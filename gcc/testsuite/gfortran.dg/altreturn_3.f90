@@ -1,5 +1,5 @@
 ! { dg-do run }
-! { dg-options "-std=gnu" }
+! { dg-options "-std=legacy" }
 !
 ! Tests the fix for PR30236, which was due to alternate returns
 ! in generic interfaces causing a segfault.  They now work

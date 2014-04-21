@@ -1,5 +1,5 @@
 // 5.1.2/2: A lambda-expression shall not appear in an unevaluated operand.
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template <class T>
 struct A { };

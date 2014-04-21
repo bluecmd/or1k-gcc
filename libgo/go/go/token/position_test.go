@@ -167,13 +167,7 @@ func TestLineInfo(t *testing.T) {
 func TestFiles(t *testing.T) {
 	fset := NewFileSet()
 	for i, test := range tests {
-		base := fset.Base()
-		if i%2 == 1 {
-			// Setting a negative base is equivalent to
-			// fset.Base(), so test some of each.
-			base = -1
-		}
-		fset.AddFile(test.filename, base, test.size)
+		fset.AddFile(test.filename, fset.Base(), test.size)
 		j := 0
 		fset.Iterate(func(f *File) bool {
 			if f.Name() != tests[j].filename {

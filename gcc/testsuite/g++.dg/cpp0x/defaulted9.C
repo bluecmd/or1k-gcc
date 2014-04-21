@@ -1,6 +1,5 @@
 // PR c++/39153
-// { dg-do compile { target c++11 } }
-// { dg-options "-fno-inline" }
+// { dg-options "-std=c++0x -fno-inline" }
 
 struct _Impl_base
 {

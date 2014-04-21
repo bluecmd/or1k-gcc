@@ -54,10 +54,6 @@ var golden = []sha1Test{
 func TestGolden(t *testing.T) {
 	for i := 0; i < len(golden); i++ {
 		g := golden[i]
-		s := fmt.Sprintf("%x", Sum([]byte(g.in)))
-		if s != g.out {
-			t.Fatalf("Sum function: sha1(%s) = %s want %s", g.in, s, g.out)
-		}
 		c := New()
 		for j := 0; j < 3; j++ {
 			if j < 2 {
@@ -74,6 +70,13 @@ func TestGolden(t *testing.T) {
 			c.Reset()
 		}
 	}
+}
+
+func ExampleNew() {
+	h := New()
+	io.WriteString(h, "His money is twice tainted: 'taint yours and 'taint mine.")
+	fmt.Printf("% x", h.Sum(nil))
+	// Output: 59 7f 6a 54 00 10 f9 4c 15 d7 18 06 a9 9a 2c 87 10 e7 47 bd
 }
 
 var bench = New()

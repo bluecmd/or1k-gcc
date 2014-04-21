@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "--std=c++0x" }
 template<typename T, typename U> struct same_type;
 template<typename T> struct same_type<T, T> {};
 

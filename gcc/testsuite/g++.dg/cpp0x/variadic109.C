@@ -1,5 +1,5 @@
 // PR c++/48292
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template <typename... Args> int g(Args...);
 

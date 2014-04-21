@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template<class T> struct S0 {};
 template<class T> using AS0 = S0<T>;

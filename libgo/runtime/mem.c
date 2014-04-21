@@ -60,10 +60,12 @@ mmap_fixed(byte *v, uintptr n, int32 prot, int32 flags, int32 fd, uint32 offset)
 }
 
 void*
-runtime_SysAlloc(uintptr n, uint64 *stat)
+runtime_SysAlloc(uintptr n)
 {
 	void *p;
 	int fd = -1;
+
+	mstats.sys += n;
 
 #ifdef USE_DEV_ZERO
 	if (dev_zero == -1) {
@@ -89,7 +91,6 @@ runtime_SysAlloc(uintptr n, uint64 *stat)
 		}
 		return nil;
 	}
-	runtime_xadd64(stat, n);
 	return p;
 }
 
@@ -102,21 +103,14 @@ runtime_SysUnused(void *v __attribute__ ((unused)), uintptr n __attribute__ ((un
 }
 
 void
-runtime_SysUsed(void *v, uintptr n)
+runtime_SysFree(void *v, uintptr n)
 {
-	USED(v);
-	USED(n);
-}
-
-void
-runtime_SysFree(void *v, uintptr n, uint64 *stat)
-{
-	runtime_xadd64(stat, -(uint64)n);
+	mstats.sys -= n;
 	runtime_munmap(v, n);
 }
 
 void*
-runtime_SysReserve(void *v, uintptr n)
+runtime_SysReserve(void *v, uintptr n, bool do_reserve)
 {
 	int fd = -1;
 	void *p;
@@ -136,12 +130,10 @@ runtime_SysReserve(void *v, uintptr n)
 	// much address space.  Instead, assume that the reservation is okay
 	// if we can reserve at least 64K and check the assumption in SysMap.
 	// Only user-mode Linux (UML) rejects these requests.
-	if(sizeof(void*) == 8 && (uintptr)v >= 0xffffffffU) {
+	if(!do_reserve) {
 		p = mmap_fixed(v, 64<<10, PROT_NONE, MAP_ANON|MAP_PRIVATE, fd, 0);
-		if (p != v) {
-			runtime_munmap(p, 64<<10);
+		if (p != v)
 			return nil;
-		}
 		runtime_munmap(p, 64<<10);
 		return v;
 	}
@@ -157,12 +149,12 @@ runtime_SysReserve(void *v, uintptr n)
 }
 
 void
-runtime_SysMap(void *v, uintptr n, uint64 *stat)
+runtime_SysMap(void *v, uintptr n, bool is_reserved)
 {
 	void *p;
 	int fd = -1;
 	
-	runtime_xadd64(stat, n);
+	mstats.sys += n;
 
 #ifdef USE_DEV_ZERO
 	if (dev_zero == -1) {
@@ -176,7 +168,7 @@ runtime_SysMap(void *v, uintptr n, uint64 *stat)
 #endif
 
 	// On 64-bit, we don't actually have v reserved, so tread carefully.
-	if(sizeof(void*) == 8 && (uintptr)v >= 0xffffffffU) {
+	if(!is_reserved) {
 		p = mmap_fixed(v, n, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, fd, 0);
 		if(p == MAP_FAILED && errno == ENOMEM)
 			runtime_throw("runtime: out of memory");

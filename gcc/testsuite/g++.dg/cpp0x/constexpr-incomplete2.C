@@ -1,6 +1,6 @@
 // A constructor that might or might not be constexpr still makes
 // its class literal.
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template <class T>
 struct B

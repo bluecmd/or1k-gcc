@@ -1,7 +1,6 @@
 ! Like array_constructor_6.f90, but check iterators with non-default stride,
 ! including combinations which lead to zero-length vectors.
 ! { dg-do run }
-! { dg-options "-Wzerotrip" }
 program main
   implicit none
   call build (77)

@@ -7,7 +7,6 @@ package crypto
 
 import (
 	"hash"
-	"strconv"
 )
 
 // Hash identifies a cryptographic hash function that is implemented in another
@@ -60,7 +59,7 @@ func (h Hash) New() hash.Hash {
 			return f()
 		}
 	}
-	panic("crypto: requested hash function #" + strconv.Itoa(int(h)) + " is unavailable")
+	panic("crypto: requested hash function is unavailable")
 }
 
 // Available reports whether the given hash function is linked into the binary.
@@ -77,9 +76,6 @@ func RegisterHash(h Hash, f func() hash.Hash) {
 	}
 	hashes[h] = f
 }
-
-// PublicKey represents a public key using an unspecified algorithm.
-type PublicKey interface{}
 
 // PrivateKey represents a private key using an unspecified algorithm.
 type PrivateKey interface{}

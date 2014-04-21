@@ -1,6 +1,6 @@
 // Debugging string implementation -*- C++ -*-
 
-// Copyright (C) 2003-2014 Free Software Foundation, Inc.
+// Copyright (C) 2003-2013 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -70,7 +70,6 @@ namespace __gnu_debug
 
     // 21.3.1 construct/copy/destroy:
     explicit basic_string(const _Allocator& __a = _Allocator())
-    // _GLIBCXX_NOEXCEPT
     : _Base(__a)
     { }
 
@@ -114,7 +113,7 @@ namespace __gnu_debug
       { }
 
 #if __cplusplus >= 201103L
-    basic_string(basic_string&& __str) // noexcept
+    basic_string(basic_string&& __str) noexcept
     : _Base(std::move(__str))
     { }
 
@@ -172,7 +171,7 @@ namespace __gnu_debug
 
     // 21.3.2 iterators:
     iterator
-    begin() // _GLIBCXX_NOEXCEPT
+    begin() _GLIBCXX_NOEXCEPT
     { return iterator(_Base::begin(), this); }
 
     const_iterator
@@ -180,7 +179,7 @@ namespace __gnu_debug
     { return const_iterator(_Base::begin(), this); }
 
     iterator
-    end() // _GLIBCXX_NOEXCEPT
+    end() _GLIBCXX_NOEXCEPT
     { return iterator(_Base::end(), this); }
 
     const_iterator
@@ -188,7 +187,7 @@ namespace __gnu_debug
     { return const_iterator(_Base::end(), this); }
 
     reverse_iterator
-    rbegin() // _GLIBCXX_NOEXCEPT
+    rbegin() _GLIBCXX_NOEXCEPT
     { return reverse_iterator(end()); }
 
     const_reverse_iterator
@@ -196,7 +195,7 @@ namespace __gnu_debug
     { return const_reverse_iterator(end()); }
 
     reverse_iterator
-    rend() // _GLIBCXX_NOEXCEPT
+    rend() _GLIBCXX_NOEXCEPT
     { return reverse_iterator(begin()); }
 
     const_reverse_iterator
@@ -239,7 +238,7 @@ namespace __gnu_debug
 
 #if __cplusplus >= 201103L
     void
-    shrink_to_fit() noexcept
+    shrink_to_fit()
     {
       if (capacity() > size())
 	{
@@ -258,7 +257,7 @@ namespace __gnu_debug
     using _Base::reserve;
 
     void
-    clear() // _GLIBCXX_NOEXCEPT
+    clear() _GLIBCXX_NOEXCEPT
     {
       _Base::clear();
       this->_M_invalidate_all();
@@ -268,7 +267,7 @@ namespace __gnu_debug
 
     // 21.3.4 element access:
     const_reference
-    operator[](size_type __pos) const _GLIBCXX_NOEXCEPT
+    operator[](size_type __pos) const
     {
       _GLIBCXX_DEBUG_VERIFY(__pos <= this->size(),
 			    _M_message(__gnu_debug::__msg_subscript_oob)
@@ -279,7 +278,7 @@ namespace __gnu_debug
     }
 
     reference
-    operator[](size_type __pos) // _GLIBCXX_NOEXCEPT
+    operator[](size_type __pos)
     {
 #ifdef _GLIBCXX_DEBUG_PEDANTIC
       __glibcxx_check_subscript(__pos);
@@ -583,7 +582,7 @@ namespace __gnu_debug
 
 #if __cplusplus >= 201103L
     void
-    pop_back() // noexcept
+    pop_back()
     {
       __glibcxx_check_nonempty();
       _Base::pop_back();
@@ -1156,11 +1155,6 @@ namespace __gnu_debug
 #ifdef _GLIBCXX_USE_WCHAR_T
   typedef basic_string<wchar_t> wstring;
 #endif
-
-  template<typename _CharT, typename _Traits, typename _Allocator>
-    struct _Insert_range_from_self_is_safe<
-      __gnu_debug::basic_string<_CharT, _Traits, _Allocator> >
-      { enum { __value = 1 }; };
 
 } // namespace __gnu_debug
 

@@ -1,6 +1,5 @@
 // PR c++/47199
-// { dg-do compile { target c++11 } }
-// { dg-options "-fno-elide-constructors" }
+// { dg-options "-std=c++0x -fno-elide-constructors" }
 
 template < int > struct S
 {

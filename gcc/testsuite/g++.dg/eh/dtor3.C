@@ -1,5 +1,5 @@
 // Red Hat bug 750545
-// { dg-do run { target { ! c++11 } } }
+// { dg-do run { target c++98 } }
 
 class excep {};
 class A

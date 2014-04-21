@@ -1,6 +1,5 @@
 // PR c++/46977
-// { dg-do compile { target c++11 } }
-// { dg-options "" }
+// { dg-options "-std=c++0x" }
 
 template < typename > void
 foo ()

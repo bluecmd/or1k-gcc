@@ -1,5 +1,5 @@
 /* Pass manager for Fortran front end.
-   Copyright (C) 2010-2014 Free Software Foundation, Inc.
+   Copyright (C) 2010-2013 Free Software Foundation, Inc.
    Contributed by Thomas König.
 
 This file is part of GCC.
@@ -134,10 +134,6 @@ optimize_code (gfc_code **c, int *walk_subtrees ATTRIBUTE_UNUSED,
     count_arglist = 1;
   else
     count_arglist = 0;
-
-  current_code = c;
-  inserted_block = NULL;
-  changed_statement = NULL;
 
   if (op == EXEC_ASSIGN)
     optimize_assignment (*c);
@@ -600,7 +596,7 @@ cfe_expr_0 (gfc_expr **e, int *walk_subtrees,
       newvar = NULL;
       for (j=0; j<i; j++)
 	{
-	  if (gfc_dep_compare_functions (*(expr_array[i]),
+	  if (gfc_dep_compare_functions(*(expr_array[i]),
 					*(expr_array[j]), true)	== 0)
 	    {
 	      if (newvar == NULL)
@@ -627,12 +623,35 @@ cfe_expr_0 (gfc_expr **e, int *walk_subtrees,
    to insert statements as needed.  */
 
 static int
-cfe_code (gfc_code **c, int *walk_subtrees ATTRIBUTE_UNUSED,
-	  void *data ATTRIBUTE_UNUSED)
+cfe_code (gfc_code **c, int *walk_subtrees, void *data ATTRIBUTE_UNUSED)
 {
   current_code = c;
   inserted_block = NULL;
   changed_statement = NULL;
+
+  /* Do not do anything inside a WHERE statement; scalar assignments, BLOCKs
+     and allocation on assigment are prohibited inside WHERE, and finally
+     masking an expression would lead to wrong-code when replacing
+
+     WHERE (a>0)
+       b = sum(foo(a) + foo(a))
+     END WHERE
+
+     with
+
+     WHERE (a > 0)
+       tmp = foo(a)
+       b = sum(tmp + tmp)
+     END WHERE
+*/
+
+  if ((*c)->op == EXEC_WHERE)
+    {
+      *walk_subtrees = 0;
+      return 0;
+    }
+  
+
   return 0;
 }
 
@@ -948,7 +967,7 @@ optimize_assignment (gfc_code * c)
       remove_trim (rhs);
 
       /* Replace a = '   ' by a = '' to optimize away a memcpy.  */
-      if (is_empty_string (rhs))
+      if (is_empty_string(rhs))
 	rhs->value.character.length = 0;
     }
 
@@ -1012,173 +1031,12 @@ optimize_lexical_comparison (gfc_expr *e)
   return false;
 }
 
-/* Combine stuff like [a]>b into [a>b], for easier optimization later.  Do not
-   do CHARACTER because of possible pessimization involving character
-   lengths.  */
-
-static bool
-combine_array_constructor (gfc_expr *e)
-{
-
-  gfc_expr *op1, *op2;
-  gfc_expr *scalar;
-  gfc_expr *new_expr;
-  gfc_constructor *c, *new_c;
-  gfc_constructor_base oldbase, newbase;
-  bool scalar_first;
-
-  /* Array constructors have rank one.  */
-  if (e->rank != 1)
-    return false;
-
-  op1 = e->value.op.op1;
-  op2 = e->value.op.op2;
-
-  if (op1->expr_type == EXPR_ARRAY && op2->rank == 0)
-    scalar_first = false;
-  else if (op2->expr_type == EXPR_ARRAY && op1->rank == 0)
-    {
-      scalar_first = true;
-      op1 = e->value.op.op2;
-      op2 = e->value.op.op1;
-    }
-  else
-    return false;
-
-  if (op2->ts.type == BT_CHARACTER)
-    return false;
-
-  if (op2->expr_type == EXPR_CONSTANT)
-    scalar = gfc_copy_expr (op2);
-  else
-    scalar = create_var (gfc_copy_expr (op2));
-
-  oldbase = op1->value.constructor;
-  newbase = NULL;
-  e->expr_type = EXPR_ARRAY;
-
-  for (c = gfc_constructor_first (oldbase); c;
-       c = gfc_constructor_next (c))
-    {
-      new_expr = gfc_get_expr ();
-      new_expr->ts = e->ts;
-      new_expr->expr_type = EXPR_OP;
-      new_expr->rank = c->expr->rank;
-      new_expr->where = c->where;
-      new_expr->value.op.op = e->value.op.op;
-
-      if (scalar_first)
-	{
-	  new_expr->value.op.op1 = gfc_copy_expr (scalar);
-	  new_expr->value.op.op2 = gfc_copy_expr (c->expr);
-	}
-      else
-	{
-	  new_expr->value.op.op1 = gfc_copy_expr (c->expr);
-	  new_expr->value.op.op2 = gfc_copy_expr (scalar);
-	}
-
-      new_c = gfc_constructor_append_expr (&newbase, new_expr, &(e->where));
-      new_c->iterator = c->iterator;
-      c->iterator = NULL;
-    }
-
-  gfc_free_expr (op1);
-  gfc_free_expr (op2);
-  gfc_free_expr (scalar);
-
-  e->value.constructor = newbase;
-  return true;
-}
-
-/* Change (-1)**k into 1-ishift(iand(k,1),1) and
- 2**k into ishift(1,k) */
-
-static bool
-optimize_power (gfc_expr *e)
-{
-  gfc_expr *op1, *op2;
-  gfc_expr *iand, *ishft;
-
-  if (e->ts.type != BT_INTEGER)
-    return false;
-
-  op1 = e->value.op.op1;
-
-  if (op1 == NULL || op1->expr_type != EXPR_CONSTANT)
-    return false;
-
-  if (mpz_cmp_si (op1->value.integer, -1L) == 0)
-    {
-      gfc_free_expr (op1);
-
-      op2 = e->value.op.op2;
-
-      if (op2 == NULL)
-	return false;
-
-      iand = gfc_build_intrinsic_call (current_ns, GFC_ISYM_IAND,
-				       "_internal_iand", e->where, 2, op2,
-				       gfc_get_int_expr (e->ts.kind,
-							 &e->where, 1));
-				   
-      ishft = gfc_build_intrinsic_call (current_ns, GFC_ISYM_ISHFT,
-					"_internal_ishft", e->where, 2, iand,
-					gfc_get_int_expr (e->ts.kind,
-							  &e->where, 1));
-
-      e->value.op.op = INTRINSIC_MINUS;
-      e->value.op.op1 = gfc_get_int_expr (e->ts.kind, &e->where, 1);
-      e->value.op.op2 = ishft;
-      return true;
-    }
-  else if (mpz_cmp_si (op1->value.integer, 2L) == 0)
-    {
-      gfc_free_expr (op1);
-
-      op2 = e->value.op.op2;
-      if (op2 == NULL)
-	return false;
-
-      ishft = gfc_build_intrinsic_call (current_ns, GFC_ISYM_ISHFT,
-					"_internal_ishft", e->where, 2,
-					gfc_get_int_expr (e->ts.kind,
-							  &e->where, 1),
-					op2);
-      *e = *ishft;
-      return true;
-    }
-
-  else if (mpz_cmp_si (op1->value.integer, 1L) == 0)
-    {
-      op2 = e->value.op.op2;
-      if (op2 == NULL)
-	return false;
-
-      gfc_free_expr (op1);
-      gfc_free_expr (op2);
-
-      e->expr_type = EXPR_CONSTANT;
-      e->value.op.op1 = NULL;
-      e->value.op.op2 = NULL;
-      mpz_init_set_si (e->value.integer, 1);
-      /* Typespec and location are still OK.  */
-      return true;
-    }
-
-  return false;
-}
-
 /* Recursive optimization of operators.  */
 
 static bool
 optimize_op (gfc_expr *e)
 {
-  bool changed;
-
   gfc_intrinsic_op op = e->value.op.op;
-
-  changed = false;
 
   /* Only use new-style comparisons.  */
   switch(op)
@@ -1219,19 +1077,7 @@ optimize_op (gfc_expr *e)
     case INTRINSIC_NE:
     case INTRINSIC_GT:
     case INTRINSIC_LT:
-      changed = optimize_comparison (e, op);
-
-      /* Fall through */
-      /* Look at array constructors.  */
-    case INTRINSIC_PLUS:
-    case INTRINSIC_MINUS:
-    case INTRINSIC_TIMES:
-    case INTRINSIC_DIVIDE:
-      return combine_array_constructor (e) || changed;
-
-    case INTRINSIC_POWER:
-      return optimize_power (e);
-      break;
+      return optimize_comparison (e, op);
 
     default:
       break;

@@ -21,20 +21,11 @@ is GOGC=100. Setting GOGC=off disables the garbage collector entirely.
 The runtime/debug package's SetGCPercent function allows changing this
 percentage at run time. See http://golang.org/pkg/runtime/debug/#SetGCPercent.
 
-The GODEBUG variable controls debug output from the runtime. GODEBUG value is
-a comma-separated list of name=val pairs. Supported names are:
-
-	gctrace: setting gctrace=1 causes the garbage collector to emit a single line to standard
-	error at each collection, summarizing the amount of memory collected and the
-	length of the pause. Setting gctrace=2 emits the same summary but also
-	repeats each collection.
-
-	schedtrace: setting schedtrace=X causes the scheduler to emit a single line to standard
-	error every X milliseconds, summarizing the scheduler state.
-
-	scheddetail: setting schedtrace=X and scheddetail=1 causes the scheduler to emit
-	detailed multiline info every X milliseconds, describing state of the scheduler,
-	processors, threads and goroutines.
+The GOGCTRACE variable controls debug output from the garbage collector.
+Setting GOGCTRACE=1 causes the garbage collector to emit a single line to standard
+error at each collection, summarizing the amount of memory collected and the
+length of the pause. Setting GOGCTRACE=2 emits the same summary but also
+repeats each collection.
 
 The GOMAXPROCS variable limits the number of operating system threads that
 can execute user-level Go code simultaneously. There is no limit to the number of threads
@@ -86,8 +77,9 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool)
 // It returns the number of entries written to pc.
 func Callers(skip int, pc []uintptr) int
 
-type Func struct {
-	opaque struct{} // unexported field to disallow conversions
+type Func struct { // Keep in sync with runtime.h:struct Func
+	name  string
+	entry uintptr // entry pc
 }
 
 // FuncForPC returns a *Func describing the function that contains the
@@ -95,14 +87,10 @@ type Func struct {
 func FuncForPC(pc uintptr) *Func
 
 // Name returns the name of the function.
-func (f *Func) Name() string {
-	return funcname_go(f)
-}
+func (f *Func) Name() string { return f.name }
 
 // Entry returns the entry address of the function.
-func (f *Func) Entry() uintptr {
-	return funcentry_go(f)
-}
+func (f *Func) Entry() uintptr { return f.entry }
 
 // FileLine returns the file name and line number of the
 // source code corresponding to the program counter pc.
@@ -114,8 +102,6 @@ func (f *Func) FileLine(pc uintptr) (file string, line int) {
 
 // implemented in symtab.c
 func funcline_go(*Func, uintptr) (string, int)
-func funcname_go(*Func) string
-func funcentry_go(*Func) uintptr
 
 // SetFinalizer sets the finalizer associated with x to f.
 // When the garbage collector finds an unreachable block
@@ -130,9 +116,8 @@ func funcentry_go(*Func) uintptr
 // The argument x must be a pointer to an object allocated by
 // calling new or by taking the address of a composite literal.
 // The argument f must be a function that takes a single argument
-// to which x's type can be assigned, and can have arbitrary ignored return
-// values. If either of these is not true, SetFinalizer aborts the
-// program.
+// of x's type and can have arbitrary ignored return values.
+// If either of these is not true, SetFinalizer aborts the program.
 //
 // Finalizers are run in dependency order: if A points at B, both have
 // finalizers, and they are otherwise unreachable, only the finalizer

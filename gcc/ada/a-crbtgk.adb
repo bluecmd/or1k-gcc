@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2011, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -38,26 +38,10 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
    --  AKA Lower_Bound
 
    function Ceiling (Tree : Tree_Type; Key : Key_Type) return Node_Access is
-      B : Natural renames Tree'Unrestricted_Access.Busy;
-      L : Natural renames Tree'Unrestricted_Access.Lock;
-
       Y : Node_Access;
       X : Node_Access;
 
    begin
-      --  If the container is empty, return a result immediately, so that we do
-      --  not manipulate the tamper bits unnecessarily.
-
-      if Tree.Root = null then
-         return null;
-      end if;
-
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
-
-      B := B + 1;
-      L := L + 1;
-
       X := Tree.Root;
       while X /= null loop
          if Is_Greater_Key_Node (Key, X) then
@@ -68,46 +52,18 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
          end if;
       end loop;
 
-      B := B - 1;
-      L := L - 1;
-
       return Y;
-
-   exception
-      when others =>
-         B := B - 1;
-         L := L - 1;
-
-         raise;
    end Ceiling;
 
    ----------
    -- Find --
    ----------
 
-   function Find (Tree : Tree_Type; Key : Key_Type) return Node_Access is
-      B : Natural renames Tree'Unrestricted_Access.Busy;
-      L : Natural renames Tree'Unrestricted_Access.Lock;
-
+   function Find (Tree : Tree_Type; Key  : Key_Type) return Node_Access is
       Y : Node_Access;
       X : Node_Access;
 
-      Result : Node_Access;
-
    begin
-      --  If the container is empty, return a result immediately, so that we do
-      --  not manipulate the tamper bits unnecessarily.
-
-      if Tree.Root = null then
-         return null;
-      end if;
-
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
-
-      B := B + 1;
-      L := L + 1;
-
       X := Tree.Root;
       while X /= null loop
          if Is_Greater_Key_Node (Key, X) then
@@ -119,53 +75,25 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
       end loop;
 
       if Y = null then
-         Result := null;
-
-      elsif Is_Less_Key_Node (Key, Y) then
-         Result := null;
-
-      else
-         Result := Y;
+         return null;
       end if;
 
-      B := B - 1;
-      L := L - 1;
+      if Is_Less_Key_Node (Key, Y) then
+         return null;
+      end if;
 
-      return Result;
-
-   exception
-      when others =>
-         B := B - 1;
-         L := L - 1;
-
-         raise;
+      return Y;
    end Find;
 
    -----------
    -- Floor --
    -----------
 
-   function Floor (Tree : Tree_Type; Key : Key_Type) return Node_Access is
-      B : Natural renames Tree'Unrestricted_Access.Busy;
-      L : Natural renames Tree'Unrestricted_Access.Lock;
-
+   function Floor (Tree : Tree_Type; Key  : Key_Type) return Node_Access is
       Y : Node_Access;
       X : Node_Access;
 
    begin
-      --  If the container is empty, return a result immediately, so that we do
-      --  not manipulate the tamper bits unnecessarily.
-
-      if Tree.Root = null then
-         return null;
-      end if;
-
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
-
-      B := B + 1;
-      L := L + 1;
-
       X := Tree.Root;
       while X /= null loop
          if Is_Less_Key_Node (Key, X) then
@@ -176,17 +104,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
          end if;
       end loop;
 
-      B := B - 1;
-      L := L - 1;
-
       return Y;
-
-   exception
-      when others =>
-         B := B - 1;
-         L := L - 1;
-
-         raise;
    end Floor;
 
    --------------------------------
@@ -199,16 +117,8 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
       Node     : out Node_Access;
       Inserted : out Boolean)
    is
-      X : Node_Access;
-      Y : Node_Access;
-
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
-
-      B : Natural renames Tree.Busy;
-      L : Natural renames Tree.Lock;
-
-      Compare : Boolean;
+      Y : Node_Access := null;
+      X : Node_Access := Tree.Root;
 
    begin
       --  This is a "conditional" insertion, meaning that the insertion request
@@ -222,48 +132,22 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
       --  its previous neighbor, in order for the conditional insertion to
       --  succeed.
 
-      --  Handle insertion into an empty container as a special case, so that
-      --  we do not manipulate the tamper bits unnecessarily.
-
-      if Tree.Root = null then
-         Insert_Post (Tree, null, True, Node);
-         Inserted := True;
-         return;
-      end if;
-
       --  We search the tree to find the nearest neighbor of Key, which is
       --  either the smallest node greater than Key (Inserted is True), or the
       --  largest node less or equivalent to Key (Inserted is False).
 
-      begin
-         B := B + 1;
-         L := L + 1;
-
-         X := Tree.Root;
-         Y := null;
-         Inserted := True;
-         while X /= null loop
-            Y := X;
-            Inserted := Is_Less_Key_Node (Key, X);
-            X := (if Inserted then Ops.Left (X) else Ops.Right (X));
-         end loop;
-
-         L := L - 1;
-         B := B - 1;
-
-      exception
-         when others =>
-            L := L - 1;
-            B := B - 1;
-
-            raise;
-      end;
+      Inserted := True;
+      while X /= null loop
+         Y := X;
+         Inserted := Is_Less_Key_Node (Key, X);
+         X := (if Inserted then Ops.Left (X) else Ops.Right (X));
+      end loop;
 
       if Inserted then
 
-         --  Key is less than Y. If Y is the first node in the tree, then there
-         --  are no other nodes that we need to search for, and we insert a new
-         --  node into the tree.
+         --  Either Tree is empty, or Key is less than Y. If Y is the first
+         --  node in the tree, then there are no other nodes that we need to
+         --  search for, and we insert a new node into the tree.
 
          if Y = Tree.First then
             Insert_Post (Tree, Y, True, Node);
@@ -288,24 +172,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
       --  Key is equivalent to or greater than Node. We must resolve which is
       --  the case, to determine whether the conditional insertion succeeds.
 
-      begin
-         B := B + 1;
-         L := L + 1;
-
-         Compare := Is_Greater_Key_Node (Key, Node);
-
-         L := L - 1;
-         B := B - 1;
-
-      exception
-         when others =>
-            L := L - 1;
-            B := B - 1;
-
-            raise;
-      end;
-
-      if Compare then
+      if Is_Greater_Key_Node (Key, Node) then
 
          --  Key is strictly greater than Node, which means that Key is not
          --  equivalent to Node. In this case, the insertion succeeds, and we
@@ -334,15 +201,6 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
       Node      : out Node_Access;
       Inserted  : out Boolean)
    is
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
-
-      B : Natural renames Tree.Busy;
-      L : Natural renames Tree.Lock;
-
-      Test    : Node_Access;
-      Compare : Boolean;
-
    begin
       --  The purpose of a hint is to avoid a search from the root of
       --  tree. If we have it hint it means we only need to traverse the
@@ -351,39 +209,15 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
       --  is not a search and the only comparisons that occur are with
       --  the hint and its neighbor.
 
-      --  Handle insertion into an empty container as a special case, so that
-      --  we do not manipulate the tamper bits unnecessarily.
-
-      if Tree.Root = null then
-         Insert_Post (Tree, null, True, Node);
-         Inserted := True;
-         return;
-      end if;
-
-      --  If Position is null, this is interpreted to mean that Key is large
-      --  relative to the nodes in the tree. If Key is greater than the last
-      --  node in the tree, then we're done; otherwise the hint was "wrong" and
-      --  we must search.
+      --  If Position is null, this is interpreted to mean that Key is
+      --  large relative to the nodes in the tree. If the tree is empty,
+      --  or Key is greater than the last node in the tree, then we're
+      --  done; otherwise the hint was "wrong" and we must search.
 
       if Position = null then  -- largest
-         begin
-            B := B + 1;
-            L := L + 1;
-
-            Compare := Is_Greater_Key_Node (Key, Tree.Last);
-
-            L := L - 1;
-            B := B - 1;
-
-         exception
-            when others =>
-               L := L - 1;
-               B := B - 1;
-
-               raise;
-         end;
-
-         if Compare then
+         if Tree.Last = null
+           or else Is_Greater_Key_Node (Key, Tree.Last)
+         then
             Insert_Post (Tree, Tree.Last, False, Node);
             Inserted := True;
          else
@@ -412,135 +246,68 @@ package body Ada.Containers.Red_Black_Trees.Generic_Keys is
       --  then its neighbor must be anterior and so we insert before the
       --  hint.
 
-      begin
-         B := B + 1;
-         L := L + 1;
-
-         Compare := Is_Less_Key_Node (Key, Position);
-
-         L := L - 1;
-         B := B - 1;
-
-      exception
-         when others =>
-            L := L - 1;
-            B := B - 1;
-
-            raise;
-      end;
-
-      if Compare then
-         Test := Ops.Previous (Position);  -- "before"
-
-         if Test = null then  -- new first node
-            Insert_Post (Tree, Tree.First, True, Node);
-
-            Inserted := True;
-            return;
-         end if;
+      if Is_Less_Key_Node (Key, Position) then
+         declare
+            Before : constant Node_Access := Ops.Previous (Position);
 
          begin
-            B := B + 1;
-            L := L + 1;
+            if Before = null then
+               Insert_Post (Tree, Tree.First, True, Node);
+               Inserted := True;
 
-            Compare := Is_Greater_Key_Node (Key, Test);
+            elsif Is_Greater_Key_Node (Key, Before) then
+               if Ops.Right (Before) = null then
+                  Insert_Post (Tree, Before, False, Node);
+               else
+                  Insert_Post (Tree, Position, True, Node);
+               end if;
 
-            L := L - 1;
-            B := B - 1;
+               Inserted := True;
 
-         exception
-            when others =>
-               L := L - 1;
-               B := B - 1;
-
-               raise;
-         end;
-
-         if Compare then
-            if Ops.Right (Test) = null then
-               Insert_Post (Tree, Test, False, Node);
             else
-               Insert_Post (Tree, Position, True, Node);
+               Conditional_Insert_Sans_Hint (Tree, Key, Node, Inserted);
             end if;
-
-            Inserted := True;
-
-         else
-            Conditional_Insert_Sans_Hint (Tree, Key, Node, Inserted);
-         end if;
+         end;
 
          return;
       end if;
 
-      --  We know that Key isn't less than the hint so we try again, this time
-      --  to see if it's greater than the hint. If so we compare Key to the
-      --  node that follows the hint. If Key is both greater than the hint and
-      --  less than the hint's next neighbor, then we're done; otherwise we
-      --  must search.
+      --  We know that Key isn't less than the hint so we try again,
+      --  this time to see if it's greater than the hint. If so we
+      --  compare Key to the node that follows the hint. If Key is both
+      --  greater than the hint and less than the hint's next neighbor,
+      --  then we're done; otherwise we must search.
 
-      begin
-         B := B + 1;
-         L := L + 1;
-
-         Compare := Is_Greater_Key_Node (Key, Position);
-
-         L := L - 1;
-         B := B - 1;
-
-      exception
-         when others =>
-            L := L - 1;
-            B := B - 1;
-
-            raise;
-      end;
-
-      if Compare then
-         Test := Ops.Next (Position);  -- "after"
-
-         if Test = null then  -- new last node
-            Insert_Post (Tree, Tree.Last, False, Node);
-
-            Inserted := True;
-            return;
-         end if;
+      if Is_Greater_Key_Node (Key, Position) then
+         declare
+            After : constant Node_Access := Ops.Next (Position);
 
          begin
-            B := B + 1;
-            L := L + 1;
+            if After = null then
+               Insert_Post (Tree, Tree.Last, False, Node);
+               Inserted := True;
 
-            Compare := Is_Less_Key_Node (Key, Test);
+            elsif Is_Less_Key_Node (Key, After) then
+               if Ops.Right (Position) = null then
+                  Insert_Post (Tree, Position, False, Node);
+               else
+                  Insert_Post (Tree, After, True, Node);
+               end if;
 
-            L := L - 1;
-            B := B - 1;
+               Inserted := True;
 
-         exception
-            when others =>
-               L := L - 1;
-               B := B - 1;
-
-               raise;
-         end;
-
-         if Compare then
-            if Ops.Right (Position) = null then
-               Insert_Post (Tree, Position, False, Node);
             else
-               Insert_Post (Tree, Test, True, Node);
+               Conditional_Insert_Sans_Hint (Tree, Key, Node, Inserted);
             end if;
-
-            Inserted := True;
-
-         else
-            Conditional_Insert_Sans_Hint (Tree, Key, Node, Inserted);
-         end if;
+         end;
 
          return;
       end if;
 
-      --  We know that Key is neither less than the hint nor greater than the
-      --  hint, and that's the definition of equivalence. There's nothing else
-      --  we need to do, since a search would just reach the same conclusion.
+      --  We know that Key is neither less than the hint nor greater
+      --  than the hint, and that's the definition of equivalence.
+      --  There's nothing else we need to do, since a search would just
+      --  reach the same conclusion.
 
       Node := Position;
       Inserted := False;

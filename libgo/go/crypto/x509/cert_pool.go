@@ -25,10 +25,9 @@ func NewCertPool() *CertPool {
 }
 
 // findVerifiedParents attempts to find certificates in s which have signed the
-// given certificate. If any candidates were rejected then errCert will be set
-// to one of them, arbitrarily, and err will contain the reason that it was
-// rejected.
-func (s *CertPool) findVerifiedParents(cert *Certificate) (parents []int, errCert *Certificate, err error) {
+// given certificate. If no such certificate can be found or the signature
+// doesn't match, it returns nil.
+func (s *CertPool) findVerifiedParents(cert *Certificate) (parents []int) {
 	if s == nil {
 		return
 	}
@@ -42,10 +41,8 @@ func (s *CertPool) findVerifiedParents(cert *Certificate) (parents []int, errCer
 	}
 
 	for _, c := range candidates {
-		if err = cert.CheckSignatureFrom(s.certs[c]); err == nil {
+		if cert.CheckSignatureFrom(s.certs[c]) == nil {
 			parents = append(parents, c)
-		} else {
-			errCert = s.certs[c]
 		}
 	}
 

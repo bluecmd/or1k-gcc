@@ -1,5 +1,5 @@
 // PR c++/47289
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 // { dg-prune-output "note" }
 
 template <template <typename... __ARGS> class _F, typename... _ARGS>

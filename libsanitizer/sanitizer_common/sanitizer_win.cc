@@ -9,10 +9,7 @@
 // run-time libraries and implements windows-specific functions from
 // sanitizer_libc.h.
 //===----------------------------------------------------------------------===//
-
-#include "sanitizer_platform.h"
-#if SANITIZER_WINDOWS
-
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOGDI
 #include <stdlib.h>
@@ -21,13 +18,10 @@
 
 #include "sanitizer_common.h"
 #include "sanitizer_libc.h"
-#include "sanitizer_mutex.h"
 #include "sanitizer_placement_new.h"
-#include "sanitizer_stacktrace.h"
+#include "sanitizer_mutex.h"
 
 namespace __sanitizer {
-
-#include "sanitizer_syscall_generic.inc"
 
 // --------------------- sanitizer_common.h
 uptr GetPageSize() {
@@ -38,28 +32,16 @@ uptr GetMmapGranularity() {
   return 1U << 16;  // FIXME: is this configurable?
 }
 
-uptr GetMaxVirtualAddress() {
-  SYSTEM_INFO si;
-  GetSystemInfo(&si);
-  return (uptr)si.lpMaximumApplicationAddress;
-}
-
 bool FileExists(const char *filename) {
   UNIMPLEMENTED();
 }
 
-uptr internal_getpid() {
+int GetPid() {
   return GetProcessId(GetCurrentProcess());
 }
 
-// In contrast to POSIX, on Windows GetCurrentThreadId()
-// returns a system-unique identifier.
-uptr GetTid() {
-  return GetCurrentThreadId();
-}
-
 uptr GetThreadSelf() {
-  return GetTid();
+  return GetCurrentThreadId();
 }
 
 void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
@@ -127,38 +109,19 @@ void *MapFileToMemory(const char *file_name, uptr *buff_size) {
   UNIMPLEMENTED();
 }
 
-static const int kMaxEnvNameLength = 128;
-static const DWORD kMaxEnvValueLength = 32767;
-
-namespace {
-
-struct EnvVariable {
-  char name[kMaxEnvNameLength];
-  char value[kMaxEnvValueLength];
-};
-
-}  // namespace
-
-static const int kEnvVariables = 5;
-static EnvVariable env_vars[kEnvVariables];
-static int num_env_vars;
-
 const char *GetEnv(const char *name) {
-  // Note: this implementation caches the values of the environment variables
-  // and limits their quantity.
-  for (int i = 0; i < num_env_vars; i++) {
-    if (0 == internal_strcmp(name, env_vars[i].name))
-      return env_vars[i].value;
-  }
-  CHECK_LT(num_env_vars, kEnvVariables);
-  DWORD rv = GetEnvironmentVariableA(name, env_vars[num_env_vars].value,
-                                     kMaxEnvValueLength);
-  if (rv > 0 && rv < kMaxEnvValueLength) {
-    CHECK_LT(internal_strlen(name), kMaxEnvNameLength);
-    internal_strncpy(env_vars[num_env_vars].name, name, kMaxEnvNameLength);
-    num_env_vars++;
-    return env_vars[num_env_vars - 1].value;
-  }
+  static char env_buffer[32767] = {};
+
+  // Note: this implementation stores the result in a static buffer so we only
+  // allow it to be called just once.
+  static bool called_once = false;
+  if (called_once)
+    UNIMPLEMENTED();
+  called_once = true;
+
+  DWORD rv = GetEnvironmentVariableA(name, env_buffer, sizeof(env_buffer));
+  if (rv > 0 && rv < sizeof(env_buffer))
+    return env_buffer;
   return 0;
 }
 
@@ -194,11 +157,6 @@ void SetStackSizeLimitInBytes(uptr limit) {
   UNIMPLEMENTED();
 }
 
-char *FindPathToBinary(const char *name) {
-  // Nothing here for now.
-  return 0;
-}
-
 void SleepForSeconds(int seconds) {
   Sleep(seconds * 1000);
 }
@@ -207,19 +165,10 @@ void SleepForMillis(int millis) {
   Sleep(millis);
 }
 
-u64 NanoTime() {
-  return 0;
-}
-
 void Abort() {
   abort();
-  internal__exit(-1);  // abort is not NORETURN on Windows.
+  _exit(-1);  // abort is not NORETURN on Windows.
 }
-
-uptr GetListOfModules(LoadedModule *modules, uptr max_modules,
-                      string_predicate_t filter) {
-  UNIMPLEMENTED();
-};
 
 #ifndef SANITIZER_GO
 int Atexit(void (*function)(void)) {
@@ -228,16 +177,16 @@ int Atexit(void (*function)(void)) {
 #endif
 
 // ------------------ sanitizer_libc.h
-uptr internal_mmap(void *addr, uptr length, int prot, int flags,
-                   int fd, u64 offset) {
+void *internal_mmap(void *addr, uptr length, int prot, int flags,
+                    int fd, u64 offset) {
   UNIMPLEMENTED();
 }
 
-uptr internal_munmap(void *addr, uptr length) {
+int internal_munmap(void *addr, uptr length) {
   UNIMPLEMENTED();
 }
 
-uptr internal_close(fd_t fd) {
+int internal_close(fd_t fd) {
   UNIMPLEMENTED();
 }
 
@@ -245,15 +194,15 @@ int internal_isatty(fd_t fd) {
   return _isatty(fd);
 }
 
-uptr internal_open(const char *filename, int flags) {
+fd_t internal_open(const char *filename, int flags) {
   UNIMPLEMENTED();
 }
 
-uptr internal_open(const char *filename, int flags, u32 mode) {
+fd_t internal_open(const char *filename, int flags, u32 mode) {
   UNIMPLEMENTED();
 }
 
-uptr OpenFile(const char *filename, bool write) {
+fd_t OpenFile(const char *filename, bool write) {
   UNIMPLEMENTED();
 }
 
@@ -273,15 +222,15 @@ uptr internal_write(fd_t fd, const void *buf, uptr count) {
   return ret;
 }
 
-uptr internal_stat(const char *path, void *buf) {
+int internal_stat(const char *path, void *buf) {
   UNIMPLEMENTED();
 }
 
-uptr internal_lstat(const char *path, void *buf) {
+int internal_lstat(const char *path, void *buf) {
   UNIMPLEMENTED();
 }
 
-uptr internal_fstat(fd_t fd, void *buf) {
+int internal_fstat(fd_t fd, void *buf) {
   UNIMPLEMENTED();
 }
 
@@ -289,7 +238,7 @@ uptr internal_filesize(fd_t fd) {
   UNIMPLEMENTED();
 }
 
-uptr internal_dup2(int oldfd, int newfd) {
+int internal_dup2(int oldfd, int newfd) {
   UNIMPLEMENTED();
 }
 
@@ -297,13 +246,13 @@ uptr internal_readlink(const char *path, char *buf, uptr bufsize) {
   UNIMPLEMENTED();
 }
 
-uptr internal_sched_yield() {
+int internal_sched_yield() {
   Sleep(0);
   return 0;
 }
 
 void internal__exit(int exitcode) {
-  ExitProcess(exitcode);
+  _exit(exitcode);
 }
 
 // ---------------------- BlockingMutex ---------------- {{{1
@@ -314,12 +263,6 @@ BlockingMutex::BlockingMutex(LinkerInitialized li) {
   // FIXME: see comments in BlockingMutex::Lock() for the details.
   CHECK(li == LINKER_INITIALIZED || owner_ == LOCK_UNINITIALIZED);
 
-  CHECK(sizeof(CRITICAL_SECTION) <= sizeof(opaque_storage_));
-  InitializeCriticalSection((LPCRITICAL_SECTION)opaque_storage_);
-  owner_ = LOCK_READY;
-}
-
-BlockingMutex::BlockingMutex() {
   CHECK(sizeof(CRITICAL_SECTION) <= sizeof(opaque_storage_));
   InitializeCriticalSection((LPCRITICAL_SECTION)opaque_storage_);
   owner_ = LOCK_READY;
@@ -344,63 +287,6 @@ void BlockingMutex::Unlock() {
   CHECK_EQ(owner_, GetThreadSelf());
   owner_ = LOCK_READY;
   LeaveCriticalSection((LPCRITICAL_SECTION)opaque_storage_);
-}
-
-void BlockingMutex::CheckLocked() {
-  CHECK_EQ(owner_, GetThreadSelf());
-}
-
-uptr GetTlsSize() {
-  return 0;
-}
-
-void InitTlsSize() {
-}
-
-void GetThreadStackAndTls(bool main, uptr *stk_addr, uptr *stk_size,
-                          uptr *tls_addr, uptr *tls_size) {
-#ifdef SANITIZER_GO
-  *stk_addr = 0;
-  *stk_size = 0;
-  *tls_addr = 0;
-  *tls_size = 0;
-#else
-  uptr stack_top, stack_bottom;
-  GetThreadStackTopAndBottom(main, &stack_top, &stack_bottom);
-  *stk_addr = stack_bottom;
-  *stk_size = stack_top - stack_bottom;
-  *tls_addr = 0;
-  *tls_size = 0;
-#endif
-}
-
-void StackTrace::SlowUnwindStack(uptr pc, uptr max_depth) {
-  // FIXME: CaptureStackBackTrace might be too slow for us.
-  // FIXME: Compare with StackWalk64.
-  // FIXME: Look at LLVMUnhandledExceptionFilter in Signals.inc
-  size = CaptureStackBackTrace(2, Min(max_depth, kStackTraceMax),
-                               (void**)trace, 0);
-  // Skip the RTL frames by searching for the PC in the stacktrace.
-  uptr pc_location = LocatePcInTrace(pc);
-  PopStackFrames(pc_location);
-}
-
-void MaybeOpenReportFile() {
-  // Windows doesn't have native fork, and we don't support Cygwin or other
-  // environments that try to fake it, so the initial report_fd will always be
-  // correct.
-}
-
-void RawWrite(const char *buffer) {
-  static const char *kRawWriteError =
-      "RawWrite can't output requested buffer!\n";
-  uptr length = (uptr)internal_strlen(buffer);
-  if (length != internal_write(report_fd, buffer, length)) {
-    // stderr may be closed, but we may be able to print to the debugger
-    // instead.  This is the case when launching a program from Visual Studio,
-    // and the following routine should write to its console.
-    OutputDebugStringA(buffer);
-  }
 }
 
 }  // namespace __sanitizer

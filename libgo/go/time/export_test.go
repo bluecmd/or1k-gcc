@@ -17,8 +17,3 @@ func ForceUSPacificForTesting() {
 	ResetLocalOnceForTest()
 	localOnce.Do(initTestingZone)
 }
-
-var (
-	ForceZipFileForTesting = forceZipFileForTesting
-	ParseTimeZone          = parseTimeZone
-)

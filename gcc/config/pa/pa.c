@@ -1,5 +1,5 @@
 /* Subroutines for insn-output.c for HPPA.
-   Copyright (C) 1992-2014 Free Software Foundation, Inc.
+   Copyright (C) 1992-2013 Free Software Foundation, Inc.
    Contributed by Tim Moore (moore@cs.utah.edu), based on sparc.c
 
 This file is part of GCC.
@@ -30,10 +30,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "insn-attr.h"
 #include "flags.h"
 #include "tree.h"
-#include "stor-layout.h"
-#include "stringpool.h"
-#include "varasm.h"
-#include "calls.h"
 #include "output.h"
 #include "dbxout.h"
 #include "except.h"
@@ -516,6 +512,12 @@ pa_option_override (void)
       warning (0, "-g option disabled");
       write_symbols = NO_DEBUG;
     }
+
+#ifdef AUTO_INC_DEC
+  /* FIXME: Disable auto increment and decrement processing until reload
+     is completed.  See PR middle-end 56791.  */
+  flag_auto_inc_dec = reload_completed;
+#endif
 
   /* We only support the "big PIC" model now.  And we always generate PIC
      code when in 64bit mode.  */
@@ -3330,7 +3332,7 @@ remove_useless_addtr_insns (int check_notes)
 	  rtx tmp;
 
 	  /* Ignore anything that isn't an INSN or a JUMP_INSN.  */
-	  if (! NONJUMP_INSN_P (insn) && ! JUMP_P (insn))
+	  if (GET_CODE (insn) != INSN && GET_CODE (insn) != JUMP_INSN)
 	    continue;
 
 	  tmp = PATTERN (insn);
@@ -3369,7 +3371,7 @@ remove_useless_addtr_insns (int check_notes)
 	  rtx tmp, next;
 
 	  /* Ignore anything that isn't an INSN.  */
-	  if (! NONJUMP_INSN_P (insn))
+	  if (GET_CODE (insn) != INSN)
 	    continue;
 
 	  tmp = PATTERN (insn);
@@ -3392,11 +3394,13 @@ remove_useless_addtr_insns (int check_notes)
 	  while (next)
 	    {
 	      /* Jumps, calls and labels stop our search.  */
-	      if (JUMP_P (next) || CALL_P (next) || LABEL_P (next))
+	      if (GET_CODE (next) == JUMP_INSN
+		  || GET_CODE (next) == CALL_INSN
+		  || GET_CODE (next) == CODE_LABEL)
 		break;
 
 	      /* As does another fcmp insn.  */
-	      if (NONJUMP_INSN_P (next)
+	      if (GET_CODE (next) == INSN
 		  && GET_CODE (PATTERN (next)) == SET
 		  && GET_CODE (SET_DEST (PATTERN (next))) == REG
 		  && REGNO (SET_DEST (PATTERN (next))) == 0)
@@ -3406,7 +3410,8 @@ remove_useless_addtr_insns (int check_notes)
 	    }
 
 	  /* Is NEXT_INSN a branch?  */
-	  if (next && JUMP_P (next))
+	  if (next
+	      && GET_CODE (next) == JUMP_INSN)
 	    {
 	      rtx pattern = PATTERN (next);
 
@@ -4168,16 +4173,16 @@ pa_output_function_epilogue (FILE *file, HOST_WIDE_INT size ATTRIBUTE_UNUSED)
      always point to a valid instruction in the current function.  */
 
   /* Get the last real insn.  */
-  if (NOTE_P (insn))
+  if (GET_CODE (insn) == NOTE)
     insn = prev_real_insn (insn);
 
   /* If it is a sequence, then look inside.  */
-  if (insn && NONJUMP_INSN_P (insn) && GET_CODE (PATTERN (insn)) == SEQUENCE)
+  if (insn && GET_CODE (insn) == INSN && GET_CODE (PATTERN (insn)) == SEQUENCE)
     insn = XVECEXP (PATTERN (insn), 0, 0);
 
   /* If insn is a CALL_INSN, then it must be a call to a volatile
      function (otherwise there would be epilogue insns).  */
-  if (insn && CALL_P (insn))
+  if (insn && GET_CODE (insn) == CALL_INSN)
     {
       fputs ("\tnop\n", file);
       last_address += 4;
@@ -4937,17 +4942,23 @@ pa_adjust_insn_length (rtx insn, int length)
 	}
     }
 
-  /* Block move pattern.  */
-  if (NONJUMP_INSN_P (insn)
+  /* Jumps inside switch tables which have unfilled delay slots need
+     adjustment.  */
+  if (GET_CODE (insn) == JUMP_INSN
       && GET_CODE (pat) == PARALLEL
-      && GET_CODE (XVECEXP (pat, 0, 0)) == SET
-      && GET_CODE (XEXP (XVECEXP (pat, 0, 0), 0)) == MEM
-      && GET_CODE (XEXP (XVECEXP (pat, 0, 0), 1)) == MEM
-      && GET_MODE (XEXP (XVECEXP (pat, 0, 0), 0)) == BLKmode
-      && GET_MODE (XEXP (XVECEXP (pat, 0, 0), 1)) == BLKmode)
+      && get_attr_type (insn) == TYPE_BTABLE_BRANCH)
+    length += 4;
+  /* Block move pattern.  */
+  else if (GET_CODE (insn) == INSN
+	   && GET_CODE (pat) == PARALLEL
+	   && GET_CODE (XVECEXP (pat, 0, 0)) == SET
+	   && GET_CODE (XEXP (XVECEXP (pat, 0, 0), 0)) == MEM
+	   && GET_CODE (XEXP (XVECEXP (pat, 0, 0), 1)) == MEM
+	   && GET_MODE (XEXP (XVECEXP (pat, 0, 0), 0)) == BLKmode
+	   && GET_MODE (XEXP (XVECEXP (pat, 0, 0), 1)) == BLKmode)
     length += compute_movmem_length (insn) - 4;
   /* Block clear pattern.  */
-  else if (NONJUMP_INSN_P (insn)
+  else if (GET_CODE (insn) == INSN
 	   && GET_CODE (pat) == PARALLEL
 	   && GET_CODE (XVECEXP (pat, 0, 0)) == SET
 	   && GET_CODE (XEXP (XVECEXP (pat, 0, 0), 0)) == MEM
@@ -4955,7 +4966,7 @@ pa_adjust_insn_length (rtx insn, int length)
 	   && GET_MODE (XEXP (XVECEXP (pat, 0, 0), 0)) == BLKmode)
     length += compute_clrmem_length (insn) - 4;
   /* Conditional branch with an unfilled delay slot.  */
-  else if (JUMP_P (insn) && ! simplejump_p (insn))
+  else if (GET_CODE (insn) == JUMP_INSN && ! simplejump_p (insn))
     {
       /* Adjust a short backwards conditional with an unfilled delay slot.  */
       if (GET_CODE (pat) == SET
@@ -5849,7 +5860,7 @@ pa_output_arg_descriptor (rtx call_insn)
       return;
     }
 
-  gcc_assert (CALL_P (call_insn));
+  gcc_assert (GET_CODE (call_insn) == CALL_INSN);
   for (link = CALL_INSN_FUNCTION_USAGE (call_insn);
        link; link = XEXP (link, 1))
     {
@@ -6644,7 +6655,7 @@ pa_output_lbranch (rtx dest, rtx insn, int xdelay)
   if (xdelay && dbr_sequence_length () != 0)
     {
       /* We can't handle a jump in the delay slot.  */
-      gcc_assert (! JUMP_P (NEXT_INSN (insn)));
+      gcc_assert (GET_CODE (NEXT_INSN (insn)) != JUMP_INSN);
 
       final_scan_insn (NEXT_INSN (insn), asm_out_file,
 		       optimize, 0, NULL);
@@ -7653,7 +7664,7 @@ pa_output_millicode_call (rtx insn, rtx call_dest)
     output_asm_insn ("nop", xoperands);
 
   /* We are done if there isn't a jump in the delay slot.  */
-  if (seq_length == 0 || ! JUMP_P (NEXT_INSN (insn)))
+  if (seq_length == 0 || GET_CODE (NEXT_INSN (insn)) != JUMP_INSN)
     return "";
 
   /* This call has an unconditional jump in its delay slot.  */
@@ -7711,7 +7722,7 @@ pa_attr_length_call (rtx insn, int sibcall)
   rtx pat = PATTERN (insn);
   unsigned long distance = -1;
 
-  gcc_assert (CALL_P (insn));
+  gcc_assert (GET_CODE (insn) == CALL_INSN);
 
   if (INSN_ADDRESSES_SET_P ())
     {
@@ -7825,7 +7836,7 @@ pa_output_call (rtx insn, rtx call_dest, int sibcall)
 	     delay slot.  We can't do this in a sibcall as we don't
 	     have a second call-clobbered scratch register available.  */
 	  if (seq_length != 0
-	      && ! JUMP_P (NEXT_INSN (insn))
+	      && GET_CODE (NEXT_INSN (insn)) != JUMP_INSN
 	      && !sibcall)
 	    {
 	      final_scan_insn (NEXT_INSN (insn), asm_out_file,
@@ -7869,7 +7880,7 @@ pa_output_call (rtx insn, rtx call_dest, int sibcall)
 	    indirect_call = 1;
 
 	  if (seq_length != 0
-	      && ! JUMP_P (NEXT_INSN (insn))
+	      && GET_CODE (NEXT_INSN (insn)) != JUMP_INSN
 	      && !sibcall
 	      && (!TARGET_PA_20
 		  || indirect_call
@@ -8035,7 +8046,7 @@ pa_output_call (rtx insn, rtx call_dest, int sibcall)
   /* We are done if there isn't a jump in the delay slot.  */
   if (seq_length == 0
       || delay_insn_deleted
-      || ! JUMP_P (NEXT_INSN (insn)))
+      || GET_CODE (NEXT_INSN (insn)) != JUMP_INSN)
     return "";
 
   /* A sibcall should never have a branch in the delay slot.  */
@@ -8104,10 +8115,10 @@ pa_attr_length_indirect_call (rtx insn)
     return 8;
 
   if (flag_pic)
-    return 20;
+    return 24;
 
   if (TARGET_PORTABLE_RUNTIME)
-    return 16;
+    return 20;
 
   /* Out of reach, can use ble.  */
   return 12;
@@ -8152,28 +8163,28 @@ pa_output_indirect_call (rtx insn, rtx call_dest)
     return ".CALL\tARGW0=GR\n\tldil L'$$dyncall,%%r2\n\tble R'$$dyncall(%%sr4,%%r2)\n\tcopy %%r31,%%r2";
 
   /* Long millicode call for portable runtime.  */
-  if (pa_attr_length_indirect_call (insn) == 16)
-    return "ldil L'$$dyncall,%%r31\n\tldo R'$$dyncall(%%r31),%%r31\n\tblr %%r0,%%r2\n\tbv,n %%r0(%%r31)";
+  if (pa_attr_length_indirect_call (insn) == 20)
+    return "ldil L'$$dyncall,%%r31\n\tldo R'$$dyncall(%%r31),%%r31\n\tblr %%r0,%%r2\n\tbv,n %%r0(%%r31)\n\tnop";
 
   /* We need a long PIC call to $$dyncall.  */
   xoperands[0] = NULL_RTX;
-  output_asm_insn ("{bl|b,l} .+8,%%r2", xoperands);
+  output_asm_insn ("{bl|b,l} .+8,%%r1", xoperands);
   if (TARGET_SOM || !TARGET_GAS)
     {
       xoperands[0] = gen_label_rtx ();
-      output_asm_insn ("addil L'$$dyncall-%0,%%r2", xoperands);
+      output_asm_insn ("addil L'$$dyncall-%0,%%r1", xoperands);
       targetm.asm_out.internal_label (asm_out_file, "L",
 				      CODE_LABEL_NUMBER (xoperands[0]));
       output_asm_insn ("ldo R'$$dyncall-%0(%%r1),%%r1", xoperands);
     }
   else
     {
-      output_asm_insn ("addil L'$$dyncall-$PIC_pcrel$0+4,%%r2", xoperands);
+      output_asm_insn ("addil L'$$dyncall-$PIC_pcrel$0+4,%%r1", xoperands);
       output_asm_insn ("ldo R'$$dyncall-$PIC_pcrel$0+8(%%r1),%%r1",
 		       xoperands);
     }
-  output_asm_insn ("bv %%r0(%%r1)", xoperands);
-  output_asm_insn ("ldo 12(%%r2),%%r2", xoperands);
+  output_asm_insn ("blr %%r0,%%r2", xoperands);
+  output_asm_insn ("bv,n %%r0(%%r1)\n\tnop", xoperands);
   return "";
 }
 
@@ -8830,12 +8841,12 @@ int
 pa_jump_in_call_delay (rtx insn)
 {
 
-  if (! JUMP_P (insn))
+  if (GET_CODE (insn) != JUMP_INSN)
     return 0;
 
   if (PREV_INSN (insn)
       && PREV_INSN (PREV_INSN (insn))
-      && NONJUMP_INSN_P (next_real_insn (PREV_INSN (PREV_INSN (insn)))))
+      && GET_CODE (next_real_insn (PREV_INSN (PREV_INSN (insn)))) == INSN)
     {
       rtx test_insn = next_real_insn (PREV_INSN (PREV_INSN (insn)));
 
@@ -8932,14 +8943,14 @@ pa_following_call (rtx insn)
 
   /* Find the previous real insn, skipping NOTEs.  */
   insn = PREV_INSN (insn);
-  while (insn && NOTE_P (insn))
+  while (insn && GET_CODE (insn) == NOTE)
     insn = PREV_INSN (insn);
 
   /* Check for CALL_INSNs and millicode calls.  */
   if (insn
-      && ((CALL_P (insn)
+      && ((GET_CODE (insn) == CALL_INSN
 	   && get_attr_type (insn) != TYPE_DYNCALL)
-	  || (NONJUMP_INSN_P (insn)
+	  || (GET_CODE (insn) == INSN
 	      && GET_CODE (PATTERN (insn)) != SEQUENCE
 	      && GET_CODE (PATTERN (insn)) != USE
 	      && GET_CODE (PATTERN (insn)) != CLOBBER
@@ -8952,10 +8963,36 @@ pa_following_call (rtx insn)
 /* We use this hook to perform a PA specific optimization which is difficult
    to do in earlier passes.
 
-   We surround the jump table itself with BEGIN_BRTAB and END_BRTAB
-   insns.  Those insns mark where we should emit .begin_brtab and
-   .end_brtab directives when using GAS.  This allows for better link
-   time optimizations.  */
+   We want the delay slots of branches within jump tables to be filled.
+   None of the compiler passes at the moment even has the notion that a
+   PA jump table doesn't contain addresses, but instead contains actual
+   instructions!
+
+   Because we actually jump into the table, the addresses of each entry
+   must stay constant in relation to the beginning of the table (which
+   itself must stay constant relative to the instruction to jump into
+   it).  I don't believe we can guarantee earlier passes of the compiler
+   will adhere to those rules.
+
+   So, late in the compilation process we find all the jump tables, and
+   expand them into real code -- e.g. each entry in the jump table vector
+   will get an appropriate label followed by a jump to the final target.
+
+   Reorg and the final jump pass can then optimize these branches and
+   fill their delay slots.  We end up with smaller, more efficient code.
+
+   The jump instructions within the table are special; we must be able
+   to identify them during assembly output (if the jumps don't get filled
+   we need to emit a nop rather than nullifying the delay slot)).  We
+   identify jumps in switch tables by using insns with the attribute
+   type TYPE_BTABLE_BRANCH.
+
+   We also surround the jump table itself with BEGIN_BRTAB and END_BRTAB
+   insns.  This serves two purposes, first it prevents jump.c from
+   noticing that the last N entries in the table jump to the instruction
+   immediately after the table and deleting the jumps.  Second, those
+   insns mark where we should emit .begin_brtab and .end_brtab directives
+   when using GAS (allows for better link time optimizations).  */
 
 static void
 pa_reorg (void)
@@ -8967,23 +9004,87 @@ pa_reorg (void)
   if (pa_cpu < PROCESSOR_8000)
     pa_combine_instructions ();
 
-    /* Still need brtab marker insns.  FIXME: the presence of these
-       markers disables output of the branch table to readonly memory,
-       and any alignment directives that might be needed.  Possibly,
-       the begin_brtab insn should be output before the label for the
-       table.  This doesn't matter at the moment since the tables are
-       always output in the text section.  */
-    for (insn = get_insns (); insn; insn = NEXT_INSN (insn))
-      {
-	/* Find an ADDR_VEC insn.  */
-	if (! JUMP_TABLE_DATA_P (insn))
-	  continue;
 
-	/* Now generate markers for the beginning and end of the
-	   branch table.  */
-	emit_insn_before (gen_begin_brtab (), insn);
-	emit_insn_after (gen_end_brtab (), insn);
-      }
+  /* This is fairly cheap, so always run it if optimizing.  */
+  if (optimize > 0 && !TARGET_BIG_SWITCH)
+    {
+      /* Find and explode all ADDR_VEC or ADDR_DIFF_VEC insns.  */
+      for (insn = get_insns (); insn; insn = NEXT_INSN (insn))
+	{
+	  rtx pattern, tmp, location, label;
+	  unsigned int length, i;
+
+	  /* Find an ADDR_VEC or ADDR_DIFF_VEC insn to explode.  */
+	  if (GET_CODE (insn) != JUMP_INSN
+	      || (GET_CODE (PATTERN (insn)) != ADDR_VEC
+		  && GET_CODE (PATTERN (insn)) != ADDR_DIFF_VEC))
+	    continue;
+
+	  /* Emit marker for the beginning of the branch table.  */
+	  emit_insn_before (gen_begin_brtab (), insn);
+
+	  pattern = PATTERN (insn);
+	  location = PREV_INSN (insn);
+          length = XVECLEN (pattern, GET_CODE (pattern) == ADDR_DIFF_VEC);
+
+	  for (i = 0; i < length; i++)
+	    {
+	      /* Emit a label before each jump to keep jump.c from
+		 removing this code.  */
+	      tmp = gen_label_rtx ();
+	      LABEL_NUSES (tmp) = 1;
+	      emit_label_after (tmp, location);
+	      location = NEXT_INSN (location);
+
+	      if (GET_CODE (pattern) == ADDR_VEC)
+		label = XEXP (XVECEXP (pattern, 0, i), 0);
+	      else
+		label = XEXP (XVECEXP (pattern, 1, i), 0);
+
+	      tmp = gen_short_jump (label);
+
+	      /* Emit the jump itself.  */
+	      tmp = emit_jump_insn_after (tmp, location);
+	      JUMP_LABEL (tmp) = label;
+	      LABEL_NUSES (label)++;
+	      location = NEXT_INSN (location);
+
+	      /* Emit a BARRIER after the jump.  */
+	      emit_barrier_after (location);
+	      location = NEXT_INSN (location);
+	    }
+
+	  /* Emit marker for the end of the branch table.  */
+	  emit_insn_before (gen_end_brtab (), location);
+	  location = NEXT_INSN (location);
+	  emit_barrier_after (location);
+
+	  /* Delete the ADDR_VEC or ADDR_DIFF_VEC.  */
+	  delete_insn (insn);
+	}
+    }
+  else
+    {
+      /* Still need brtab marker insns.  FIXME: the presence of these
+	 markers disables output of the branch table to readonly memory,
+	 and any alignment directives that might be needed.  Possibly,
+	 the begin_brtab insn should be output before the label for the
+	 table.  This doesn't matter at the moment since the tables are
+	 always output in the text section.  */
+      for (insn = get_insns (); insn; insn = NEXT_INSN (insn))
+	{
+	  /* Find an ADDR_VEC insn.  */
+	  if (GET_CODE (insn) != JUMP_INSN
+	      || (GET_CODE (PATTERN (insn)) != ADDR_VEC
+		  && GET_CODE (PATTERN (insn)) != ADDR_DIFF_VEC))
+	    continue;
+
+	  /* Now generate markers for the beginning and end of the
+	     branch table.  */
+	  emit_insn_before (gen_begin_brtab (), insn);
+	  emit_insn_after (gen_end_brtab (), insn);
+	}
+    }
 }
 
 /* The PA has a number of odd instructions which can perform multiple
@@ -9054,9 +9155,13 @@ pa_combine_instructions (void)
 
       /* We only care about INSNs, JUMP_INSNs, and CALL_INSNs.
 	 Also ignore any special USE insns.  */
-      if ((! NONJUMP_INSN_P (anchor) && ! JUMP_P (anchor) && ! CALL_P (anchor))
+      if ((GET_CODE (anchor) != INSN
+	  && GET_CODE (anchor) != JUMP_INSN
+	  && GET_CODE (anchor) != CALL_INSN)
 	  || GET_CODE (PATTERN (anchor)) == USE
-	  || GET_CODE (PATTERN (anchor)) == CLOBBER)
+	  || GET_CODE (PATTERN (anchor)) == CLOBBER
+	  || GET_CODE (PATTERN (anchor)) == ADDR_VEC
+	  || GET_CODE (PATTERN (anchor)) == ADDR_DIFF_VEC)
 	continue;
 
       anchor_attr = get_attr_pa_combine_type (anchor);
@@ -9072,14 +9177,16 @@ pa_combine_instructions (void)
 	       floater;
 	       floater = PREV_INSN (floater))
 	    {
-	      if (NOTE_P (floater)
-		  || (NONJUMP_INSN_P (floater)
+	      if (GET_CODE (floater) == NOTE
+		  || (GET_CODE (floater) == INSN
 		      && (GET_CODE (PATTERN (floater)) == USE
 			  || GET_CODE (PATTERN (floater)) == CLOBBER)))
 		continue;
 
 	      /* Anything except a regular INSN will stop our search.  */
-	      if (! NONJUMP_INSN_P (floater))
+	      if (GET_CODE (floater) != INSN
+		  || GET_CODE (PATTERN (floater)) == ADDR_VEC
+		  || GET_CODE (PATTERN (floater)) == ADDR_DIFF_VEC)
 		{
 		  floater = NULL_RTX;
 		  break;
@@ -9131,15 +9238,17 @@ pa_combine_instructions (void)
 	    {
 	      for (floater = anchor; floater; floater = NEXT_INSN (floater))
 		{
-		  if (NOTE_P (floater)
-		      || (NONJUMP_INSN_P (floater)
+		  if (GET_CODE (floater) == NOTE
+		      || (GET_CODE (floater) == INSN
 			  && (GET_CODE (PATTERN (floater)) == USE
 			      || GET_CODE (PATTERN (floater)) == CLOBBER)))
 
 		    continue;
 
 		  /* Anything except a regular INSN will stop our search.  */
-		  if (! NONJUMP_INSN_P (floater))
+		  if (GET_CODE (floater) != INSN
+		      || GET_CODE (PATTERN (floater)) == ADDR_VEC
+		      || GET_CODE (PATTERN (floater)) == ADDR_DIFF_VEC)
 		    {
 		      floater = NULL_RTX;
 		      break;
@@ -9292,7 +9401,7 @@ pa_can_combine_p (rtx new_rtx, rtx anchor, rtx floater, int reversed, rtx dest,
 int
 pa_insn_refs_are_delayed (rtx insn)
 {
-  return ((NONJUMP_INSN_P (insn)
+  return ((GET_CODE (insn) == INSN
 	   && GET_CODE (PATTERN (insn)) != SEQUENCE
 	   && GET_CODE (PATTERN (insn)) != USE
 	   && GET_CODE (PATTERN (insn)) != CLOBBER
@@ -10144,11 +10253,6 @@ pa_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
 				    gen_reg_rtx (Pmode),
 				    gen_reg_rtx (Pmode)));
     }
-
-#ifdef HAVE_ENABLE_EXECUTE_STACK
-  emit_library_call (gen_rtx_SYMBOL_REF (Pmode, "__enable_execute_stack"),
-		     LCT_NORMAL, VOIDmode, 1, XEXP (m_tramp, 0), Pmode);
-#endif
 }
 
 /* Perform any machine-specific adjustment in the address of the trampoline.

@@ -1,4 +1,5 @@
 /* { dg-do run } */
+/* { dg-options "-O3" } */
 
 int a, c, e[5][2]; 
 unsigned int d;

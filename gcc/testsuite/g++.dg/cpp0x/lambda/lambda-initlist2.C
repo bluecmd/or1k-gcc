@@ -1,5 +1,5 @@
 // PR c++/54947
-// { dg-do compile { target c++11 } }
+// { dg-options -std=gnu++11 }
 
 struct X
 {

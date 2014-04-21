@@ -1,4 +1,4 @@
-// compiledir
+// skip # used by recursive2
 
 // Copyright 2012 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -6,4 +6,12 @@
 
 // Mutually recursive type definitions imported and used by recursive1.go.
 
-package ignored
+package p
+
+type I1 interface {
+	F() I2
+}
+
+type I2 interface {
+	I1
+}

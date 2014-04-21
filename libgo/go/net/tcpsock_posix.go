@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd windows
+// +build darwin freebsd linux netbsd openbsd windows
 
 package net
 
@@ -46,10 +46,14 @@ func (a *TCPAddr) isWildcard() bool {
 }
 
 func (a *TCPAddr) sockaddr(family int) (syscall.Sockaddr, error) {
-	if a == nil {
-		return nil, nil
-	}
 	return ipToSockaddr(family, a.IP, a.Port, a.Zone)
+}
+
+func (a *TCPAddr) toAddr() sockaddr {
+	if a == nil { // nil *TCPAddr
+		return nil // nil interface
+	}
+	return a
 }
 
 // TCPConn is an implementation of the Conn interface for TCP network
@@ -117,14 +121,6 @@ func (c *TCPConn) SetKeepAlive(keepalive bool) error {
 	return setKeepAlive(c.fd, keepalive)
 }
 
-// SetKeepAlivePeriod sets period between keep alives.
-func (c *TCPConn) SetKeepAlivePeriod(d time.Duration) error {
-	if !c.ok() {
-		return syscall.EINVAL
-	}
-	return setKeepAlivePeriod(c.fd, d)
-}
-
 // SetNoDelay controls whether the operating system should delay
 // packet transmission in hopes of sending fewer packets (Nagle's
 // algorithm).  The default is true (no delay), meaning that data is
@@ -143,16 +139,16 @@ func DialTCP(net string, laddr, raddr *TCPAddr) (*TCPConn, error) {
 	switch net {
 	case "tcp", "tcp4", "tcp6":
 	default:
-		return nil, &OpError{Op: "dial", Net: net, Addr: raddr, Err: UnknownNetworkError(net)}
+		return nil, UnknownNetworkError(net)
 	}
 	if raddr == nil {
-		return nil, &OpError{Op: "dial", Net: net, Addr: nil, Err: errMissingAddress}
+		return nil, &OpError{"dial", net, nil, errMissingAddress}
 	}
 	return dialTCP(net, laddr, raddr, noDeadline)
 }
 
 func dialTCP(net string, laddr, raddr *TCPAddr, deadline time.Time) (*TCPConn, error) {
-	fd, err := internetSocket(net, laddr, raddr, deadline, syscall.SOCK_STREAM, 0, "dial", sockaddrToTCP)
+	fd, err := internetSocket(net, laddr.toAddr(), raddr.toAddr(), deadline, syscall.SOCK_STREAM, 0, "dial", sockaddrToTCP)
 
 	// TCP has a rarely used mechanism called a 'simultaneous connection' in
 	// which Dial("tcp", addr1, addr2) run on the machine at addr1 can
@@ -182,11 +178,11 @@ func dialTCP(net string, laddr, raddr *TCPAddr, deadline time.Time) (*TCPConn, e
 		if err == nil {
 			fd.Close()
 		}
-		fd, err = internetSocket(net, laddr, raddr, deadline, syscall.SOCK_STREAM, 0, "dial", sockaddrToTCP)
+		fd, err = internetSocket(net, laddr.toAddr(), raddr.toAddr(), deadline, syscall.SOCK_STREAM, 0, "dial", sockaddrToTCP)
 	}
 
 	if err != nil {
-		return nil, &OpError{Op: "dial", Net: net, Addr: raddr, Err: err}
+		return nil, err
 	}
 	return newTCPConn(fd), nil
 }
@@ -225,7 +221,7 @@ type TCPListener struct {
 }
 
 // AcceptTCP accepts the next incoming call and returns the new
-// connection.
+// connection and the remote address.
 func (l *TCPListener) AcceptTCP() (*TCPConn, error) {
 	if l == nil || l.fd == nil {
 		return nil, syscall.EINVAL
@@ -265,7 +261,7 @@ func (l *TCPListener) SetDeadline(t time.Time) error {
 	if l == nil || l.fd == nil {
 		return syscall.EINVAL
 	}
-	return l.fd.setDeadline(t)
+	return setDeadline(l.fd, t)
 }
 
 // File returns a copy of the underlying os.File, set to blocking
@@ -285,14 +281,19 @@ func ListenTCP(net string, laddr *TCPAddr) (*TCPListener, error) {
 	switch net {
 	case "tcp", "tcp4", "tcp6":
 	default:
-		return nil, &OpError{Op: "listen", Net: net, Addr: laddr, Err: UnknownNetworkError(net)}
+		return nil, UnknownNetworkError(net)
 	}
 	if laddr == nil {
 		laddr = &TCPAddr{}
 	}
-	fd, err := internetSocket(net, laddr, nil, noDeadline, syscall.SOCK_STREAM, 0, "listen", sockaddrToTCP)
+	fd, err := internetSocket(net, laddr.toAddr(), nil, noDeadline, syscall.SOCK_STREAM, 0, "listen", sockaddrToTCP)
 	if err != nil {
-		return nil, &OpError{Op: "listen", Net: net, Addr: laddr, Err: err}
+		return nil, err
+	}
+	err = syscall.Listen(fd.sysfd, listenerBacklog)
+	if err != nil {
+		fd.Close()
+		return nil, &OpError{"listen", net, laddr, err}
 	}
 	return &TCPListener{fd}, nil
 }

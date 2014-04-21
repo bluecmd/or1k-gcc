@@ -1,5 +1,6 @@
 // Origin PR c++/47172
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
+// { dg-do compile }
 
 struct A
 {

@@ -16,8 +16,6 @@ typedef struct {
    unsigned char h;
 } s;
 
-volatile int y = 0;
-
 __attribute__ ((noinline)) int
 main1 (s *arr)
 {
@@ -76,8 +74,8 @@ int main (void)
       arr[i].f = i * 5;
       arr[i].g = i - 3;
       arr[i].h = 67;
-      if (y) /* Avoid vectorization.  */
-        abort ();
+      if (arr[i].a == 178)
+         abort(); 
     } 
 
   main1 (arr);

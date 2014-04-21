@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 // PR c++/34103
 template<typename> struct A {};
 

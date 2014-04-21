@@ -1,5 +1,5 @@
 // PR c++/43054
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template<typename R> struct future { };
 

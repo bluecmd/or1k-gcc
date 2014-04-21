@@ -504,12 +504,12 @@ var elementNameMap = map[string]element{
 	"title":    elementTitle,
 }
 
-// asciiAlpha reports whether c is an ASCII letter.
+// asciiAlpha returns whether c is an ASCII letter.
 func asciiAlpha(c byte) bool {
 	return 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z'
 }
 
-// asciiAlphaNum reports whether c is an ASCII letter or digit.
+// asciiAlphaNum returns whether c is an ASCII letter or digit.
 func asciiAlphaNum(c byte) bool {
 	return asciiAlpha(c) || '0' <= c && c <= '9'
 }

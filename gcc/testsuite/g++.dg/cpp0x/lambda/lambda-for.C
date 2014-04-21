@@ -1,6 +1,5 @@
 // PR c++/50114
-// { dg-do compile { target c++11 } }
-// { dg-options "-w" }
+// { dg-options "-std=c++0x -w" }
 
 int open()
 {

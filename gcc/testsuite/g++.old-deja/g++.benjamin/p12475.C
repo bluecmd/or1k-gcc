@@ -1,4 +1,4 @@
-// { dg-do assemble { target { ! c++11 } } }
+// { dg-do assemble { target c++98 } }
 // prms-id: 12475
 
 #include <limits.h>

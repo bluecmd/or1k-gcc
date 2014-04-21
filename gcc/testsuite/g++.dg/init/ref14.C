@@ -1,6 +1,4 @@
 // PR c++/33459
-// { dg-prune-output "uninitialized" }
-// { dg-prune-output "deleted" }
 
 union A
 {

@@ -1,5 +1,5 @@
 /* Target definitions for Darwin (Mac OS X) systems.
-   Copyright (C) 1989-2014 Free Software Foundation, Inc.
+   Copyright (C) 1989-2013 Free Software Foundation, Inc.
    Contributed by Apple Computer Inc.
 
 This file is part of GCC.
@@ -178,11 +178,10 @@ extern GTY(()) int darwin_ms_struct;
     %{L*} %(link_libgcc) %o %{fprofile-arcs|fprofile-generate*|coverage:-lgcov} \
     %{fopenmp|ftree-parallelize-loops=*: \
       %{static|static-libgcc|static-libstdc++|static-libgfortran: libgomp.a%s; : -lgomp } } \
+    %{fsanitize=address: -lasan } \
     %{fgnu-tm: \
       %{static|static-libgcc|static-libstdc++|static-libgfortran: libitm.a%s; : -litm } } \
     %{!nostdlib:%{!nodefaultlibs:\
-      %{%:sanitize(address): -lasan } \
-      %{%:sanitize(undefined): -lubsan } \
       %(link_ssp) %(link_gcc_c_sequence)\
     }}\
     %{!nostdlib:%{!nostartfiles:%E}} %{T*} %{F*} }}}}}}}"
@@ -875,6 +874,10 @@ void add_framework_path (char *);
 
 #define TARGET_POSIX_IO
 
+/* All new versions of Darwin have C99 functions.  */
+
+#define TARGET_C99_FUNCTIONS 1
+
 #define WINT_TYPE "int"
 
 /* Every program on darwin links against libSystem which contains the pthread
@@ -917,5 +920,11 @@ extern void darwin_driver_init (unsigned int *,struct cl_decoded_option **);
 /* When building cross-compilers (and native crosses) we shall default to 
    providing an osx-version-min of this unless overridden by the User.  */
 #define DEF_MIN_OSX_VERSION "10.4"
+
+#define TARGET_OS_D_BUILTINS()					\
+    do {							\
+	builtin_define ("OSX");					\
+	builtin_define ("Posix");				\
+    } while (0)
 
 #endif /* CONFIG_DARWIN_H */

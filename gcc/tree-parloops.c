@@ -1,5 +1,5 @@
 /* Loop autoparallelization.
-   Copyright (C) 2006-2014 Free Software Foundation, Inc.
+   Copyright (C) 2006-2013 Free Software Foundation, Inc.
    Contributed by Sebastian Pop <pop@cri.ensmp.fr> 
    Zdenek Dvorak <dvorakz@suse.cz> and Razya Ladelsky <razya@il.ibm.com>.
 
@@ -22,30 +22,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tree.h"
-#include "basic-block.h"
-#include "tree-ssa-alias.h"
-#include "internal-fn.h"
-#include "gimple-expr.h"
-#include "is-a.h"
-#include "gimple.h"
-#include "gimplify.h"
-#include "gimple-iterator.h"
-#include "gimplify-me.h"
-#include "gimple-walk.h"
-#include "stor-layout.h"
-#include "tree-nested.h"
-#include "gimple-ssa.h"
-#include "tree-cfg.h"
-#include "tree-phinodes.h"
-#include "ssa-iterators.h"
-#include "stringpool.h"
-#include "tree-ssanames.h"
-#include "tree-ssa-loop-ivopts.h"
-#include "tree-ssa-loop-manip.h"
-#include "tree-ssa-loop-niter.h"
-#include "tree-ssa-loop.h"
-#include "tree-into-ssa.h"
+#include "tree-flow.h"
 #include "cfgloop.h"
 #include "tree-data-ref.h"
 #include "tree-scalar-evolution.h"
@@ -53,10 +30,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-pass.h"
 #include "langhooks.h"
 #include "tree-vectorizer.h"
-#include "tree-hasher.h"
-#include "tree-parloops.h"
-#include "omp-low.h"
-#include "tree-nested.h"
 
 /* This pass tries to distribute iterations of loops into several threads.
    The implementation is straightforward -- for each loop we test whether its
@@ -203,44 +176,36 @@ struct reduction_info
 				   operation.  */
 };
 
-/* Reduction info hashtable helpers.  */
-
-struct reduction_hasher : typed_free_remove <reduction_info>
-{
-  typedef reduction_info value_type;
-  typedef reduction_info compare_type;
-  static inline hashval_t hash (const value_type *);
-  static inline bool equal (const value_type *, const compare_type *);
-};
-
 /* Equality and hash functions for hashtab code.  */
 
-inline bool
-reduction_hasher::equal (const value_type *a, const compare_type *b)
+static int
+reduction_info_eq (const void *aa, const void *bb)
 {
+  const struct reduction_info *a = (const struct reduction_info *) aa;
+  const struct reduction_info *b = (const struct reduction_info *) bb;
+
   return (a->reduc_phi == b->reduc_phi);
 }
 
-inline hashval_t
-reduction_hasher::hash (const value_type *a)
+static hashval_t
+reduction_info_hash (const void *aa)
 {
+  const struct reduction_info *a = (const struct reduction_info *) aa;
+
   return a->reduc_version;
 }
 
-typedef hash_table <reduction_hasher> reduction_info_table_type;
-
-
 static struct reduction_info *
-reduction_phi (reduction_info_table_type reduction_list, gimple phi)
+reduction_phi (htab_t reduction_list, gimple phi)
 {
   struct reduction_info tmpred, *red;
 
-  if (reduction_list.elements () == 0 || phi == NULL)
+  if (htab_elements (reduction_list) == 0 || phi == NULL)
     return NULL;
 
   tmpred.reduc_phi = phi;
   tmpred.reduc_version = gimple_uid (phi);
-  red = reduction_list.find (&tmpred);
+  red = (struct reduction_info *) htab_find (reduction_list, &tmpred);
 
   return red;
 }
@@ -255,31 +220,24 @@ struct name_to_copy_elt
 			   value.  */
 };
 
-/* Name copies hashtable helpers.  */
-
-struct name_to_copy_hasher : typed_free_remove <name_to_copy_elt>
-{
-  typedef name_to_copy_elt value_type;
-  typedef name_to_copy_elt compare_type;
-  static inline hashval_t hash (const value_type *);
-  static inline bool equal (const value_type *, const compare_type *);
-};
-
 /* Equality and hash functions for hashtab code.  */
 
-inline bool
-name_to_copy_hasher::equal (const value_type *a, const compare_type *b)
+static int
+name_to_copy_elt_eq (const void *aa, const void *bb)
 {
+  const struct name_to_copy_elt *a = (const struct name_to_copy_elt *) aa;
+  const struct name_to_copy_elt *b = (const struct name_to_copy_elt *) bb;
+
   return a->version == b->version;
 }
 
-inline hashval_t
-name_to_copy_hasher::hash (const value_type *a)
+static hashval_t
+name_to_copy_elt_hash (const void *aa)
 {
+  const struct name_to_copy_elt *a = (const struct name_to_copy_elt *) aa;
+
   return (hashval_t) a->version;
 }
-
-typedef hash_table <name_to_copy_hasher> name_to_copy_table_type;
 
 /* A transformation matrix, which is a self-contained ROWSIZE x COLSIZE
    matrix.  Rather than use floats, we simply keep a single DENOMINATOR that
@@ -408,6 +366,7 @@ lambda_transform_legal_p (lambda_trans_matrix trans,
 static bool
 loop_parallel_p (struct loop *loop, struct obstack * parloop_obstack)
 {
+  vec<loop_p> loop_nest;
   vec<ddr_p> dependence_relations;
   vec<data_reference_p> datarefs;
   lambda_trans_matrix trans;
@@ -424,9 +383,9 @@ loop_parallel_p (struct loop *loop, struct obstack * parloop_obstack)
 
   /* Check for problems with dependences.  If the loop can be reversed,
      the iterations are independent.  */
-  auto_vec<loop_p, 3> loop_nest;
   datarefs.create (10);
-  dependence_relations.create (100);
+  dependence_relations.create (10 * 10);
+  loop_nest.create (3);
   if (! compute_data_dependences_for_loop (loop, true, &loop_nest, &datarefs,
 					   &dependence_relations))
     {
@@ -452,6 +411,7 @@ loop_parallel_p (struct loop *loop, struct obstack * parloop_obstack)
 	     "  FAILED: data dependencies exist across iterations\n");
 
  end:
+  loop_nest.release ();
   free_dependence_relations (dependence_relations);
   free_data_refs (datarefs);
 
@@ -485,11 +445,11 @@ loop_has_blocks_with_irreducible_flag (struct loop *loop)
    right before GSI.  */
 
 static tree
-take_address_of (tree obj, tree type, edge entry,
-		 int_tree_htab_type decl_address, gimple_stmt_iterator *gsi)
+take_address_of (tree obj, tree type, edge entry, htab_t decl_address,
+		 gimple_stmt_iterator *gsi)
 {
   int uid;
-  int_tree_map **dslot;
+  void **dslot;
   struct int_tree_map ielt, *nielt;
   tree *var_p, name, addr;
   gimple stmt;
@@ -512,7 +472,7 @@ take_address_of (tree obj, tree type, edge entry,
      on it.  */
   uid = DECL_UID (TREE_OPERAND (TREE_OPERAND (*var_p, 0), 0));
   ielt.uid = uid;
-  dslot = decl_address.find_slot_with_hash (&ielt, uid, INSERT);
+  dslot = htab_find_slot_with_hash (decl_address, &ielt, uid, INSERT);
   if (!*dslot)
     {
       if (gsi == NULL)
@@ -533,7 +493,7 @@ take_address_of (tree obj, tree type, edge entry,
       *dslot = nielt;
     }
   else
-    name = (*dslot)->to;
+    name = ((struct int_tree_map *) *dslot)->to;
 
   /* Express the address in terms of the canonical SSA name.  */
   TREE_OPERAND (*var_p, 0) = name;
@@ -560,14 +520,15 @@ take_address_of (tree obj, tree type, edge entry,
    for reduction described in SLOT, and place it at the preheader of
    the loop described in DATA.  */
 
-int
-initialize_reductions (reduction_info **slot, struct loop *loop)
+static int
+initialize_reductions (void **slot, void *data)
 {
   tree init, c;
   tree bvar, type, arg;
   edge e;
 
-  struct reduction_info *const reduc = *slot;
+  struct reduction_info *const reduc = (struct reduction_info *) *slot;
+  struct loop *loop = (struct loop *) data;
 
   /* Create initialization in preheader:
      reduction_variable = initialization value of reduction.  */
@@ -609,7 +570,7 @@ struct elv_data
 {
   struct walk_stmt_info info;
   edge entry;
-  int_tree_htab_type decl_address;
+  htab_t decl_address;
   gimple_stmt_iterator *gsi;
   bool changed;
   bool reset;
@@ -699,7 +660,7 @@ eliminate_local_variables_1 (tree *tp, int *walk_subtrees, void *data)
 
 static void
 eliminate_local_variables_stmt (edge entry, gimple_stmt_iterator *gsi,
-				int_tree_htab_type decl_address)
+				htab_t decl_address)
 {
   struct elv_data dta;
   gimple stmt = gsi_stmt (*gsi);
@@ -752,12 +713,13 @@ static void
 eliminate_local_variables (edge entry, edge exit)
 {
   basic_block bb;
-  auto_vec<basic_block, 3> body;
+  vec<basic_block> body;
+  body.create (3);
   unsigned i;
   gimple_stmt_iterator gsi;
   bool has_debug_stmt = false;
-  int_tree_htab_type decl_address;
-  decl_address.create (10);
+  htab_t decl_address = htab_create (10, int_tree_map_hash, int_tree_map_eq,
+				     free);
   basic_block entry_bb = entry->src;
   basic_block exit_bb = exit->dest;
 
@@ -781,7 +743,8 @@ eliminate_local_variables (edge entry, edge exit)
 	  if (gimple_debug_bind_p (gsi_stmt (gsi)))
 	    eliminate_local_variables_stmt (entry, &gsi, decl_address);
 
-  decl_address.dispose ();
+  htab_delete (decl_address);
+  body.release ();
 }
 
 /* Returns true if expression EXPR is not defined between ENTRY and
@@ -819,25 +782,25 @@ expr_invariant_in_region_p (edge entry, edge exit, tree expr)
    duplicated, storing the copies in DECL_COPIES.  */
 
 static tree
-separate_decls_in_region_name (tree name, name_to_copy_table_type name_copies,
-			       int_tree_htab_type decl_copies, bool copy_name_p)
+separate_decls_in_region_name (tree name,
+			       htab_t name_copies, htab_t decl_copies,
+			       bool copy_name_p)
 {
   tree copy, var, var_copy;
   unsigned idx, uid, nuid;
   struct int_tree_map ielt, *nielt;
   struct name_to_copy_elt elt, *nelt;
-  name_to_copy_elt **slot;
-  int_tree_map **dslot;
+  void **slot, **dslot;
 
   if (TREE_CODE (name) != SSA_NAME)
     return name;
 
   idx = SSA_NAME_VERSION (name);
   elt.version = idx;
-  slot = name_copies.find_slot_with_hash (&elt, idx,
-					  copy_name_p ? INSERT : NO_INSERT);
+  slot = htab_find_slot_with_hash (name_copies, &elt, idx,
+				   copy_name_p ? INSERT : NO_INSERT);
   if (slot && *slot)
-    return (*slot)->new_name;
+    return ((struct name_to_copy_elt *) *slot)->new_name;
 
   if (copy_name_p)
     {
@@ -860,7 +823,7 @@ separate_decls_in_region_name (tree name, name_to_copy_table_type name_copies,
 
   uid = DECL_UID (var);
   ielt.uid = uid;
-  dslot = decl_copies.find_slot_with_hash (&ielt, uid, INSERT);
+  dslot = htab_find_slot_with_hash (decl_copies, &ielt, uid, INSERT);
   if (!*dslot)
     {
       var_copy = create_tmp_var (TREE_TYPE (var), get_name (var));
@@ -874,7 +837,7 @@ separate_decls_in_region_name (tree name, name_to_copy_table_type name_copies,
          it again.  */
       nuid = DECL_UID (var_copy);
       ielt.uid = nuid;
-      dslot = decl_copies.find_slot_with_hash (&ielt, nuid, INSERT);
+      dslot = htab_find_slot_with_hash (decl_copies, &ielt, nuid, INSERT);
       gcc_assert (!*dslot);
       nielt = XNEW (struct int_tree_map);
       nielt->uid = nuid;
@@ -897,8 +860,7 @@ separate_decls_in_region_name (tree name, name_to_copy_table_type name_copies,
 
 static void
 separate_decls_in_region_stmt (edge entry, edge exit, gimple stmt,
-			       name_to_copy_table_type name_copies,
-			       int_tree_htab_type decl_copies)
+			       htab_t name_copies, htab_t decl_copies)
 {
   use_operand_p use;
   def_operand_p def;
@@ -936,17 +898,15 @@ separate_decls_in_region_stmt (edge entry, edge exit, gimple stmt,
    replacement decls are stored in DECL_COPIES.  */
 
 static bool
-separate_decls_in_region_debug (gimple stmt,
-				name_to_copy_table_type name_copies,
-				int_tree_htab_type decl_copies)
+separate_decls_in_region_debug (gimple stmt, htab_t name_copies,
+				htab_t decl_copies)
 {
   use_operand_p use;
   ssa_op_iter oi;
   tree var, name;
   struct int_tree_map ielt;
   struct name_to_copy_elt elt;
-  name_to_copy_elt **slot;
-  int_tree_map **dslot;
+  void **slot, **dslot;
 
   if (gimple_debug_bind_p (stmt))
     var = gimple_debug_bind_get_var (stmt);
@@ -958,7 +918,7 @@ separate_decls_in_region_debug (gimple stmt,
     return true;
   gcc_assert (DECL_P (var) && SSA_VAR_P (var));
   ielt.uid = DECL_UID (var);
-  dslot = decl_copies.find_slot_with_hash (&ielt, ielt.uid, NO_INSERT);
+  dslot = htab_find_slot_with_hash (decl_copies, &ielt, ielt.uid, NO_INSERT);
   if (!dslot)
     return true;
   if (gimple_debug_bind_p (stmt))
@@ -973,7 +933,7 @@ separate_decls_in_region_debug (gimple stmt,
       continue;
 
     elt.version = SSA_NAME_VERSION (name);
-    slot = name_copies.find_slot_with_hash (&elt, elt.version, NO_INSERT);
+    slot = htab_find_slot_with_hash (name_copies, &elt, elt.version, NO_INSERT);
     if (!slot)
       {
 	gimple_debug_bind_reset_value (stmt);
@@ -981,7 +941,7 @@ separate_decls_in_region_debug (gimple stmt,
 	break;
       }
 
-    SET_USE (use, (*slot)->new_name);
+    SET_USE (use, ((struct name_to_copy_elt *) *slot)->new_name);
   }
 
   return false;
@@ -990,11 +950,12 @@ separate_decls_in_region_debug (gimple stmt,
 /* Callback for htab_traverse.  Adds a field corresponding to the reduction
    specified in SLOT. The type is passed in DATA.  */
 
-int
-add_field_for_reduction (reduction_info **slot, tree type)
+static int
+add_field_for_reduction (void **slot, void *data)
 {
 
-  struct reduction_info *const red = *slot;
+  struct reduction_info *const red = (struct reduction_info *) *slot;
+  tree const type = (tree) data;
   tree var = gimple_assign_lhs (red->reduc_stmt);
   tree field = build_decl (gimple_location (red->reduc_stmt), FIELD_DECL,
 			   SSA_NAME_IDENTIFIER (var), TREE_TYPE (var));
@@ -1009,10 +970,11 @@ add_field_for_reduction (reduction_info **slot, tree type)
 /* Callback for htab_traverse.  Adds a field corresponding to a ssa name
    described in SLOT. The type is passed in DATA.  */
 
-int
-add_field_for_name (name_to_copy_elt **slot, tree type)
+static int
+add_field_for_name (void **slot, void *data)
 {
-  struct name_to_copy_elt *const elt = *slot;
+  struct name_to_copy_elt *const elt = (struct name_to_copy_elt *) *slot;
+  tree type = (tree) data;
   tree name = ssa_name (elt->version);
   tree field = build_decl (UNKNOWN_LOCATION,
 			   FIELD_DECL, SSA_NAME_IDENTIFIER (name),
@@ -1031,10 +993,11 @@ add_field_for_name (name_to_copy_elt **slot, tree type)
    The phi's result will be stored in NEW_PHI field of the
    reduction's data structure.  */
 
-int
-create_phi_for_local_result (reduction_info **slot, struct loop *loop)
+static int
+create_phi_for_local_result (void **slot, void *data)
 {
-  struct reduction_info *const reduc = *slot;
+  struct reduction_info *const reduc = (struct reduction_info *) *slot;
+  const struct loop *const loop = (const struct loop *) data;
   edge e;
   gimple new_phi;
   basic_block store_bb;
@@ -1080,10 +1043,11 @@ struct clsn_data
    DATA annotates the place in memory the atomic operation relates to,
    and the basic block it needs to be generated in.  */
 
-int
-create_call_for_reduction_1 (reduction_info **slot, struct clsn_data *clsn_data)
+static int
+create_call_for_reduction_1 (void **slot, void *data)
 {
-  struct reduction_info *const reduc = *slot;
+  struct reduction_info *const reduc = (struct reduction_info *) *slot;
+  struct clsn_data *const clsn_data = (struct clsn_data *) data;
   gimple_stmt_iterator gsi;
   tree type = TREE_TYPE (PHI_RESULT (reduc->reduc_phi));
   tree load_struct;
@@ -1132,24 +1096,23 @@ create_call_for_reduction_1 (reduction_info **slot, struct clsn_data *clsn_data)
    LD_ST_DATA describes the shared data structure where
    shared data is stored in and loaded from.  */
 static void
-create_call_for_reduction (struct loop *loop,
-			   reduction_info_table_type reduction_list,
+create_call_for_reduction (struct loop *loop, htab_t reduction_list,
 			   struct clsn_data *ld_st_data)
 {
-  reduction_list.traverse <struct loop *, create_phi_for_local_result> (loop);
+  htab_traverse (reduction_list, create_phi_for_local_result, loop);
   /* Find the fallthru edge from GIMPLE_OMP_CONTINUE.  */
   ld_st_data->load_bb = FALLTHRU_EDGE (loop->latch)->dest;
-  reduction_list
-    .traverse <struct clsn_data *, create_call_for_reduction_1> (ld_st_data);
+  htab_traverse (reduction_list, create_call_for_reduction_1, ld_st_data);
 }
 
 /* Callback for htab_traverse.  Loads the final reduction value at the
    join point of all threads, and inserts it in the right place.  */
 
-int
-create_loads_for_reductions (reduction_info **slot, struct clsn_data *clsn_data)
+static int
+create_loads_for_reductions (void **slot, void *data)
 {
-  struct reduction_info *const red = *slot;
+  struct reduction_info *const red = (struct reduction_info *) *slot;
+  struct clsn_data *const clsn_data = (struct clsn_data *) data;
   gimple stmt;
   gimple_stmt_iterator gsi;
   tree type = TREE_TYPE (gimple_assign_lhs (red->reduc_stmt));
@@ -1165,6 +1128,7 @@ create_loads_for_reductions (reduction_info **slot, struct clsn_data *clsn_data)
   x = load_struct;
   name = PHI_RESULT (red->keep_res);
   stmt = gimple_build_assign (name, x);
+  SSA_NAME_DEF_STMT (name) = stmt;
 
   gsi_insert_after (&gsi, stmt, GSI_NEW_STMT);
 
@@ -1182,7 +1146,7 @@ create_loads_for_reductions (reduction_info **slot, struct clsn_data *clsn_data)
    REDUCTION_LIST describes the list of reductions that the
    loads should be generated for.  */
 static void
-create_final_loads_for_reduction (reduction_info_table_type reduction_list,
+create_final_loads_for_reduction (htab_t reduction_list,
 				  struct clsn_data *ld_st_data)
 {
   gimple_stmt_iterator gsi;
@@ -1194,9 +1158,9 @@ create_final_loads_for_reduction (reduction_info_table_type reduction_list,
   stmt = gimple_build_assign (ld_st_data->load, t);
 
   gsi_insert_before (&gsi, stmt, GSI_NEW_STMT);
+  SSA_NAME_DEF_STMT (ld_st_data->load) = stmt;
 
-  reduction_list
-    .traverse <struct clsn_data *, create_loads_for_reductions> (ld_st_data);
+  htab_traverse (reduction_list, create_loads_for_reductions, ld_st_data);
 
 }
 
@@ -1206,10 +1170,11 @@ create_final_loads_for_reduction (reduction_info_table_type reduction_list,
   The reduction is specified in SLOT. The store information is
   passed in DATA.  */
 
-int
-create_stores_for_reduction (reduction_info **slot, struct clsn_data *clsn_data)
+static int
+create_stores_for_reduction (void **slot, void *data)
 {
-  struct reduction_info *const red = *slot;
+  struct reduction_info *const red = (struct reduction_info *) *slot;
+  struct clsn_data *const clsn_data = (struct clsn_data *) data;
   tree t;
   gimple stmt;
   gimple_stmt_iterator gsi;
@@ -1227,11 +1192,11 @@ create_stores_for_reduction (reduction_info **slot, struct clsn_data *clsn_data)
    store to a field of STORE in STORE_BB for the ssa name and its duplicate
    specified in SLOT.  */
 
-int
-create_loads_and_stores_for_name (name_to_copy_elt **slot,
-				  struct clsn_data *clsn_data)
+static int
+create_loads_and_stores_for_name (void **slot, void *data)
 {
-  struct name_to_copy_elt *const elt = *slot;
+  struct name_to_copy_elt *const elt = (struct name_to_copy_elt *) *slot;
+  struct clsn_data *const clsn_data = (struct clsn_data *) data;
   tree t;
   gimple stmt;
   gimple_stmt_iterator gsi;
@@ -1247,6 +1212,7 @@ create_loads_and_stores_for_name (name_to_copy_elt **slot,
   load_struct = build_simple_mem_ref (clsn_data->load);
   t = build3 (COMPONENT_REF, type, load_struct, elt->field, NULL_TREE);
   stmt = gimple_build_assign (elt->new_name, t);
+  SSA_NAME_DEF_STMT (elt->new_name) = stmt;
   gsi_insert_after (&gsi, stmt, GSI_NEW_STMT);
 
   return 1;
@@ -1287,23 +1253,23 @@ create_loads_and_stores_for_name (name_to_copy_elt **slot,
    in LOOP.  */
 
 static void
-separate_decls_in_region (edge entry, edge exit,
-			  reduction_info_table_type reduction_list,
+separate_decls_in_region (edge entry, edge exit, htab_t reduction_list,
 			  tree *arg_struct, tree *new_arg_struct,
 			  struct clsn_data *ld_st_data)
 
 {
   basic_block bb1 = split_edge (entry);
   basic_block bb0 = single_pred (bb1);
-  name_to_copy_table_type name_copies;
-  name_copies.create (10);
-  int_tree_htab_type decl_copies;
-  decl_copies.create (10);
+  htab_t name_copies = htab_create (10, name_to_copy_elt_hash,
+				    name_to_copy_elt_eq, free);
+  htab_t decl_copies = htab_create (10, int_tree_map_hash, int_tree_map_eq,
+				    free);
   unsigned i;
   tree type, type_name, nvar;
   gimple_stmt_iterator gsi;
   struct clsn_data clsn_data;
-  auto_vec<basic_block, 3> body;
+  vec<basic_block> body;
+  body.create (3);
   basic_block bb;
   basic_block entry_bb = bb1;
   basic_block exit_bb = exit->dest;
@@ -1361,7 +1327,9 @@ separate_decls_in_region (edge entry, edge exit,
 	    }
 	}
 
-  if (name_copies.elements () == 0 && reduction_list.elements () == 0)
+  body.release ();
+
+  if (htab_elements (name_copies) == 0 && htab_elements (reduction_list) == 0)
     {
       /* It may happen that there is nothing to copy (if there are only
          loop carried and external variables in the loop).  */
@@ -1377,11 +1345,12 @@ separate_decls_in_region (edge entry, edge exit,
 			      type);
       TYPE_NAME (type) = type_name;
 
-      name_copies.traverse <tree, add_field_for_name> (type);
-      if (reduction_list.is_created () && reduction_list.elements () > 0)
+      htab_traverse (name_copies, add_field_for_name, type);
+      if (reduction_list && htab_elements (reduction_list) > 0)
 	{
 	  /* Create the fields for reductions.  */
-	  reduction_list.traverse <tree, add_field_for_reduction> (type);
+	  htab_traverse (reduction_list, add_field_for_reduction,
+                         type);
 	}
       layout_type (type);
 
@@ -1395,17 +1364,15 @@ separate_decls_in_region (edge entry, edge exit,
       ld_st_data->store_bb = bb0;
       ld_st_data->load_bb = bb1;
 
-      name_copies
-	.traverse <struct clsn_data *, create_loads_and_stores_for_name>
-		  (ld_st_data);
+      htab_traverse (name_copies, create_loads_and_stores_for_name,
+		     ld_st_data);
 
       /* Load the calculation from memory (after the join of the threads).  */
 
-      if (reduction_list.is_created () && reduction_list.elements () > 0)
+      if (reduction_list && htab_elements (reduction_list) > 0)
 	{
-	  reduction_list
-	    .traverse <struct clsn_data *, create_stores_for_reduction>
-		      (ld_st_data);
+	  htab_traverse (reduction_list, create_stores_for_reduction,
+                        ld_st_data);
 	  clsn_data.load = make_ssa_name (nvar, NULL);
 	  clsn_data.load_bb = exit->dest;
 	  clsn_data.store = ld_st_data->store;
@@ -1413,8 +1380,8 @@ separate_decls_in_region (edge entry, edge exit,
 	}
     }
 
-  decl_copies.dispose ();
-  name_copies.dispose ();
+  htab_delete (decl_copies);
+  htab_delete (name_copies);
 }
 
 /* Bitmap containing uids of functions created by parallelization.  We cannot
@@ -1503,9 +1470,7 @@ create_loop_fn (location_t loc)
    REDUCTION_LIST describes the reductions in LOOP.  */
 
 static void
-transform_to_exit_first_loop (struct loop *loop,
-			      reduction_info_table_type reduction_list,
-			      tree nit)
+transform_to_exit_first_loop (struct loop *loop, htab_t reduction_list, tree nit)
 {
   basic_block *bbs, *nbbs, ex_bb, orig_header;
   unsigned n;
@@ -1574,7 +1539,7 @@ transform_to_exit_first_loop (struct loop *loop,
          PHI_RESULT of this phi is the resulting value of the reduction
          variable when exiting the loop.  */
 
-      if (reduction_list.elements () > 0)
+      if (htab_elements (reduction_list) > 0)
 	{
 	  struct reduction_info *red;
 
@@ -1604,6 +1569,7 @@ transform_to_exit_first_loop (struct loop *loop,
 				  false, NULL_TREE, false, GSI_SAME_STMT);
   stmt = gimple_build_assign (control_name, nit_1);
   gsi_insert_before (&gsi, stmt, GSI_NEW_STMT);
+  SSA_NAME_DEF_STMT (control_name) = stmt;
 }
 
 /* Create the parallel constructs for LOOP as described in gen_parallel_loop.
@@ -1644,10 +1610,12 @@ create_parallel_loop (struct loop *loop, tree loop_fn, tree data,
       param = make_ssa_name (DECL_ARGUMENTS (loop_fn), NULL);
       stmt = gimple_build_assign (param, build_fold_addr_expr (data));
       gsi_insert_before (&gsi, stmt, GSI_SAME_STMT);
+      SSA_NAME_DEF_STMT (param) = stmt;
 
       stmt = gimple_build_assign (new_data,
 				  fold_convert (TREE_TYPE (new_data), param));
       gsi_insert_before (&gsi, stmt, GSI_SAME_STMT);
+      SSA_NAME_DEF_STMT (new_data) = stmt;
     }
 
   /* Emit GIMPLE_OMP_RETURN for GIMPLE_OMP_PARALLEL.  */
@@ -1708,7 +1676,7 @@ create_parallel_loop (struct loop *loop, tree loop_fn, tree data,
   t = build_omp_clause (loc, OMP_CLAUSE_SCHEDULE);
   OMP_CLAUSE_SCHEDULE_KIND (t) = OMP_CLAUSE_SCHEDULE_STATIC;
 
-  for_stmt = gimple_build_omp_for (NULL, GF_OMP_FOR_KIND_FOR, t, 1, NULL);
+  for_stmt = gimple_build_omp_for (NULL, t, 1, NULL);
   gimple_set_location (for_stmt, loc);
   gimple_omp_for_set_index (for_stmt, 0, initvar);
   gimple_omp_for_set_initial (for_stmt, 0, cvar_init);
@@ -1749,9 +1717,10 @@ create_parallel_loop (struct loop *loop, tree loop_fn, tree data,
    REDUCTION_LIST describes the reductions existent in the LOOP.  */
 
 static void
-gen_parallel_loop (struct loop *loop, reduction_info_table_type reduction_list,
+gen_parallel_loop (struct loop *loop, htab_t reduction_list,
 		   unsigned n_threads, struct tree_niter_desc *niter)
 {
+  loop_iterator li;
   tree many_iterations_cond, type, nit;
   tree arg_struct, new_arg_struct;
   gimple_seq stmts;
@@ -1874,8 +1843,8 @@ gen_parallel_loop (struct loop *loop, reduction_info_table_type reduction_list,
   transform_to_exit_first_loop (loop, reduction_list, nit);
 
   /* Generate initializations for reductions.  */
-  if (reduction_list.elements () > 0)
-    reduction_list.traverse <struct loop *, initialize_reductions> (loop);
+  if (htab_elements (reduction_list) > 0)
+    htab_traverse (reduction_list, initialize_reductions, loop);
 
   /* Eliminate the references to local variables from the loop.  */
   gcc_assert (single_exit (loop));
@@ -1895,7 +1864,7 @@ gen_parallel_loop (struct loop *loop, reduction_info_table_type reduction_list,
     loc = gimple_location (cond_stmt);
   parallel_head = create_parallel_loop (loop, create_loop_fn (loc), arg_struct,
 					new_arg_struct, n_threads, loc);
-  if (reduction_list.elements () > 0)
+  if (htab_elements (reduction_list) > 0)
     create_call_for_reduction (loop, reduction_list, &clsn_data);
 
   scev_reset ();
@@ -1906,7 +1875,7 @@ gen_parallel_loop (struct loop *loop, reduction_info_table_type reduction_list,
 
   /* Free loop bound estimations that could contain references to
      removed statements.  */
-  FOR_EACH_LOOP (loop, 0)
+  FOR_EACH_LOOP (li, loop, 0)
     free_numbers_of_iterations_estimates_loop (loop);
 
   /* Expand the parallel constructs.  We do it directly here instead of running
@@ -1942,10 +1911,9 @@ loop_has_vector_phi_nodes (struct loop *loop ATTRIBUTE_UNUSED)
    and PHI, insert it to the REDUCTION_LIST.  */
 
 static void
-build_new_reduction (reduction_info_table_type reduction_list,
-		     gimple reduc_stmt, gimple phi)
+build_new_reduction (htab_t reduction_list, gimple reduc_stmt, gimple phi)
 {
-  reduction_info **slot;
+  PTR *slot;
   struct reduction_info *new_reduction;
 
   gcc_assert (reduc_stmt);
@@ -1964,16 +1932,16 @@ build_new_reduction (reduction_info_table_type reduction_list,
   new_reduction->reduc_phi = phi;
   new_reduction->reduc_version = SSA_NAME_VERSION (gimple_phi_result (phi));
   new_reduction->reduction_code = gimple_assign_rhs_code (reduc_stmt);
-  slot = reduction_list.find_slot (new_reduction, INSERT);
+  slot = htab_find_slot (reduction_list, new_reduction, INSERT);
   *slot = new_reduction;
 }
 
 /* Callback for htab_traverse.  Sets gimple_uid of reduc_phi stmts.  */
 
-int
-set_reduc_phi_uids (reduction_info **slot, void *data ATTRIBUTE_UNUSED)
+static int
+set_reduc_phi_uids (void **slot, void *data ATTRIBUTE_UNUSED)
 {
-  struct reduction_info *const red = *slot;
+  struct reduction_info *const red = (struct reduction_info *) *slot;
   gimple_set_uid (red->reduc_phi, red->reduc_version);
   return 1;
 }
@@ -1981,7 +1949,7 @@ set_reduc_phi_uids (reduction_info **slot, void *data ATTRIBUTE_UNUSED)
 /* Detect all reductions in the LOOP, insert them into REDUCTION_LIST.  */
 
 static void
-gather_scalar_reductions (loop_p loop, reduction_info_table_type reduction_list)
+gather_scalar_reductions (loop_p loop, htab_t reduction_list)
 {
   gimple_stmt_iterator gsi;
   loop_vec_info simple_loop_info;
@@ -2013,7 +1981,7 @@ gather_scalar_reductions (loop_p loop, reduction_info_table_type reduction_list)
   /* As gimple_uid is used by the vectorizer in between vect_analyze_loop_form
      and destroy_loop_vec_info, we can set gimple_uid of reduc_phi stmts
      only now.  */
-  reduction_list.traverse <void *, set_reduc_phi_uids> (NULL);
+  htab_traverse (reduction_list, set_reduc_phi_uids, NULL);
 }
 
 /* Try to initialize NITER for code generation part.  */
@@ -2042,8 +2010,7 @@ try_get_loop_niter (loop_p loop, struct tree_niter_desc *niter)
    REDUCTION_LIST describes the reductions.  */
 
 static bool
-try_create_reduction_list (loop_p loop,
-			   reduction_info_table_type reduction_list)
+try_create_reduction_list (loop_p loop, htab_t reduction_list)
 {
   edge exit = single_dom_exit (loop);
   gimple_stmt_iterator gsi;
@@ -2074,7 +2041,7 @@ try_create_reduction_list (loop_p loop,
 	      fprintf (dump_file,
 		       "  checking if it a part of reduction pattern:  \n");
 	    }
-	  if (reduction_list.elements () == 0)
+	  if (htab_elements (reduction_list) == 0)
 	    {
 	      if (dump_file && (dump_flags & TDF_DETAILS))
 		fprintf (dump_file,
@@ -2147,10 +2114,11 @@ parallelize_loops (void)
   bool changed = false;
   struct loop *loop;
   struct tree_niter_desc niter_desc;
-  reduction_info_table_type reduction_list;
+  loop_iterator li;
+  htab_t reduction_list;
   struct obstack parloop_obstack;
   HOST_WIDE_INT estimated;
-  source_location loop_loc;
+  LOC loop_loc;
 
   /* Do not parallelize loops in the functions created by parallelization.  */
   if (parallelized_function_p (cfun->decl))
@@ -2159,12 +2127,13 @@ parallelize_loops (void)
     return false;
 
   gcc_obstack_init (&parloop_obstack);
-  reduction_list.create (10);
+  reduction_list = htab_create (10, reduction_info_hash,
+				     reduction_info_eq, free);
   init_stmt_vec_info_vec ();
 
-  FOR_EACH_LOOP (loop, 0)
+  FOR_EACH_LOOP (li, loop, 0)
     {
-      reduction_list.empty ();
+      htab_empty (reduction_list);
       if (dump_file && (dump_flags & TDF_DETAILS))
       {
         fprintf (dump_file, "Trying loop %d as candidate\n",loop->num);
@@ -2230,16 +2199,21 @@ parallelize_loops (void)
 	else
 	  fprintf (dump_file, "parallelizing inner loop %d\n",loop->header->index);
 	loop_loc = find_loop_location (loop);
-	if (loop_loc != UNKNOWN_LOCATION)
+	if (loop_loc != UNKNOWN_LOC)
 	  fprintf (dump_file, "\nloop at %s:%d: ",
-		   LOCATION_FILE (loop_loc), LOCATION_LINE (loop_loc));
+		   LOC_FILE (loop_loc), LOC_LINE (loop_loc));
       }
       gen_parallel_loop (loop, reduction_list,
 			 n_threads, &niter_desc);
+#ifdef ENABLE_CHECKING
+      verify_flow_info ();
+      verify_loop_structure ();
+      verify_loop_closed_ssa (true);
+#endif
     }
 
   free_stmt_vec_info_vec ();
-  reduction_list.dispose ();
+  htab_delete (reduction_list);
   obstack_free (&parloop_obstack, NULL);
 
   /* Parallelization will cause new function calls to be inserted through
@@ -2250,63 +2224,5 @@ parallelize_loops (void)
 
   return changed;
 }
-
-/* Parallelization.  */
-
-static bool
-gate_tree_parallelize_loops (void)
-{
-  return flag_tree_parallelize_loops > 1;
-}
-
-static unsigned
-tree_parallelize_loops (void)
-{
-  if (number_of_loops (cfun) <= 1)
-    return 0;
-
-  if (parallelize_loops ())
-    return TODO_cleanup_cfg | TODO_rebuild_alias;
-  return 0;
-}
-
-namespace {
-
-const pass_data pass_data_parallelize_loops =
-{
-  GIMPLE_PASS, /* type */
-  "parloops", /* name */
-  OPTGROUP_LOOP, /* optinfo_flags */
-  true, /* has_gate */
-  true, /* has_execute */
-  TV_TREE_PARALLELIZE_LOOPS, /* tv_id */
-  ( PROP_cfg | PROP_ssa ), /* properties_required */
-  0, /* properties_provided */
-  0, /* properties_destroyed */
-  0, /* todo_flags_start */
-  TODO_verify_flow, /* todo_flags_finish */
-};
-
-class pass_parallelize_loops : public gimple_opt_pass
-{
-public:
-  pass_parallelize_loops (gcc::context *ctxt)
-    : gimple_opt_pass (pass_data_parallelize_loops, ctxt)
-  {}
-
-  /* opt_pass methods: */
-  bool gate () { return gate_tree_parallelize_loops (); }
-  unsigned int execute () { return tree_parallelize_loops (); }
-
-}; // class pass_parallelize_loops
-
-} // anon namespace
-
-gimple_opt_pass *
-make_pass_parallelize_loops (gcc::context *ctxt)
-{
-  return new pass_parallelize_loops (ctxt);
-}
-
 
 #include "gt-tree-parloops.h"

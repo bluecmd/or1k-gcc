@@ -1,5 +1,5 @@
 /* The Blackfin code generation auxiliary output file.
-   Copyright (C) 2005-2014 Free Software Foundation, Inc.
+   Copyright (C) 2005-2013 Free Software Foundation, Inc.
    Contributed by Analog Devices.
 
    This file is part of GCC.
@@ -32,8 +32,6 @@
 #include "output.h"
 #include "insn-attr.h"
 #include "tree.h"
-#include "varasm.h"
-#include "calls.h"
 #include "flags.h"
 #include "except.h"
 #include "function.h"
@@ -48,7 +46,6 @@
 #include "cgraph.h"
 #include "langhooks.h"
 #include "bfin-protos.h"
-#include "tm_p.h"
 #include "tm-preds.h"
 #include "tm-constrs.h"
 #include "gt-bfin.h"
@@ -105,7 +102,7 @@ output_file_start (void)
   FILE *file = asm_out_file;
   int i;
 
-  fprintf (file, ".file \"%s\";\n", LOCATION_FILE (input_location));
+  fprintf (file, ".file \"%s\";\n", input_filename);
   
   for (i = 0; arg_regs[i] >= 0; i++)
     ;
@@ -2440,7 +2437,7 @@ cbranch_predicted_taken_p (rtx insn)
 
   if (x)
     {
-      int pred_val = XINT (x, 0);
+      int pred_val = INTVAL (XEXP (x, 0));
 
       return pred_val >= REG_BR_PROB_BASE / 2;
     }
@@ -2992,7 +2989,7 @@ static int first_preg_to_save, first_dreg_to_save;
 static int n_regs_to_save;
 
 int
-analyze_push_multiple_operation (rtx op)
+push_multiple_operation (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 {
   int lastdreg = 8, lastpreg = 6;
   int i, group;
@@ -3063,7 +3060,7 @@ analyze_push_multiple_operation (rtx op)
 }
 
 int
-analyze_pop_multiple_operation (rtx op)
+pop_multiple_operation (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 {
   int lastdreg = 8, lastpreg = 6;
   int i, group;
@@ -3132,7 +3129,7 @@ output_push_multiple (rtx insn, rtx *operands)
   int ok;
   
   /* Validate the insn again, and compute first_[dp]reg_to_save. */
-  ok = analyze_push_multiple_operation (PATTERN (insn));
+  ok = push_multiple_operation (PATTERN (insn), VOIDmode);
   gcc_assert (ok);
   
   if (first_dreg_to_save == 8)
@@ -3156,7 +3153,7 @@ output_pop_multiple (rtx insn, rtx *operands)
   int ok;
   
   /* Validate the insn again, and compute first_[dp]reg_to_save. */
-  ok = analyze_pop_multiple_operation (PATTERN (insn));
+  ok = pop_multiple_operation (PATTERN (insn), VOIDmode);
   gcc_assert (ok);
 
   if (first_dreg_to_save == 8)
@@ -3368,22 +3365,6 @@ find_prev_insn_start (rtx insn)
   return insn;
 }
 
-/* Implement TARGET_CAN_USE_DOLOOP_P.  */
-
-static bool
-bfin_can_use_doloop_p (double_int, double_int iterations_max,
-		       unsigned int, bool)
-{
-  /* Due to limitations in the hardware (an initial loop count of 0
-     does not loop 2^32 times) we must avoid to generate a hardware
-     loops when we cannot rule out this case.  */
-  if (!flag_unsafe_loop_optimizations
-      && (iterations_max.high != 0
-	  || iterations_max.low >= 0xFFFFFFFF))
-    return false;
-  return true;
-}
-
 /* Increment the counter for the number of loop instructions in the
    current function.  */
 
@@ -3600,7 +3581,7 @@ hwloop_optimize (hwloop_info loop)
 
       if (single_pred_p (bb)
 	  && single_pred_edge (bb)->flags & EDGE_FALLTHRU
-	  && single_pred (bb) != ENTRY_BLOCK_PTR_FOR_FN (cfun))
+	  && single_pred (bb) != ENTRY_BLOCK_PTR)
 	{
 	  bb = single_pred (bb);
 	  last_insn = BB_END (bb);
@@ -3906,7 +3887,8 @@ gen_one_bundle (rtx slot[3])
       rtx t = NEXT_INSN (slot[0]);
       while (t != slot[1])
 	{
-	  if (! NOTE_P (t) || NOTE_KIND (t) != NOTE_INSN_DELETED)
+	  if (GET_CODE (t) != NOTE
+	      || NOTE_KIND (t) != NOTE_INSN_DELETED)
 	    return false;
 	  t = NEXT_INSN (t);
 	}
@@ -3916,7 +3898,8 @@ gen_one_bundle (rtx slot[3])
       rtx t = NEXT_INSN (slot[1]);
       while (t != slot[2])
 	{
-	  if (! NOTE_P (t) || NOTE_KIND (t) != NOTE_INSN_DELETED)
+	  if (GET_CODE (t) != NOTE
+	      || NOTE_KIND (t) != NOTE_INSN_DELETED)
 	    return false;
 	  t = NEXT_INSN (t);
 	}
@@ -3957,7 +3940,7 @@ static void
 bfin_gen_bundles (void)
 {
   basic_block bb;
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     {
       rtx insn, next;
       rtx slot[3];
@@ -4036,7 +4019,7 @@ static void
 reorder_var_tracking_notes (void)
 {
   basic_block bb;
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     {
       rtx insn, next;
       rtx queue = NULL_RTX;
@@ -4103,15 +4086,12 @@ workaround_rts_anomaly (void)
       if (NOTE_P (insn) || LABEL_P (insn))
 	continue;
 
-      if (JUMP_TABLE_DATA_P (insn))
-	continue;
-
       if (first_insn == NULL_RTX)
 	first_insn = insn;
       pat = PATTERN (insn);
       if (GET_CODE (pat) == USE || GET_CODE (pat) == CLOBBER
-	  || GET_CODE (pat) == ASM_INPUT
-	  || asm_noperands (pat) >= 0)
+	  || GET_CODE (pat) == ASM_INPUT || GET_CODE (pat) == ADDR_VEC
+	  || GET_CODE (pat) == ADDR_DIFF_VEC || asm_noperands (pat) >= 0)
 	continue;
 
       if (CALL_P (insn))
@@ -4136,8 +4116,8 @@ workaround_rts_anomaly (void)
 
 	  if (GET_CODE (pat) == PARALLEL)
 	    {
-	      if (analyze_push_multiple_operation (pat)
-		  || analyze_pop_multiple_operation (pat))
+	      if (push_multiple_operation (pat, VOIDmode)
+		  || pop_multiple_operation (pat, VOIDmode))
 		this_cycles = n_regs_to_save;
 	    }
 	  else
@@ -4299,8 +4279,6 @@ workaround_speculation (void)
       
       if (NOTE_P (insn) || BARRIER_P (insn))
 	continue;
-      if (JUMP_TABLE_DATA_P (insn))
-	continue;
 
       if (LABEL_P (insn))
 	{
@@ -4309,7 +4287,8 @@ workaround_speculation (void)
 	}
 
       pat = PATTERN (insn);
-      if (GET_CODE (pat) == USE || GET_CODE (pat) == CLOBBER)
+      if (GET_CODE (pat) == USE || GET_CODE (pat) == CLOBBER
+	  || GET_CODE (pat) == ADDR_VEC || GET_CODE (pat) == ADDR_DIFF_VEC)
 	continue;
       
       if (GET_CODE (pat) == ASM_INPUT || asm_noperands (pat) >= 0)
@@ -4457,13 +4436,10 @@ workaround_speculation (void)
 	      if (NOTE_P (target) || BARRIER_P (target) || LABEL_P (target))
 		continue;
 
-	      if (JUMP_TABLE_DATA_P (target))
-		continue;
-
 	      pat = PATTERN (target);
 	      if (GET_CODE (pat) == USE || GET_CODE (pat) == CLOBBER
-		  || GET_CODE (pat) == ASM_INPUT
-		  || asm_noperands (pat) >= 0)
+		  || GET_CODE (pat) == ASM_INPUT || GET_CODE (pat) == ADDR_VEC
+		  || GET_CODE (pat) == ADDR_DIFF_VEC || asm_noperands (pat) >= 0)
 		continue;
 
 	      if (NONDEBUG_INSN_P (target))
@@ -4536,13 +4512,11 @@ add_sched_insns_for_speculation (void)
 
       if (NOTE_P (insn) || BARRIER_P (insn) || LABEL_P (insn))
 	continue;
-      if (JUMP_TABLE_DATA_P (insn))
-	continue;
 
       pat = PATTERN (insn);
       if (GET_CODE (pat) == USE || GET_CODE (pat) == CLOBBER
-	  || GET_CODE (pat) == ASM_INPUT
-	  || asm_noperands (pat) >= 0)
+	  || GET_CODE (pat) == ASM_INPUT || GET_CODE (pat) == ADDR_VEC
+	  || GET_CODE (pat) == ADDR_DIFF_VEC || asm_noperands (pat) >= 0)
 	continue;
 
       if (JUMP_P (insn))
@@ -5827,8 +5801,5 @@ bfin_conditional_register_usage (void)
    change order of insns.  It also needs a valid CFG.  */
 #undef TARGET_DELAY_VARTRACK
 #define TARGET_DELAY_VARTRACK true
-
-#undef TARGET_CAN_USE_DOLOOP_P
-#define TARGET_CAN_USE_DOLOOP_P bfin_can_use_doloop_p
 
 struct gcc_target targetm = TARGET_INITIALIZER;

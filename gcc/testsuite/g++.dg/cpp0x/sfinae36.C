@@ -1,6 +1,5 @@
 // PR c++/52363
-// { dg-do compile { target c++11 } }
-// { dg-options "-pedantic" }
+// { dg-options "-std=c++11 -pedantic" }
 
 #include <type_traits>
 

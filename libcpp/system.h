@@ -1,6 +1,6 @@
 /* Get common system includes and various definitions and declarations based
    on autoconf macros.
-   Copyright (C) 1998-2014 Free Software Foundation, Inc.
+   Copyright (C) 1998-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -280,7 +280,7 @@ extern int errno;
 #endif
 
 #ifndef _
-# define _(msgid) dgettext (PACKAGE, msgid)
+# define _(msgid) dgettext (PACKAGE PACKAGE_SUFFIX, msgid)
 #endif
 
 #ifndef N_

@@ -1,5 +1,5 @@
 // PR c++/49520
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 namespace x { void foo(); }
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd netbsd openbsd
+// +build darwin freebsd netbsd openbsd
 
 // Routing sockets and messages
 
@@ -13,14 +13,10 @@ import "unsafe"
 // Round the length of a raw sockaddr up to align it properly.
 func rsaAlignOf(salen int) int {
 	salign := sizeofPtr
-	// NOTE: It seems like 64-bit Darwin kernel still requires
-	// 32-bit aligned access to BSD subsystem. Also NetBSD 6
-	// kernel and beyond require 64-bit aligned access to routing
-	// facilities.
-	if darwin64Bit {
+	// NOTE: It seems like 64-bit Darwin kernel still requires 32-bit
+	// aligned access to BSD subsystem.
+	if darwinAMD64 {
 		salign = 4
-	} else if netbsd32Bit {
-		salign = 8
 	}
 	if salen == 0 {
 		return salign
@@ -146,12 +142,6 @@ func (m *InterfaceAddrMessage) sockaddr() (sas []Sockaddr) {
 		return nil
 	}
 	b := m.Data[:]
-	// We still see AF_UNSPEC in socket addresses on some
-	// platforms. To identify each address family correctly, we
-	// will use the address family of RTAX_NETMASK as a preferred
-	// one on the 32-bit NetBSD kernel, also use the length of
-	// RTAX_NETMASK socket address on the FreeBSD kernel.
-	preferredFamily := uint8(AF_UNSPEC)
 	for i := uint(0); i < RTAX_MAX; i++ {
 		if m.Header.Addrs&rtaIfaMask&(1<<i) == 0 {
 			continue
@@ -159,29 +149,14 @@ func (m *InterfaceAddrMessage) sockaddr() (sas []Sockaddr) {
 		rsa := (*RawSockaddr)(unsafe.Pointer(&b[0]))
 		switch i {
 		case RTAX_IFA:
-			if rsa.Family == AF_UNSPEC {
-				rsa.Family = preferredFamily
-			}
 			sa, err := anyToSockaddr((*RawSockaddrAny)(unsafe.Pointer(rsa)))
 			if err != nil {
 				return nil
 			}
 			sas = append(sas, sa)
 		case RTAX_NETMASK:
-			switch rsa.Family {
-			case AF_UNSPEC:
-				switch rsa.Len {
-				case SizeofSockaddrInet4:
-					rsa.Family = AF_INET
-				case SizeofSockaddrInet6:
-					rsa.Family = AF_INET6
-				default:
-					rsa.Family = AF_INET // an old fashion, AF_UNSPEC means AF_INET
-				}
-			case AF_INET, AF_INET6:
-				preferredFamily = rsa.Family
-			default:
-				return nil
+			if rsa.Family == AF_UNSPEC {
+				rsa.Family = AF_INET // an old fasion, AF_UNSPEC means AF_INET
 			}
 			sa, err := anyToSockaddr((*RawSockaddrAny)(unsafe.Pointer(rsa)))
 			if err != nil {

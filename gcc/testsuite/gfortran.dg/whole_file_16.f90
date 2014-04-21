@@ -5,7 +5,7 @@
 !
 program main
   real, dimension(2) :: a
-  call foo(a)                ! { dg-error "Explicit interface required" }
+  call foo(a)                ! { dg-error "must have an explicit interface" }
 end program main
 
 subroutine foo(a)

@@ -1,6 +1,6 @@
 // PR c++/52026
-// { dg-options "-O" }
-// { dg-do run { target c++11 } }
+// { dg-options "-std=c++11 -O" }
+// { dg-do run }
 
 template<bool B>
 int func() {

@@ -1,5 +1,5 @@
 // PR c++/51433
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 constexpr int f();
 constexpr int g() { return f(); }

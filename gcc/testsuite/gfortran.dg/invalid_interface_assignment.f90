@@ -1,6 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-std=gnu" }
-!
 ! Tests the fix for PR25102, which did not diagnose the aberrant interface
 ! assignement below.
 !

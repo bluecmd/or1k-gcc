@@ -1,27 +1,27 @@
 // PR c++/29043
 // { dg-do compile }
 
-struct S		// { dg-error "uninitialized" "" { target c++11 } }
+struct S 
 {
-  int const i; // { dg-message "should be initialized" "" { target { ! c++11 } } }
+  int const i; // { dg-message "should be initialized" }
 };
 
 class C
 {
 public:
-  C() {} // { dg-error "uninitialized const member|deleted" }
+  C() {} // { dg-error "uninitialized const member" }   
   S s;
 };
 
-struct S2		// { dg-error "uninitialized" "" { target c++11 } }
+struct S2
 {
-  int& ref;   // { dg-message "should be initialized" "" { target { ! c++11 } } }
+  int& ref; // { dg-message "should be initialized" }
 };
 
 class C2
 {
 public:
-  C2() {} // { dg-error "uninitialized reference member|deleted" }
+  C2() {} // { dg-error "uninitialized reference member" }   
   S2 s;
 };
 
@@ -33,14 +33,14 @@ class C3
   };
 };
 
-struct S4		// { dg-error "uninitialized" "" { target c++11 } }
+struct S4
 {
-  int const i; // { dg-message "should be initialized" "" { target { ! c++11 } } }
+  int const i; // { dg-message "should be initialized" }
 };
 
 struct C4
 {
-  C4() {} // { dg-error "uninitialized const member|deleted" }
+  C4() {} // { dg-error "uninitialized const member" }
   S4 s4[ 1 ];
 };
 

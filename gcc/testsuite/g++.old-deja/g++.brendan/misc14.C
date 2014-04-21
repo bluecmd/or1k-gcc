@@ -4,7 +4,7 @@ class X {
 public:
     enum e {
 	New // { dg-message "previous" }
-	,   // { dg-error "comma at end" "" { target { ! c++11 } } }
+	,   // { dg-error "comma at end" "" { target c++98 } }
     };
 
     static int New(int); // { dg-error "conflicts with a previous" }

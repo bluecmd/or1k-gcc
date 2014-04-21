@@ -1,5 +1,5 @@
 /* RunTime Type Identification
-   Copyright (C) 1995-2014 Free Software Foundation, Inc.
+   Copyright (C) 1995-2013 Free Software Foundation, Inc.
    Mostly written by Jason Merrill (jason@cygnus.com).
 
 This file is part of GCC.
@@ -24,8 +24,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "tree.h"
-#include "stringpool.h"
-#include "stor-layout.h"
 #include "cp-tree.h"
 #include "flags.h"
 #include "convert.h"
@@ -175,7 +173,7 @@ build_headof (tree exp)
   tree offset;
   tree index;
 
-  gcc_assert (TYPE_PTR_P (type));
+  gcc_assert (TREE_CODE (type) == POINTER_TYPE);
   type = TREE_TYPE (type);
 
   if (!TYPE_POLYMORPHIC_P (type))
@@ -328,16 +326,18 @@ build_typeid (tree exp, tsubst_flags_t complain)
 
   /* FIXME when integrating with c_fully_fold, mark
      resolves_to_fixed_type_p case as a non-constant expression.  */
-  if (TYPE_POLYMORPHIC_P (TREE_TYPE (exp))
+  if (TREE_CODE (exp) == INDIRECT_REF
+      && TREE_CODE (TREE_TYPE (TREE_OPERAND (exp, 0))) == POINTER_TYPE
+      && TYPE_POLYMORPHIC_P (TREE_TYPE (exp))
       && ! resolves_to_fixed_type_p (exp, &nonnull)
       && ! nonnull)
     {
       /* So we need to look into the vtable of the type of exp.
-         Make sure it isn't a null lvalue.  */
-      exp = cp_build_addr_expr (exp, complain);
+         This is an lvalue use of expr then.  */
+      exp = mark_lvalue_use (exp);
       exp = stabilize_reference (exp);
-      cond = cp_convert (boolean_type_node, exp, complain);
-      exp = cp_build_indirect_ref (exp, RO_NULL, complain);
+      cond = cp_convert (boolean_type_node, TREE_OPERAND (exp, 0),
+			 complain);
     }
 
   exp = get_tinfo_decl_dynamic (exp, complain);
@@ -395,12 +395,9 @@ get_tinfo_decl (tree type)
 
   if (variably_modified_type_p (type, /*fn=*/NULL_TREE))
     {
-      if (array_of_runtime_bound_p (type))
-	error ("typeid of array of runtime bound");
-      else
-	error ("cannot create type information for type %qT because "
-	       "it involves types of variable size",
-	       type);
+      error ("cannot create type information for type %qT because "
+	     "it involves types of variable size",
+	     type);
       return error_mark_node;
     }
 
@@ -482,16 +479,6 @@ get_typeid (tree type, tsubst_flags_t complain)
      referenced type.  */
   type = non_reference (type);
 
-  /* This is not one of the uses of a qualified function type in 8.3.5.  */
-  if (TREE_CODE (type) == FUNCTION_TYPE
-      && (type_memfn_quals (type) != TYPE_UNQUALIFIED
-	  || type_memfn_rqual (type) != REF_QUAL_NONE))
-    {
-      if (complain & tf_error)
-	error ("typeid of qualified function type %qT", type);
-      return error_mark_node;
-    }
-
   /* The top-level cv-qualifiers of the lvalue expression or the type-id
      that is the operand of typeid are always ignored.  */
   type = TYPE_MAIN_VARIANT (type);
@@ -541,7 +528,7 @@ build_dynamic_cast_1 (tree type, tree expr, tsubst_flags_t complain)
   switch (tc)
     {
     case POINTER_TYPE:
-      if (VOID_TYPE_P (TREE_TYPE (type)))
+      if (TREE_CODE (TREE_TYPE (type)) == VOID_TYPE)
 	break;
       /* Fall through.  */
     case REFERENCE_TYPE:
@@ -572,7 +559,7 @@ build_dynamic_cast_1 (tree type, tree expr, tsubst_flags_t complain)
 
       expr = mark_rvalue_use (expr);
 
-      if (!TYPE_PTR_P (exprtype))
+      if (TREE_CODE (exprtype) != POINTER_TYPE)
 	{
 	  errstr = _("source is not a pointer");
 	  goto fail;
@@ -624,10 +611,19 @@ build_dynamic_cast_1 (tree type, tree expr, tsubst_flags_t complain)
   /* If *type is an unambiguous accessible base class of *exprtype,
      convert statically.  */
   {
-    tree binfo = lookup_base (TREE_TYPE (exprtype), TREE_TYPE (type),
-			      ba_check, NULL, complain);
+    tree binfo;
+
+    binfo = lookup_base (TREE_TYPE (exprtype), TREE_TYPE (type),
+			 ba_check, NULL, complain);
+
     if (binfo)
-      return build_static_cast (type, expr, complain);
+      {
+	expr = build_base_path (PLUS_EXPR, convert_from_reference (expr),
+				binfo, 0, complain);
+	if (TREE_CODE (exprtype) == POINTER_TYPE)
+	  expr = rvalue (expr);
+	return expr;
+      }
   }
 
   /* Otherwise *exprtype must be a polymorphic class (have a vtbl).  */
@@ -639,7 +635,7 @@ build_dynamic_cast_1 (tree type, tree expr, tsubst_flags_t complain)
 	{
 	  /* if b is an object, dynamic_cast<void *>(&b) == (void *)&b.  */
 	  if (TREE_CODE (expr) == ADDR_EXPR
-	      && VAR_P (TREE_OPERAND (expr, 0))
+	      && TREE_CODE (TREE_OPERAND (expr, 0)) == VAR_DECL
 	      && TREE_CODE (TREE_TYPE (TREE_OPERAND (expr, 0))) == RECORD_TYPE)
 	    return build1 (NOP_EXPR, type, expr);
 
@@ -662,7 +658,7 @@ build_dynamic_cast_1 (tree type, tree expr, tsubst_flags_t complain)
 	     dynamic_cast<D&>(b) (b an object) cannot succeed.  */
 	  if (tc == REFERENCE_TYPE)
 	    {
-	      if (VAR_P (old_expr)
+	      if (TREE_CODE (old_expr) == VAR_DECL
 		  && TREE_CODE (TREE_TYPE (old_expr)) == RECORD_TYPE)
 		{
 		  tree expr = throw_bad_cast ();
@@ -678,7 +674,7 @@ build_dynamic_cast_1 (tree type, tree expr, tsubst_flags_t complain)
 	  else if (TREE_CODE (expr) == ADDR_EXPR)
 	    {
 	      tree op = TREE_OPERAND (expr, 0);
-	      if (VAR_P (op)
+	      if (TREE_CODE (op) == VAR_DECL
 		  && TREE_CODE (TREE_TYPE (op)) == RECORD_TYPE)
 		{
                   if (complain & tf_warning)
@@ -741,8 +737,8 @@ build_dynamic_cast_1 (tree type, tree expr, tsubst_flags_t complain)
 					      const_ptr_type_node,
 					      tinfo_ptr, tinfo_ptr,
 					      ptrdiff_type_node, NULL_TREE);
-	      dcast_fn = build_library_fn_ptr (name, tmp,
-					       ECF_LEAF | ECF_PURE | ECF_NOTHROW);
+	      dcast_fn = build_library_fn_ptr (name, tmp);
+	      DECL_PURE_P (dcast_fn) = 1;
 	      pop_abi_namespace ();
 	      dynamic_cast_node = dcast_fn;
 	    }
@@ -826,7 +822,7 @@ target_incomplete_p (tree type)
 	  return true;
 	type = TYPE_PTRMEM_POINTED_TO_TYPE (type);
       }
-    else if (TYPE_PTR_P (type))
+    else if (TREE_CODE (type) == POINTER_TYPE)
       type = TREE_TYPE (type);
     else
       return !COMPLETE_OR_VOID_TYPE_P (type);
@@ -1057,7 +1053,7 @@ typeinfo_in_lib_p (tree type)
 {
   /* The typeinfo objects for `T*' and `const T*' are in the runtime
      library for simple types T.  */
-  if (TYPE_PTR_P (type)
+  if (TREE_CODE (type) == POINTER_TYPE
       && (cp_type_quals (TREE_TYPE (type)) == TYPE_QUAL_CONST
 	  || cp_type_quals (TREE_TYPE (type)) == TYPE_UNQUALIFIED))
     type = TREE_TYPE (type);

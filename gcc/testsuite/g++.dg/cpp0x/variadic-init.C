@@ -1,4 +1,5 @@
-// { dg-do run { target c++11 } }
+// { dg-do run }
+// { dg-options "-std=gnu++0x" }
 
 // PR c++/33510
 #define SIZE_FROM_CTOR

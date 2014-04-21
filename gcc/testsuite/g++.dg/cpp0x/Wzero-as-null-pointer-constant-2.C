@@ -1,6 +1,5 @@
 // PR c++/56373
-// { dg-do compile { target c++11 } }
-// { dg-options "-Wzero-as-null-pointer-constant" }
+// { dg-options "-std=c++11 -Wzero-as-null-pointer-constant" }
 
 struct shared_ptr
 {

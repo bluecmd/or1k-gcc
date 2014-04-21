@@ -1,6 +1,6 @@
 // <forward_list.h> -*- C++ -*-
 
-// Copyright (C) 2008-2014 Free Software Foundation, Inc.
+// Copyright (C) 2008-2013 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -32,14 +32,10 @@
 
 #pragma GCC system_header
 
+#include <memory>
+#if __cplusplus >= 201103L
 #include <initializer_list>
-#include <bits/stl_iterator_base_types.h>
-#include <bits/stl_iterator.h>
-#include <bits/stl_algobase.h>
-#include <bits/stl_function.h>
-#include <bits/allocator.h>
-#include <ext/alloc_traits.h>
-#include <ext/aligned_buffer.h>
+#endif
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
@@ -58,7 +54,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
     _Fwd_list_node_base*
     _M_transfer_after(_Fwd_list_node_base* __begin,
-		      _Fwd_list_node_base* __end) noexcept
+		      _Fwd_list_node_base* __end)
     {
       _Fwd_list_node_base* __keep = __begin->_M_next;
       if (__end)
@@ -100,15 +96,20 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
     {
       _Fwd_list_node() = default;
 
-      __gnu_cxx::__aligned_buffer<_Tp> _M_storage;
+      typename aligned_storage<sizeof(_Tp), alignment_of<_Tp>::value>::type
+	_M_storage;
 
       _Tp*
       _M_valptr() noexcept
-      { return _M_storage._M_ptr(); }
+      {
+	return static_cast<_Tp*>(static_cast<void*>(&_M_storage));
+      }
 
       const _Tp*
       _M_valptr() const noexcept
-      { return _M_storage._M_ptr(); }
+      {
+	return static_cast<const _Tp*>(static_cast<const void*>(&_M_storage));
+      }
     };
 
   /**
@@ -128,30 +129,30 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       typedef ptrdiff_t                          difference_type;
       typedef std::forward_iterator_tag          iterator_category;
 
-      _Fwd_list_iterator() noexcept
+      _Fwd_list_iterator()
       : _M_node() { }
 
       explicit
-      _Fwd_list_iterator(_Fwd_list_node_base* __n) noexcept
+      _Fwd_list_iterator(_Fwd_list_node_base* __n) 
       : _M_node(__n) { }
 
       reference
-      operator*() const noexcept
+      operator*() const
       { return *static_cast<_Node*>(this->_M_node)->_M_valptr(); }
 
       pointer
-      operator->() const noexcept
+      operator->() const
       { return static_cast<_Node*>(this->_M_node)->_M_valptr(); }
 
       _Self&
-      operator++() noexcept
+      operator++()
       {
         _M_node = _M_node->_M_next;
         return *this;
       }
 
       _Self
-      operator++(int) noexcept
+      operator++(int)
       {
         _Self __tmp(*this);
         _M_node = _M_node->_M_next;
@@ -159,15 +160,15 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       }
 
       bool
-      operator==(const _Self& __x) const noexcept
+      operator==(const _Self& __x) const
       { return _M_node == __x._M_node; }
 
       bool
-      operator!=(const _Self& __x) const noexcept
+      operator!=(const _Self& __x) const
       { return _M_node != __x._M_node; }
 
       _Self
-      _M_next() const noexcept
+      _M_next() const
       {
         if (_M_node)
           return _Fwd_list_iterator(_M_node->_M_next);
@@ -196,33 +197,33 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       typedef ptrdiff_t                          difference_type;
       typedef std::forward_iterator_tag          iterator_category;
 
-      _Fwd_list_const_iterator() noexcept
+      _Fwd_list_const_iterator()
       : _M_node() { }
 
       explicit
-      _Fwd_list_const_iterator(const _Fwd_list_node_base* __n)  noexcept
+      _Fwd_list_const_iterator(const _Fwd_list_node_base* __n) 
       : _M_node(__n) { }
 
-      _Fwd_list_const_iterator(const iterator& __iter) noexcept
+      _Fwd_list_const_iterator(const iterator& __iter)
       : _M_node(__iter._M_node) { }
 
       reference
-      operator*() const noexcept
+      operator*() const
       { return *static_cast<_Node*>(this->_M_node)->_M_valptr(); }
 
       pointer
-      operator->() const noexcept
+      operator->() const
       { return static_cast<_Node*>(this->_M_node)->_M_valptr(); }
 
       _Self&
-      operator++() noexcept
+      operator++()
       {
         _M_node = _M_node->_M_next;
         return *this;
       }
 
       _Self
-      operator++(int) noexcept
+      operator++(int)
       {
         _Self __tmp(*this);
         _M_node = _M_node->_M_next;
@@ -230,15 +231,15 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       }
 
       bool
-      operator==(const _Self& __x) const noexcept
+      operator==(const _Self& __x) const
       { return _M_node == __x._M_node; }
 
       bool
-      operator!=(const _Self& __x) const noexcept
+      operator!=(const _Self& __x) const
       { return _M_node != __x._M_node; }
 
       _Self
-      _M_next() const noexcept
+      _M_next() const
       {
         if (this->_M_node)
           return _Fwd_list_const_iterator(_M_node->_M_next);
@@ -255,7 +256,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
   template<typename _Tp>
     inline bool
     operator==(const _Fwd_list_iterator<_Tp>& __x,
-               const _Fwd_list_const_iterator<_Tp>& __y) noexcept
+               const _Fwd_list_const_iterator<_Tp>& __y)
     { return __x._M_node == __y._M_node; }
 
   /**
@@ -264,7 +265,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
   template<typename _Tp>
     inline bool
     operator!=(const _Fwd_list_iterator<_Tp>& __x,
-               const _Fwd_list_const_iterator<_Tp>& __y) noexcept
+               const _Fwd_list_const_iterator<_Tp>& __y)
     { return __x._M_node != __y._M_node; }
 
   /**
@@ -338,10 +339,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       _Node*
       _M_get_node()
-      {
-	auto __ptr = _Node_alloc_traits::allocate(_M_get_Node_allocator(), 1);
-	return std::__addressof(*__ptr);
-      }
+      { return _Node_alloc_traits::allocate(_M_get_Node_allocator(), 1); }
 
       template<typename... _Args>
         _Node*
@@ -352,7 +350,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
             {
 	      _Tp_alloc_type __a(_M_get_Node_allocator());
 	      typedef allocator_traits<_Tp_alloc_type> _Alloc_traits;
-	      ::new ((void*)__node) _Node;
+	      ::new ((void*)__node) _Node();
 	      _Alloc_traits::construct(__a, __node->_M_valptr(),
 				       std::forward<_Args>(__args)...);
             }
@@ -370,11 +368,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       void
       _M_put_node(_Node* __p)
-      {
-	typedef typename _Node_alloc_traits::pointer _Ptr;
-	auto __ptr = std::pointer_traits<_Ptr>::pointer_to(*__p);
-	_Node_alloc_traits::deallocate(_M_get_Node_allocator(), __ptr, 1);
-      }
+      { _Node_alloc_traits::deallocate(_M_get_Node_allocator(), __p, 1); }
 
       _Fwd_list_node_base*
       _M_erase_after(_Fwd_list_node_base* __pos);
@@ -427,8 +421,8 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       typedef _Tp                                          value_type;
       typedef typename _Alloc_traits::pointer              pointer;
       typedef typename _Alloc_traits::const_pointer        const_pointer;
-      typedef value_type&				   reference;
-      typedef const value_type&				   const_reference;
+      typedef typename _Alloc_traits::reference            reference;
+      typedef typename _Alloc_traits::const_reference      const_reference;
  
       typedef _Fwd_list_iterator<_Tp>                      iterator;
       typedef _Fwd_list_const_iterator<_Tp>                const_iterator;

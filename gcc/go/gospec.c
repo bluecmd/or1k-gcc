@@ -1,5 +1,5 @@
 /* gospec.c -- Specific flags and argument handling of the gcc Go front end.
-   Copyright (C) 2009-2014 Free Software Foundation, Inc.
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -117,6 +117,10 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
   /* Whether the -S option was used.  */
   bool saw_opt_S = false;
 
+  /* "-fuse-ld=" if it appears on the command line.  */
+  bool saw_use_ld = false;
+  int need_gold = 0;
+
   /* The first input file with an extension of .go.  */
   const char *first_go_file = NULL;  
 
@@ -217,6 +221,11 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
 	    }
 
 	  break;
+
+	case OPT_fuse_ld_bfd:
+	case OPT_fuse_ld_gold:
+	  saw_use_ld = true;
+	  break;
 	}
     }
 
@@ -226,8 +235,14 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
   shared_libgcc = 0;
 #endif
 
+#if defined(TARGET_CAN_SPLIT_STACK) && defined(HAVE_GOLD_NON_DEFAULT)
+  if (!saw_use_ld)
+    need_gold = 1;
+#endif
+
   /* Make sure to have room for the trailing NULL argument.  */
-  num_args = argc + need_math + shared_libgcc + (library > 0) * 5 + 10;
+  num_args = argc + need_math + shared_libgcc + need_gold +
+    (library > 0) * 5 + 10;
   new_decoded_options = XNEWVEC (struct cl_decoded_option, num_args);
 
   i = 0;
@@ -244,6 +259,14 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
 		       &new_decoded_options[j]);
       j++;
     }
+#ifdef HAVE_GOLD_NON_DEFAULT
+  if (need_gold)
+    {
+      generate_option (OPT_fuse_ld_gold, NULL, 1, CL_DRIVER,
+		       &new_decoded_options[j]);
+      j++;
+    }
+#endif
 #endif
 
   /* NOTE: We start at 1 now, not 0.  */

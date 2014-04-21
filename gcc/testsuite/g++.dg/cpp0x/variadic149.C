@@ -1,6 +1,5 @@
 // PR c++/60248
-// { dg-do compile { target c++11 } }
-// { dg-options "-g -fabi-version=2" }
+// { dg-options "-std=c++11 -g -fabi-version=2" }
 
 template<int...> struct A {};
 

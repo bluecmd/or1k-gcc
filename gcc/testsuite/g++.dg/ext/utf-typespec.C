@@ -1,6 +1,7 @@
 /* Contributed by Kris Van Hees <kris.van.hees@oracle.com> */
 /* Ensure that type specifiers are not allowed for char16_t/char32_t. */
-/* { dg-do compile { target c++11 } } */
+/* { dg-do compile } */
+/* { dg-options "-std=c++0x" } */
 
 signed char16_t		c0;		/* { dg-error "signed" } */
 signed char32_t		c1;		/* { dg-error "signed" } */

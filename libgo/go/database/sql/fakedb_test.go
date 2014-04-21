@@ -38,8 +38,6 @@ type fakeDriver struct {
 	mu         sync.Mutex // guards 3 following fields
 	openCount  int        // conn opens
 	closeCount int        // conn closes
-	waitCh     chan struct{}
-	waitingCh  chan struct{}
 	dbs        map[string]*fakeDB
 }
 
@@ -147,12 +145,6 @@ func (d *fakeDriver) Open(dsn string) (driver.Conn, error) {
 
 	if len(parts) >= 2 && parts[1] == "badConn" {
 		conn.bad = true
-	}
-	if d.waitCh != nil {
-		d.waitingCh <- struct{}{}
-		<-d.waitCh
-		d.waitCh = nil
-		d.waitingCh = nil
 	}
 	return conn, nil
 }
@@ -455,10 +447,6 @@ func (c *fakeConn) Prepare(query string) (driver.Stmt, error) {
 		return c.prepareCreate(stmt, parts)
 	case "INSERT":
 		return c.prepareInsert(stmt, parts)
-	case "NOSERT":
-		// Do all the prep-work like for an INSERT but don't actually insert the row.
-		// Used for some of the concurrent tests.
-		return c.prepareInsert(stmt, parts)
 	default:
 		stmt.Close()
 		return nil, errf("unsupported command type %q", cmd)
@@ -509,20 +497,13 @@ func (s *fakeStmt) Exec(args []driver.Value) (driver.Result, error) {
 		}
 		return driver.ResultNoRows, nil
 	case "INSERT":
-		return s.execInsert(args, true)
-	case "NOSERT":
-		// Do all the prep-work like for an INSERT but don't actually insert the row.
-		// Used for some of the concurrent tests.
-		return s.execInsert(args, false)
+		return s.execInsert(args)
 	}
 	fmt.Printf("EXEC statement, cmd=%q: %#v\n", s.cmd, s)
 	return nil, fmt.Errorf("unimplemented statement Exec command type of %q", s.cmd)
 }
 
-// When doInsert is true, add the row to the table.
-// When doInsert is false do prep-work and error checking, but don't
-// actually add the row to the table.
-func (s *fakeStmt) execInsert(args []driver.Value, doInsert bool) (driver.Result, error) {
+func (s *fakeStmt) execInsert(args []driver.Value) (driver.Result, error) {
 	db := s.c.db
 	if len(args) != s.placeholders {
 		panic("error in pkg db; should only get here if size is correct")
@@ -537,10 +518,7 @@ func (s *fakeStmt) execInsert(args []driver.Value, doInsert bool) (driver.Result
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	var cols []interface{}
-	if doInsert {
-		cols = make([]interface{}, len(t.colname))
-	}
+	cols := make([]interface{}, len(t.colname))
 	argPos := 0
 	for n, colname := range s.colName {
 		colidx := t.columnIndex(colname)
@@ -554,14 +532,10 @@ func (s *fakeStmt) execInsert(args []driver.Value, doInsert bool) (driver.Result
 		} else {
 			val = s.colValue[n]
 		}
-		if doInsert {
-			cols[colidx] = val
-		}
+		cols[colidx] = val
 	}
 
-	if doInsert {
-		t.rows = append(t.rows, &row{cols: cols})
-	}
+	t.rows = append(t.rows, &row{cols: cols})
 	return driver.RowsAffected(1), nil
 }
 
@@ -634,10 +608,9 @@ rows:
 	}
 
 	cursor := &rowsCursor{
-		pos:    -1,
-		rows:   mrows,
-		cols:   s.colName,
-		errPos: -1,
+		pos:  -1,
+		rows: mrows,
+		cols: s.colName,
 	}
 	return cursor, nil
 }
@@ -661,10 +634,6 @@ type rowsCursor struct {
 	pos    int
 	rows   []*row
 	closed bool
-
-	// errPos and err are for making Next return early with error.
-	errPos int
-	err    error
 
 	// a clone of slices to give out to clients, indexed by the
 	// the original slice's first byte address.  we clone them
@@ -691,9 +660,6 @@ func (rc *rowsCursor) Next(dest []driver.Value) error {
 		return errors.New("fakedb: cursor is closed")
 	}
 	rc.pos++
-	if rc.pos == rc.errPos {
-		return rc.err
-	}
 	if rc.pos >= len(rc.rows) {
 		return io.EOF // per interface spec
 	}

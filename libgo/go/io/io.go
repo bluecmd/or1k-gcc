@@ -91,14 +91,10 @@ type Closer interface {
 // Seek sets the offset for the next Read or Write to offset,
 // interpreted according to whence: 0 means relative to the origin of
 // the file, 1 means relative to the current offset, and 2 means
-// relative to the end.  Seek returns the new offset and an error, if
+// relative to the end.  Seek returns the new offset and an Error, if
 // any.
-//
-// Seeking to a negative offset is an error. Seeking to any positive
-// offset is legal, but the behavior of subsequent I/O operations on
-// the underlying object is implementation-dependent.
 type Seeker interface {
-	Seek(offset int64, whence int) (int64, error)
+	Seek(offset int64, whence int) (ret int64, err error)
 }
 
 // ReadWriter is the interface that groups the basic Read and Write methods.
@@ -333,19 +329,19 @@ func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
 // Because Copy is defined to read from src until EOF, it does
 // not treat an EOF from Read as an error to be reported.
 //
-// If src implements the WriterTo interface,
-// the copy is implemented by calling src.WriteTo(dst).
-// Otherwise, if dst implements the ReaderFrom interface,
+// If dst implements the ReaderFrom interface,
 // the copy is implemented by calling dst.ReadFrom(src).
+// Otherwise, if src implements the WriterTo interface,
+// the copy is implemented by calling src.WriteTo(dst).
 func Copy(dst Writer, src Reader) (written int64, err error) {
-	// If the reader has a WriteTo method, use it to do the copy.
+	// If the writer has a ReadFrom method, use it to do the copy.
 	// Avoids an allocation and a copy.
-	if wt, ok := src.(WriterTo); ok {
-		return wt.WriteTo(dst)
-	}
-	// Similarly, if the writer has a ReadFrom method, use it to do the copy.
 	if rt, ok := dst.(ReaderFrom); ok {
 		return rt.ReadFrom(src)
+	}
+	// Similarly, if the reader has a WriteTo method, use it to do the copy.
+	if wt, ok := src.(WriterTo); ok {
+		return wt.WriteTo(dst)
 	}
 	buf := make([]byte, 32*1024)
 	for {
@@ -430,7 +426,7 @@ func (s *SectionReader) Read(p []byte) (n int, err error) {
 var errWhence = errors.New("Seek: invalid whence")
 var errOffset = errors.New("Seek: invalid offset")
 
-func (s *SectionReader) Seek(offset int64, whence int) (int64, error) {
+func (s *SectionReader) Seek(offset int64, whence int) (ret int64, err error) {
 	switch whence {
 	default:
 		return 0, errWhence
@@ -441,7 +437,7 @@ func (s *SectionReader) Seek(offset int64, whence int) (int64, error) {
 	case 2:
 		offset += s.limit
 	}
-	if offset < s.base {
+	if offset < s.base || offset > s.limit {
 		return 0, errOffset
 	}
 	s.off = offset

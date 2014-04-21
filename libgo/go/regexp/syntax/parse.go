@@ -651,7 +651,7 @@ func literalRegexp(s string, flags Flags) *Regexp {
 
 // Parse parses a regular expression string s, controlled by the specified
 // Flags, and returns a regular expression parse tree. The syntax is
-// described in the top-level comment.
+// described in the top-level comment for package regexp.
 func Parse(s string, flags Flags) (*Regexp, error) {
 	if flags&Literal != 0 {
 		// Trivial parser for literal string.

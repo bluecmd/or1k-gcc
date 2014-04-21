@@ -3,7 +3,7 @@
 /* { dg-do compile } */
 
 /* Verify that adding the constant 4096 is turned
-   into subtracting the constant -4096. */
+   into substracting the constant -4096. */
 
 int foo(int a)
 {

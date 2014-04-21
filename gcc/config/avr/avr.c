@@ -1,5 +1,5 @@
 /* Subroutines for insn-output.c for ATMEL AVR micro controllers
-   Copyright (C) 1998-2014 Free Software Foundation, Inc.
+   Copyright (C) 1998-2013 Free Software Foundation, Inc.
    Contributed by Denis Chertykov (chertykov@gmail.com)
 
    This file is part of GCC.
@@ -32,10 +32,6 @@
 #include "flags.h"
 #include "reload.h"
 #include "tree.h"
-#include "print-tree.h"
-#include "calls.h"
-#include "stor-layout.h"
-#include "stringpool.h"
 #include "output.h"
 #include "expr.h"
 #include "c-family/c-common.h"
@@ -314,15 +310,6 @@ avr_option_override (void)
       flag_omit_frame_pointer = 0;
     }
 
-  if (flag_pic == 1)
-    warning (OPT_fpic, "-fpic is not supported");
-  if (flag_pic == 2)
-    warning (OPT_fPIC, "-fPIC is not supported");
-  if (flag_pie == 1)
-    warning (OPT_fpie, "-fpie is not supported");
-  if (flag_pie == 2)
-    warning (OPT_fPIE, "-fPIE is not supported");
-
   avr_current_device = &avr_mcu_types[avr_mcu_index];
   avr_current_arch = &avr_arch_types[avr_current_device->arch];
 
@@ -600,9 +587,13 @@ avr_set_current_function (tree decl)
       const char *name;
 
       name = DECL_ASSEMBLER_NAME_SET_P (decl)
-        /* Remove the leading '*' added in set_user_assembler_name.  */
-        ? 1 + IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl))
+        ? IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl))
         : IDENTIFIER_POINTER (DECL_NAME (decl));
+
+      /* Skip a leading '*' that might still prefix the assembler name,
+         e.g. in non-LTO runs.  */
+
+      name = default_strip_name_encoding (name);
 
       /* Silently ignore 'signal' if 'interrupt' is present.  AVR-LibC startet
          using this when it switched from SIGNAL and INTERRUPT to ISR.  */
@@ -734,8 +725,11 @@ avr_allocate_stack_slots_for_args (void)
 static bool
 avr_can_eliminate (const int from, const int to)
 {
-  return ((frame_pointer_needed && to == FRAME_POINTER_REGNUM)
-          || !frame_pointer_needed);
+  return ((from == ARG_POINTER_REGNUM && to == FRAME_POINTER_REGNUM)
+          || (frame_pointer_needed && to == FRAME_POINTER_REGNUM)
+          || ((from == FRAME_POINTER_REGNUM
+               || from == FRAME_POINTER_REGNUM + 1)
+              && !frame_pointer_needed));
 }
 
 
@@ -3089,10 +3083,14 @@ avr_out_xload (rtx insn ATTRIBUTE_UNUSED, rtx *op, int *plen)
   xop[2] = lpm_addr_reg_rtx;
   xop[3] = AVR_HAVE_LPMX ? op[0] : lpm_reg_rtx;
 
-  avr_asm_len (AVR_HAVE_LPMX ? "lpm %3,%a2" : "lpm", xop, plen, -1);
+  if (plen)
+    *plen = 0;
 
   avr_asm_len ("sbrc %1,7" CR_TAB
-               "ld %3,%a2", xop, plen, 2);
+               "ld %3,%a2" CR_TAB
+               "sbrs %1,7", xop, plen, 3);
+
+  avr_asm_len (AVR_HAVE_LPMX ? "lpm %3,%a2" : "lpm", xop, plen, 1);
 
   if (REGNO (xop[0]) != REGNO (xop[3]))
     avr_asm_len ("mov %0,%3", xop, plen, 1);
@@ -6812,8 +6810,8 @@ avr_out_plus (rtx insn, rtx *xop, int *plen, int *pcc, bool out_label)
 
   /* Work out the shortest sequence.  */
 
-  avr_out_plus_1 (op, &len_minus, MINUS, &cc_plus, code_sat, sign, out_label);
-  avr_out_plus_1 (op, &len_plus, PLUS, &cc_minus, code_sat, sign, out_label);
+  avr_out_plus_1 (op, &len_minus, MINUS, &cc_minus, code_sat, sign, out_label);
+  avr_out_plus_1 (op, &len_plus, PLUS, &cc_plus, code_sat, sign, out_label);
 
   if (plen)
     {
@@ -7040,9 +7038,7 @@ avr_out_fract (rtx insn, rtx operands[], bool intsigned, int *plen)
   RTX_CODE shift = UNKNOWN;
   bool sign_in_carry = false;
   bool msb_in_carry = false;
-  bool lsb_in_tmp_reg = false;
   bool lsb_in_carry = false;
-  bool frac_rounded = false;
   const char *code_ashift = "lsl %0";
 
 
@@ -7050,7 +7046,6 @@ avr_out_fract (rtx insn, rtx operands[], bool intsigned, int *plen)
   /* Shorthand used below.  */                                          \
   ((sign_bytes                                                          \
     && IN_RANGE (RR, dest.regno_msb - sign_bytes + 1, dest.regno_msb))  \
-   || (offset && IN_RANGE (RR, dest.regno, dest.regno_msb))		\
    || (reg_unused_after (insn, all_regs_rtx[RR])                        \
        && !IN_RANGE (RR, dest.regno, dest.regno_msb)))
 
@@ -7125,119 +7120,13 @@ avr_out_fract (rtx insn, rtx operands[], bool intsigned, int *plen)
   else
     gcc_unreachable();
 
-  /* If we need to round the fraction part, we might need to save/round it
-     before clobbering any of it in Step 1.  Also, we might to want to do
-     the rounding now to make use of LD_REGS.  */
-  if (SCALAR_INT_MODE_P (GET_MODE (xop[0]))
-      && SCALAR_ACCUM_MODE_P (GET_MODE (xop[1]))
-      && !TARGET_FRACT_CONV_TRUNC)
-    {
-      bool overlap
-	= (src.regno <=
-	   (offset ? dest.regno_msb - sign_bytes : dest.regno + zero_bytes - 1)
-	   && dest.regno - offset -1 >= dest.regno);
-      unsigned s0 = dest.regno - offset -1;
-      bool use_src = true;
-      unsigned sn;
-      unsigned copied_msb = src.regno_msb;
-      bool have_carry = false;
-
-      if (src.ibyte > dest.ibyte)
-	copied_msb -= src.ibyte - dest.ibyte;
-
-      for (sn = s0; sn <= copied_msb; sn++)
-	if (!IN_RANGE (sn, dest.regno, dest.regno_msb)
-	    && !reg_unused_after (insn, all_regs_rtx[sn]))
-	  use_src = false;
-      if (use_src && TEST_HARD_REG_BIT (reg_class_contents[LD_REGS], s0))
-	{
-	  avr_asm_len ("tst %0" CR_TAB "brpl 0f",
-		       &all_regs_rtx[src.regno_msb], plen, 2);
-	  sn = src.regno;
-	  if (sn < s0)
-	    {
-	      if (TEST_HARD_REG_BIT (reg_class_contents[LD_REGS], sn))
-		avr_asm_len ("cpi %0,1", &all_regs_rtx[sn], plen, 1);
-	      else
-		avr_asm_len ("sec" CR_TAB "cpc %0,__zero_reg__",
-			     &all_regs_rtx[sn], plen, 2);
-	      have_carry = true;
-	    }
-	  while (++sn < s0)
-	    avr_asm_len ("cpc %0,__zero_reg__", &all_regs_rtx[sn], plen, 1);
-	  avr_asm_len (have_carry ? "sbci %0,128" : "subi %0,129",
-		       &all_regs_rtx[s0], plen, 1);
-	  for (sn = src.regno + src.fbyte; sn <= copied_msb; sn++)
-	    avr_asm_len ("sbci %0,255", &all_regs_rtx[sn], plen, 1);
-	  avr_asm_len ("\n0:", NULL, plen, 0);
-	  frac_rounded = true;
-	}
-      else if (use_src && overlap)
-	{
-	  avr_asm_len ("clr __tmp_reg__" CR_TAB
-		       "sbrc %1,0" CR_TAB "dec __tmp_reg__", xop, plen, 1);
-	  sn = src.regno;
-	  if (sn < s0)
-	    {
-	      avr_asm_len ("add %0,__tmp_reg__", &all_regs_rtx[sn], plen, 1);
-	      have_carry = true;
-	    }
-	  while (++sn < s0)
-	    avr_asm_len ("adc %0,__tmp_reg__", &all_regs_rtx[sn], plen, 1);
-	  if (have_carry)
-	    avr_asm_len ("clt" CR_TAB "bld __tmp_reg__,7" CR_TAB
-			 "adc %0,__tmp_reg__",
-			 &all_regs_rtx[s0], plen, 1);
-	  else
-	    avr_asm_len ("lsr __tmp_reg" CR_TAB "add %0,__tmp_reg__",
-			 &all_regs_rtx[s0], plen, 2);
-	  for (sn = src.regno + src.fbyte; sn <= copied_msb; sn++)
-	    avr_asm_len ("adc %0,__zero_reg__", &all_regs_rtx[sn], plen, 1);
-	  frac_rounded = true;
-	}
-      else if (overlap)
-	{
-	  bool use_src
-	    = (TEST_HARD_REG_BIT (reg_class_contents[LD_REGS], s0)
-	       && (IN_RANGE (s0, dest.regno, dest.regno_msb)
-		   || reg_unused_after (insn, all_regs_rtx[s0])));
-	  xop[2] = all_regs_rtx[s0];
-	  unsigned sn = src.regno;
-	  if (!use_src || sn == s0)
-	    avr_asm_len ("mov __tmp_reg__,%2", xop, plen, 1);
-	  /* We need to consider to-be-discarded bits
-	     if the value is negative.  */
-	  if (sn < s0)
-	    {
-	      avr_asm_len ("tst %0" CR_TAB "brpl 0f",
-			   &all_regs_rtx[src.regno_msb], plen, 2);
-	      /* Test to-be-discarded bytes for any nozero bits.
-		 ??? Could use OR or SBIW to test two registers at once.  */
-	      if (sn < s0)
-		avr_asm_len ("cp %0,__zero_reg__", &all_regs_rtx[sn], plen, 1);
-	      while (++sn < s0)
-		avr_asm_len ("cpc %0,__zero_reg__", &all_regs_rtx[sn], plen, 1);
-	      /* Set bit 0 in __tmp_reg__ if any of the lower bits was set.  */
-	      if (use_src)
-		avr_asm_len ("breq 0f" CR_TAB
-			     "ori %2,1" "\n0:\t" "mov __tmp_reg__,%2",
-			     xop, plen, 3);
-	      else
-		avr_asm_len ("breq 0f" CR_TAB
-			     "set" CR_TAB "bld __tmp_reg__,0\n0:",
-			     xop, plen, 3);
-	    }
-	  lsb_in_tmp_reg = true;
-	}
-    }
-
   /* Step 1:  Clear bytes at the low end and copy payload bits from source
      ======   to destination.  */
 
   int step = offset < 0 ? 1 : -1;
   unsigned d0 = offset < 0 ? dest.regno : dest.regno_msb;
 
-  // We cleared at least that number of registers.
+  // We leared at least that number of registers.
   int clr_n = 0;
 
   for (; d0 >= dest.regno && d0 <= dest.regno_msb; d0 += step)
@@ -7327,7 +7216,6 @@ avr_out_fract (rtx insn, rtx operands[], bool intsigned, int *plen)
           unsigned src_lsb = dest.regno - offset -1;
 
           if (shift == ASHIFT && src.fbyte > dest.fbyte && !lsb_in_carry
-	      && !lsb_in_tmp_reg
               && (d0 == src_lsb || d0 + stepw == src_lsb))
             {
               /* We are going to override the new LSB; store it into carry.  */
@@ -7349,91 +7237,7 @@ avr_out_fract (rtx insn, rtx operands[], bool intsigned, int *plen)
     {
       unsigned s0 = dest.regno - offset -1;
 
-      /* n1169 4.1.4 says:
-	 "Conversions from a fixed-point to an integer type round toward zero."
-	 Hence, converting a fract type to integer only gives a non-zero result
-	 for -1.  */
-      if (SCALAR_INT_MODE_P (GET_MODE (xop[0]))
-	  && SCALAR_FRACT_MODE_P (GET_MODE (xop[1]))
-	  && !TARGET_FRACT_CONV_TRUNC)
-	{
-	  gcc_assert (s0 == src.regno_msb);
-	  /* Check if the input is -1.  We do that by checking if negating
-	     the input causes an integer overflow.  */
-	  unsigned sn = src.regno;
-	  avr_asm_len ("cp __zero_reg__,%0", &all_regs_rtx[sn++], plen, 1);
-	  while (sn <= s0)
-	    avr_asm_len ("cpc __zero_reg__,%0", &all_regs_rtx[sn++], plen, 1);
-
-	  /* Overflow goes with set carry.  Clear carry otherwise.  */
-	  avr_asm_len ("brvs 0f" CR_TAB "clc\n0:", NULL, plen, 2);
-	}
-      /* Likewise, when converting from accumulator types to integer, we
-	 need to round up negative values.  */
-      else if (SCALAR_INT_MODE_P (GET_MODE (xop[0]))
-	       && SCALAR_ACCUM_MODE_P (GET_MODE (xop[1]))
-	       && !TARGET_FRACT_CONV_TRUNC
-	       && !frac_rounded)
-	{
-	  bool have_carry = false;
-
-	  xop[2] = all_regs_rtx[s0];
-	  if (!lsb_in_tmp_reg && !MAY_CLOBBER (s0))
-	    avr_asm_len ("mov __tmp_reg__,%2", xop, plen, 1);
-	  avr_asm_len ("tst %0" CR_TAB "brpl 0f",
-		       &all_regs_rtx[src.regno_msb], plen, 2);
-	  if (!lsb_in_tmp_reg)
-	    {
-	      unsigned sn = src.regno;
-	      if (sn < s0)
-		{
-		  avr_asm_len ("cp __zero_reg__,%0", &all_regs_rtx[sn],
-			       plen, 1);
-		  have_carry = true;
-		}
-	      while (++sn < s0)
-		avr_asm_len ("cpc __zero_reg__,%0", &all_regs_rtx[sn], plen, 1);
-	      lsb_in_tmp_reg = !MAY_CLOBBER (s0);
-	    }
-	  /* Add in C and the rounding value 127.  */
-	  /* If the destination msb is a sign byte, and in LD_REGS,
-	     grab it as a temporary.  */
-	  if (sign_bytes
-	      && TEST_HARD_REG_BIT (reg_class_contents[LD_REGS],
-				    dest.regno_msb))
-	    {
-	      xop[3] = all_regs_rtx[dest.regno_msb];
-	      avr_asm_len ("ldi %3,127", xop, plen, 1);
-	      avr_asm_len ((have_carry && lsb_in_tmp_reg ? "adc __tmp_reg__,%3"
-			   : have_carry ? "adc %2,%3"
-			   : lsb_in_tmp_reg ? "add __tmp_reg__,%3"
-			   : "add %2,%3"),
-			   xop, plen, 1);
-	    }
-	  else
-	    {
-	      /* Fall back to use __zero_reg__ as a temporary.  */
-	      avr_asm_len ("dec __zero_reg__", NULL, plen, 1);
-	      if (have_carry)
-		avr_asm_len ("clt" CR_TAB "bld __zero_reg__,7", NULL, plen, 2);
-	      else
-		avr_asm_len ("lsr __zero_reg__", NULL, plen, 1);
-	      avr_asm_len ((have_carry && lsb_in_tmp_reg
-			   ? "adc __tmp_reg__,__zero_reg__"
-			   : have_carry ? "adc %2,__zero_reg__"
-			   : lsb_in_tmp_reg ? "add __tmp_reg__,__zero_reg__"
-			   : "add %2,__zero_reg__"),
-			   xop, plen, 1);
-	      avr_asm_len ("eor __zero_reg__,__zero_reg__", NULL, plen, 1);
-	    }
-	  for (d0 = dest.regno + zero_bytes;
-	       d0 <= dest.regno_msb - sign_bytes; d0++)
-	    avr_asm_len ("adc %0,__zero_reg__", &all_regs_rtx[d0], plen, 1);
-	  avr_asm_len (lsb_in_tmp_reg
-		       ? "\n0:\t" "lsl __tmp_reg__" : "\n0:\t" "lsl %2",
-		       xop, plen, 1);
-	}
-      else if (MAY_CLOBBER (s0))
+      if (MAY_CLOBBER (s0))
         avr_asm_len ("lsl %0", &all_regs_rtx[s0], plen, 1);
       else
         avr_asm_len ("mov __tmp_reg__,%0" CR_TAB
@@ -7741,7 +7545,7 @@ avr_rotate_bytes (rtx operands[])
 		gcc_assert (move[blocked].links != -1);
 		/* Replace src of  blocking move with scratch reg.  */
 		move[move[blocked].links].src = scratch;
-		/* Make dependent on scratch move occurring.  */
+		/* Make dependent on scratch move occuring.  */
 		move[blocked].links = size;
 		size=size+1;
 	      }
@@ -7908,9 +7712,9 @@ _reg_unused_after (rtx insn, rtx reg)
 	      rtx this_insn = XVECEXP (PATTERN (insn), 0, i);
 	      rtx set = single_set (this_insn);
 
-	      if (CALL_P (this_insn))
+	      if (GET_CODE (this_insn) == CALL_INSN)
 		code = CALL_INSN;
-	      else if (JUMP_P (this_insn))
+	      else if (GET_CODE (this_insn) == JUMP_INSN)
 		{
 		  if (INSN_ANNULLED_BRANCH_P (this_insn))
 		    return 0;
@@ -8603,10 +8407,7 @@ avr_encode_section_info (tree decl, rtx rtl, int new_decl_p)
       && SYMBOL_REF == GET_CODE (XEXP (rtl, 0)))
    {
       rtx sym = XEXP (rtl, 0);
-      tree type = TREE_TYPE (decl);
-      if (type == error_mark_node)
-	return;
-      addr_space_t as = TYPE_ADDR_SPACE (type);
+      addr_space_t as = TYPE_ADDR_SPACE (TREE_TYPE (decl));
 
       /* PSTR strings are in generic space but located in flash:
          patch address space.  */
@@ -11375,12 +11176,26 @@ avr_expand_delay_cycles (rtx operands0)
 }
 
 
+/* Return VAL * BASE + DIGIT.  BASE = 0 is shortcut for BASE = 2^{32}   */
+
+static double_int
+avr_double_int_push_digit (double_int val, int base,
+                           unsigned HOST_WIDE_INT digit)
+{
+  val = 0 == base
+    ? val.llshift (32, 64)
+    : val * double_int::from_uhwi (base);
+
+  return val + double_int::from_uhwi (digit);
+}
+
+
 /* Compute the image of x under f, i.e. perform   x --> f(x)    */
 
 static int
-avr_map (unsigned int f, int x)
+avr_map (double_int f, int x)
 {
-  return x < 8 ? (f >> (4 * x)) & 0xf : 0;
+  return 0xf & f.lrshift (4*x, 64).to_uhwi ();
 }
 
 
@@ -11405,7 +11220,7 @@ enum
   };
 
 static unsigned
-avr_map_metric (unsigned int a, int mode)
+avr_map_metric (double_int a, int mode)
 {
   unsigned i, metric = 0;
 
@@ -11438,8 +11253,7 @@ avr_map_metric (unsigned int a, int mode)
 bool
 avr_has_nibble_0xf (rtx ival)
 {
-  unsigned int map = UINTVAL (ival) & GET_MODE_MASK (SImode);
-  return 0 != avr_map_metric (map, MAP_MASK_PREIMAGE_F);
+  return 0 != avr_map_metric (rtx_to_double_int (ival), MAP_MASK_PREIMAGE_F);
 }
 
 
@@ -11473,7 +11287,7 @@ typedef struct
   int cost;
 
   /* The composition F o G^-1 (*, arg) for some function F */
-  unsigned int map;
+  double_int map;
 
   /* For debug purpose only */
   const char *str;
@@ -11481,21 +11295,21 @@ typedef struct
 
 static const avr_map_op_t avr_map_op[] =
   {
-    { LROTATE_EXPR, 0, 0x76543210, 0, 0, "id" },
-    { LROTATE_EXPR, 1, 0x07654321, 2, 0, "<<<" },
-    { LROTATE_EXPR, 2, 0x10765432, 4, 0, "<<<" },
-    { LROTATE_EXPR, 3, 0x21076543, 4, 0, "<<<" },
-    { LROTATE_EXPR, 4, 0x32107654, 1, 0, "<<<" },
-    { LROTATE_EXPR, 5, 0x43210765, 3, 0, "<<<" },
-    { LROTATE_EXPR, 6, 0x54321076, 5, 0, "<<<" },
-    { LROTATE_EXPR, 7, 0x65432107, 3, 0, "<<<" },
-    { RSHIFT_EXPR, 1, 0x6543210c, 1, 0, ">>" },
-    { RSHIFT_EXPR, 1, 0x7543210c, 1, 0, ">>" },
-    { RSHIFT_EXPR, 2, 0x543210cc, 2, 0, ">>" },
-    { RSHIFT_EXPR, 2, 0x643210cc, 2, 0, ">>" },
-    { RSHIFT_EXPR, 2, 0x743210cc, 2, 0, ">>" },
-    { LSHIFT_EXPR, 1, 0xc7654321, 1, 0, "<<" },
-    { LSHIFT_EXPR, 2, 0xcc765432, 2, 0, "<<" }
+    { LROTATE_EXPR, 0, 0x76543210, 0, { 0, 0 }, "id" },
+    { LROTATE_EXPR, 1, 0x07654321, 2, { 0, 0 }, "<<<" },
+    { LROTATE_EXPR, 2, 0x10765432, 4, { 0, 0 }, "<<<" },
+    { LROTATE_EXPR, 3, 0x21076543, 4, { 0, 0 }, "<<<" },
+    { LROTATE_EXPR, 4, 0x32107654, 1, { 0, 0 }, "<<<" },
+    { LROTATE_EXPR, 5, 0x43210765, 3, { 0, 0 }, "<<<" },
+    { LROTATE_EXPR, 6, 0x54321076, 5, { 0, 0 }, "<<<" },
+    { LROTATE_EXPR, 7, 0x65432107, 3, { 0, 0 }, "<<<" },
+    { RSHIFT_EXPR, 1, 0x6543210c, 1, { 0, 0 }, ">>" },
+    { RSHIFT_EXPR, 1, 0x7543210c, 1, { 0, 0 }, ">>" },
+    { RSHIFT_EXPR, 2, 0x543210cc, 2, { 0, 0 }, ">>" },
+    { RSHIFT_EXPR, 2, 0x643210cc, 2, { 0, 0 }, ">>" },
+    { RSHIFT_EXPR, 2, 0x743210cc, 2, { 0, 0 }, ">>" },
+    { LSHIFT_EXPR, 1, 0xc7654321, 1, { 0, 0 }, "<<" },
+    { LSHIFT_EXPR, 2, 0xcc765432, 2, { 0, 0 }, "<<" }
   };
 
 
@@ -11504,12 +11318,12 @@ static const avr_map_op_t avr_map_op[] =
    If result.cost < 0 then such a decomposition does not exist.  */
 
 static avr_map_op_t
-avr_map_decompose (unsigned int f, const avr_map_op_t *g, bool val_const_p)
+avr_map_decompose (double_int f, const avr_map_op_t *g, bool val_const_p)
 {
   int i;
   bool val_used_p = 0 != avr_map_metric (f, MAP_MASK_PREIMAGE_F);
   avr_map_op_t f_ginv = *g;
-  unsigned int ginv = g->ginv;
+  double_int ginv = double_int::from_uhwi (g->ginv);
 
   f_ginv.cost = -1;
 
@@ -11529,7 +11343,7 @@ avr_map_decompose (unsigned int f, const avr_map_op_t *g, bool val_const_p)
             return f_ginv;
         }
 
-      f_ginv.map = (f_ginv.map << 4) + x;
+      f_ginv.map = avr_double_int_push_digit (f_ginv.map, 16, x);
     }
 
   /* Step 2:  Compute the cost of the operations.
@@ -11554,7 +11368,7 @@ avr_map_decompose (unsigned int f, const avr_map_op_t *g, bool val_const_p)
          are mapped to 0 and used operands are reloaded to xop[0].  */
 
       xop[0] = all_regs_rtx[24];
-      xop[1] = gen_int_mode (f_ginv.map, SImode);
+      xop[1] = gen_int_mode (f_ginv.map.to_uhwi (), SImode);
       xop[2] = all_regs_rtx[25];
       xop[3] = val_used_p ? xop[0] : const0_rtx;
 
@@ -11581,7 +11395,7 @@ avr_map_decompose (unsigned int f, const avr_map_op_t *g, bool val_const_p)
    is different to its source position.  */
 
 static void
-avr_move_bits (rtx *xop, unsigned int map, bool fixp_p, int *plen)
+avr_move_bits (rtx *xop, double_int map, bool fixp_p, int *plen)
 {
   int bit_dest, b;
 
@@ -11634,7 +11448,7 @@ avr_move_bits (rtx *xop, unsigned int map, bool fixp_p, int *plen)
 const char*
 avr_out_insert_bits (rtx *op, int *plen)
 {
-  unsigned int map = UINTVAL (op[1]) & GET_MODE_MASK (SImode);
+  double_int map = rtx_to_double_int (op[1]);
   unsigned mask_fixed;
   bool fixp_p = true;
   rtx xop[4];
@@ -11648,7 +11462,9 @@ avr_out_insert_bits (rtx *op, int *plen)
   if (plen)
     *plen = 0;
   else if (flag_print_asm_name)
-    fprintf (asm_out_file, ASM_COMMENT_START "map = 0x%08x\n", map);
+    fprintf (asm_out_file,
+             ASM_COMMENT_START "map = 0x%08" HOST_LONG_FORMAT "x\n",
+             map.to_uhwi () & GET_MODE_MASK (SImode));
 
   /* If MAP has fixed points it might be better to initialize the result
      with the bits to be inserted instead of moving all bits by hand.  */
@@ -12223,7 +12039,7 @@ avr_fold_builtin (tree fndecl, int n_args ATTRIBUTE_UNUSED, tree *arg,
         tree tval = arg[2];
         tree tmap;
         tree map_type = TREE_VALUE (TYPE_ARG_TYPES (TREE_TYPE (fndecl)));
-        unsigned int map;
+        double_int map;
         bool changed = false;
         unsigned i;
         avr_map_op_t best_g;
@@ -12236,8 +12052,8 @@ avr_fold_builtin (tree fndecl, int n_args ATTRIBUTE_UNUSED, tree *arg,
             break;
           }
 
-        tmap = double_int_to_tree (map_type, tree_to_double_int (arg[0]));
-        map = TREE_INT_CST_LOW (tmap);
+        map = tree_to_double_int (arg[0]);
+        tmap = double_int_to_tree (map_type, map);
 
         if (TREE_CODE (tval) != INTEGER_CST
             && 0 == avr_map_metric (map, MAP_MASK_PREIMAGE_F))
@@ -12303,7 +12119,7 @@ avr_fold_builtin (tree fndecl, int n_args ATTRIBUTE_UNUSED, tree *arg,
         /* Try to decomposing map to reduce overall cost.  */
 
         if (avr_log.builtin)
-          avr_edump ("\n%?: %x\n%?: ROL cost: ", map);
+          avr_edump ("\n%?: %X\n%?: ROL cost: ", map);
 
         best_g = avr_map_op[0];
         best_g.cost = 1000;
@@ -12328,7 +12144,7 @@ avr_fold_builtin (tree fndecl, int n_args ATTRIBUTE_UNUSED, tree *arg,
         /* Apply operation G to the 2nd argument.  */
 
         if (avr_log.builtin)
-          avr_edump ("%?: using OP(%s%d, %x) cost %d\n",
+          avr_edump ("%?: using OP(%s%d, %X) cost %d\n",
                      best_g.str, best_g.arg, best_g.map, best_g.cost);
 
         /* Do right-shifts arithmetically: They copy the MSB instead of
@@ -12341,8 +12157,7 @@ avr_fold_builtin (tree fndecl, int n_args ATTRIBUTE_UNUSED, tree *arg,
 
         /* Use map o G^-1 instead of original map to undo the effect of G.  */
 
-        tmap = double_int_to_tree (map_type,
-				   double_int::from_uhwi (best_g.map));
+        tmap = double_int_to_tree (map_type, best_g.map);
 
         return build_call_expr (fndecl, 3, tmap, tbits, tval);
       } /* AVR_BUILTIN_INSERT_BITS */

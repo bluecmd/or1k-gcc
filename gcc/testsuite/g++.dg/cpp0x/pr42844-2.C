@@ -1,5 +1,6 @@
 // PR c++/42844
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 struct A // { dg-message "user-provided default constructor" }
 {

@@ -55,10 +55,10 @@ func testslice() {
 		panic("fail")
 	}
 	if s != 15 {
-		println("wrong sum ranging over makeslice", s)
+		println("wrong sum ranging over makeslice")
 		panic("fail")
 	}
-
+	
 	x := []int{10, 20}
 	y := []int{99}
 	i := 1
@@ -82,7 +82,7 @@ func testslice1() {
 		panic("fail")
 	}
 	if s != 10 {
-		println("wrong sum ranging over makeslice", s)
+		println("wrong sum ranging over makeslice")
 		panic("fail")
 	}
 }
@@ -106,7 +106,7 @@ func testarray() {
 		panic("fail")
 	}
 	if s != 15 {
-		println("wrong sum ranging over makearray", s)
+		println("wrong sum ranging over makearray")
 		panic("fail")
 	}
 }
@@ -122,7 +122,7 @@ func testarray1() {
 		panic("fail")
 	}
 	if s != 10 {
-		println("wrong sum ranging over makearray", s)
+		println("wrong sum ranging over makearray")
 		panic("fail")
 	}
 }
@@ -155,7 +155,7 @@ func testarrayptr() {
 		panic("fail")
 	}
 	if s != 15 {
-		println("wrong sum ranging over makearrayptr", s)
+		println("wrong sum ranging over makearrayptr")
 		panic("fail")
 	}
 }
@@ -171,7 +171,7 @@ func testarrayptr1() {
 		panic("fail")
 	}
 	if s != 10 {
-		println("wrong sum ranging over makearrayptr", s)
+		println("wrong sum ranging over makearrayptr")
 		panic("fail")
 	}
 }
@@ -195,7 +195,7 @@ func teststring() {
 		panic("fail")
 	}
 	if s != 'a'+'b'+'c'+'d'+'☺' {
-		println("wrong sum ranging over makestring", s)
+		println("wrong sum ranging over makestring")
 		panic("fail")
 	}
 }
@@ -211,7 +211,7 @@ func teststring1() {
 		panic("fail")
 	}
 	if s != 10 {
-		println("wrong sum ranging over makestring", s)
+		println("wrong sum ranging over makestring")
 		panic("fail")
 	}
 }
@@ -235,7 +235,7 @@ func testmap() {
 		panic("fail")
 	}
 	if s != 'a'+'b'+'c'+'d'+'☺' {
-		println("wrong sum ranging over makemap", s)
+		println("wrong sum ranging over makemap")
 		panic("fail")
 	}
 }
@@ -251,7 +251,7 @@ func testmap1() {
 		panic("fail")
 	}
 	if s != 10 {
-		println("wrong sum ranging over makemap", s)
+		println("wrong sum ranging over makemap")
 		panic("fail")
 	}
 }

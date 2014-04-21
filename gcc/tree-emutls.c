@@ -1,5 +1,5 @@
 /* Lower TLS operations to emulation functions.
-   Copyright (C) 2006-2014 Free Software Foundation, Inc.
+   Copyright (C) 2006-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -21,23 +21,10 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tree.h"
-#include "stor-layout.h"
-#include "varasm.h"
-#include "basic-block.h"
-#include "tree-ssa-alias.h"
-#include "internal-fn.h"
-#include "gimple-expr.h"
-#include "is-a.h"
 #include "gimple.h"
-#include "gimple-iterator.h"
-#include "gimple-walk.h"
 #include "tree-pass.h"
-#include "gimple-ssa.h"
+#include "tree-flow.h"
 #include "cgraph.h"
-#include "tree-phinodes.h"
-#include "ssa-iterators.h"
-#include "stringpool.h"
-#include "tree-ssanames.h"
 #include "langhooks.h"
 #include "target.h"
 #include "targhooks.h"
@@ -350,7 +337,7 @@ new_emutls_decl (tree decl, tree alias_of)
   else 
     varpool_create_variable_alias (to,
 				   varpool_node_for_asm
-				    (DECL_ASSEMBLER_NAME (DECL_VALUE_EXPR (alias_of)))->decl);
+				    (DECL_ASSEMBLER_NAME (DECL_VALUE_EXPR (alias_of)))->symbol.decl);
   return to;
 }
 
@@ -373,12 +360,12 @@ emutls_index (tree decl)
 static tree
 emutls_decl (tree decl)
 {
-  varpool_node *var;
+  struct varpool_node *var;
   unsigned int i;
 
   i = emutls_index (decl);
   var = control_vars[i];
-  return var->decl;
+  return var->symbol.decl;
 }
 
 /* Generate a call statement to initialize CONTROL_DECL for TLS_DECL.
@@ -435,12 +422,12 @@ gen_emutls_addr (tree decl, struct lower_emutls_data *d)
   addr = access_vars[index];
   if (addr == NULL)
     {
-      varpool_node *cvar;
+      struct varpool_node *cvar;
       tree cdecl;
       gimple x;
 
       cvar = control_vars[index];
-      cdecl = cvar->decl;
+      cdecl = cvar->symbol.decl;
       TREE_ADDRESSABLE (cdecl) = 1;
 
       addr = create_tmp_var (build_pointer_type (TREE_TYPE (decl)), NULL);
@@ -457,7 +444,7 @@ gen_emutls_addr (tree decl, struct lower_emutls_data *d)
 
       /* We may be adding a new reference to a new variable to the function.
          This means we have to play with the ipa-reference web.  */
-      ipa_record_reference (d->cfun_node, cvar, IPA_REF_ADDR, x);
+      ipa_record_reference ((symtab_node)d->cfun_node, (symtab_node)cvar, IPA_REF_ADDR, x);
 
       /* Record this ssa_name for possible use later in the basic block.  */
       access_vars[index] = addr;
@@ -619,7 +606,7 @@ static inline void
 clear_access_vars (void)
 {
   memset (access_vars.address (), 0,
-          access_vars.length () * sizeof (tree));
+          access_vars.length () * sizeof(tree));
 }
 
 /* Lower the entire function NODE.  */
@@ -630,7 +617,7 @@ lower_emutls_function_body (struct cgraph_node *node)
   struct lower_emutls_data d;
   bool any_edge_inserts = false;
 
-  push_cfun (DECL_STRUCT_FUNCTION (node->decl));
+  push_cfun (DECL_STRUCT_FUNCTION (node->symbol.decl));
 
   d.cfun_node = node;
   d.builtin_decl = builtin_decl_explicit (BUILT_IN_EMUTLS_GET_ADDRESS);
@@ -638,7 +625,7 @@ lower_emutls_function_body (struct cgraph_node *node)
      create a node for it.  */
   d.builtin_node = cgraph_get_create_node (d.builtin_decl);
 
-  FOR_EACH_BB_FN (d.bb, cfun)
+  FOR_EACH_BB (d.bb)
     {
       gimple_stmt_iterator gsi;
       unsigned int i, nedge;
@@ -707,14 +694,12 @@ lower_emutls_function_body (struct cgraph_node *node)
    Callback for varpool_for_variable_and_aliases.  */
 
 static bool
-create_emultls_var (varpool_node *var, void *data)
+create_emultls_var (struct varpool_node *var, void *data)
 {
   tree cdecl;
-  varpool_node *cvar;
+  struct varpool_node *cvar;
 
-  cdecl = new_emutls_decl (var->decl,
-			   var->alias && var->analyzed
-			   ? varpool_alias_target (var)->decl : NULL);
+  cdecl = new_emutls_decl (var->symbol.decl, var->alias_of);
 
   cvar = varpool_get_node (cdecl);
   control_vars.quick_push (cvar);
@@ -724,17 +709,17 @@ create_emultls_var (varpool_node *var, void *data)
       /* Make sure the COMMON block control variable gets initialized.
 	 Note that there's no point in doing this for aliases; we only
 	 need to do this once for the main variable.  */
-      emutls_common_1 (var->decl, cdecl, (tree *)data);
+      emutls_common_1 (var->symbol.decl, cdecl, (tree *)data);
     }
-  if (var->alias && !var->analyzed)
+  if (var->alias && !var->alias_of)
     cvar->alias = true;
 
   /* Indicate that the value of the TLS variable may be found elsewhere,
      preventing the variable from re-appearing in the GIMPLE.  We cheat
      and use the control variable here (rather than a full call_expr),
      which is special-cased inside the DWARF2 output routines.  */
-  SET_DECL_VALUE_EXPR (var->decl, cdecl);
-  DECL_HAS_VALUE_EXPR_P (var->decl) = 1;
+  SET_DECL_VALUE_EXPR (var->symbol.decl, cdecl);
+  DECL_HAS_VALUE_EXPR_P (var->symbol.decl) = 1;
   return false;
 }
 
@@ -743,7 +728,7 @@ create_emultls_var (varpool_node *var, void *data)
 static unsigned int
 ipa_lower_emutls (void)
 {
-  varpool_node *var;
+  struct varpool_node *var;
   struct cgraph_node *func;
   bool any_aliases = false;
   tree ctor_body = NULL;
@@ -753,12 +738,12 @@ ipa_lower_emutls (void)
 
   /* Examine all global variables for TLS variables.  */
   FOR_EACH_VARIABLE (var)
-    if (DECL_THREAD_LOCAL_P (var->decl))
+    if (DECL_THREAD_LOCAL_P (var->symbol.decl))
       {
-	gcc_checking_assert (TREE_STATIC (var->decl)
-			     || DECL_EXTERNAL (var->decl));
+	gcc_checking_assert (TREE_STATIC (var->symbol.decl)
+			     || DECL_EXTERNAL (var->symbol.decl));
 	varpool_node_set_add (tls_vars, var);
-	if (var->alias && var->definition)
+	if (var->alias && var->analyzed)
 	  varpool_node_set_add (tls_vars, varpool_variable_node (var, NULL));
       }
 
@@ -782,7 +767,7 @@ ipa_lower_emutls (void)
     {
       var = tls_vars->nodes[i];
 
-      if (var->alias && !var->analyzed)
+      if (var->alias && !var->alias_of)
 	any_aliases = true;
       else if (!var->alias)
 	varpool_for_node_and_aliases (var, create_emultls_var, &ctor_body, true);
@@ -813,7 +798,7 @@ ipa_lower_emutls (void)
   access_vars.release ();
   free_varpool_node_set (tls_vars);
 
-  return TODO_verify_all;
+  return TODO_ggc_collect | TODO_verify_all;
 }
 
 /* If the target supports TLS natively, we need do nothing here.  */
@@ -824,40 +809,22 @@ gate_emutls (void)
   return !targetm.have_tls;
 }
 
-namespace {
-
-const pass_data pass_data_ipa_lower_emutls =
+struct simple_ipa_opt_pass pass_ipa_lower_emutls =
 {
-  SIMPLE_IPA_PASS, /* type */
-  "emutls", /* name */
-  OPTGROUP_NONE, /* optinfo_flags */
-  true, /* has_gate */
-  true, /* has_execute */
-  TV_IPA_OPT, /* tv_id */
-  ( PROP_cfg | PROP_ssa ), /* properties_required */
-  0, /* properties_provided */
-  0, /* properties_destroyed */
-  0, /* todo_flags_start */
-  0, /* todo_flags_finish */
+ {
+  SIMPLE_IPA_PASS,
+  "emutls",				/* name */
+  OPTGROUP_NONE,                        /* optinfo_flags */
+  gate_emutls,				/* gate */
+  ipa_lower_emutls,			/* execute */
+  NULL,                                 /* sub */
+  NULL,                                 /* next */
+  0,                                    /* static_pass_number */
+  TV_IPA_OPT,				/* tv_id */
+  PROP_cfg | PROP_ssa,			/* properties_required */
+  0,                                    /* properties_provided */
+  0,                                    /* properties_destroyed */
+  0,                                    /* todo_flags_start */
+  0,					/* todo_flags_finish */
+ }
 };
-
-class pass_ipa_lower_emutls : public simple_ipa_opt_pass
-{
-public:
-  pass_ipa_lower_emutls (gcc::context *ctxt)
-    : simple_ipa_opt_pass (pass_data_ipa_lower_emutls, ctxt)
-  {}
-
-  /* opt_pass methods: */
-  bool gate () { return gate_emutls (); }
-  unsigned int execute () { return ipa_lower_emutls (); }
-
-}; // class pass_ipa_lower_emutls
-
-} // anon namespace
-
-simple_ipa_opt_pass *
-make_pass_ipa_lower_emutls (gcc::context *ctxt)
-{
-  return new pass_ipa_lower_emutls (ctxt);
-}

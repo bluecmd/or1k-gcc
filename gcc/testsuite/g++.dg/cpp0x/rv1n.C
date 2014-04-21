@@ -2,7 +2,8 @@
 
 // Test overload resolution among reference types
 
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 template <bool> struct sa;
 template <> struct sa<true> {};
@@ -29,7 +30,7 @@ const volatile A cv_source();
 
 // 1 at a time
 
-one   sink_1_1(               A&);  // { dg-message "" }
+one   sink_1_1(               A&);  // { dg-error "" }
 
 int test1_1()
 {
@@ -47,7 +48,7 @@ int test1_1()
     return 0;
 }
 
-two   sink_1_2(const          A&);  // { dg-message "" }
+two   sink_1_2(const          A&);  // { dg-error "" }
 
 int test1_2()
 {
@@ -62,7 +63,7 @@ int test1_2()
     return 0;
 }
 
-three sink_1_3(volatile       A&);  // { dg-message "" }
+three sink_1_3(volatile       A&);  // { dg-error "" }
 
 int test1_3()
 {
@@ -79,7 +80,7 @@ int test1_3()
     return 0;
 }
 
-four  sink_1_4(const volatile A&);  // { dg-message "" }
+four  sink_1_4(const volatile A&);  // { dg-error "" }
 
 int test1_4()
 {
@@ -94,7 +95,7 @@ int test1_4()
     return 0;
 }
 
-five  sink_1_5(               A&&);  // { dg-message "" }
+five  sink_1_5(               A&&);  // { dg-error "" }
 
 int test1_5()
 {
@@ -112,7 +113,7 @@ int test1_5()
     return 0;
 }
 
-six   sink_1_6(const          A&&);  // { dg-message "" }
+six   sink_1_6(const          A&&);  // { dg-error "" }
 
 int test1_6()
 {
@@ -129,7 +130,7 @@ int test1_6()
     return 0;
 }
 
-seven sink_1_7(volatile       A&&);  // { dg-message "" }
+seven sink_1_7(volatile       A&&);  // { dg-error "" }
 
 int test1_7()
 {
@@ -146,7 +147,7 @@ int test1_7()
     return 0;
 }
 
-eight sink_1_8(const volatile A&&); // { dg-message "" }
+eight sink_1_8(const volatile A&&); // { dg-error "" }
 
 int test1_8()
 {

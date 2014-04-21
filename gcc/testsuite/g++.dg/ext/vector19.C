@@ -1,4 +1,5 @@
-/* { dg-do compile { target c++11 } } */
+/* { dg-do compile } */
+/* { dg-options "-std=c++11" } */
 
 typedef double vec __attribute__((vector_size(2*sizeof(double))));
 typedef signed char vec2 __attribute__((vector_size(16)));
@@ -36,7 +37,8 @@ void j (vec2 *x, vec2 *y, vec2 *z, vec *t)
   *x = (*y < *z) ? *x : 4.2; /* { dg-error "" } */
   *y = (*x < *z) ? 2.5 : *y; /* { dg-error "" } */
   *t = *t ? *t : *t; /* { dg-error "" } */
-  *z = (*x < *z) ? '1' : '0';
+  *z = (*x < *z) ? '1' : '0'; /* { dg-error "" } */
+  // The last one may eventually be accepted.
 }
 
 template <class A, class B>

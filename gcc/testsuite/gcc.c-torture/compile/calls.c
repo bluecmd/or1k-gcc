@@ -1,4 +1,3 @@
-/* { dg-require-effective-target ptr32plus } */
 typedef void  *(*T)(void);
 f1 ()
 {

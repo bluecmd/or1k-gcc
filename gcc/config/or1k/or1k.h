@@ -90,6 +90,9 @@ Boston, MA 02111-1307, USA.  */
 /* Define this if most significant word of a multiword number is numbered.  */
 #define WORDS_BIG_ENDIAN 1
 
+/* Number of bits in an addressable storage unit */
+#define BITS_PER_UNIT 8
+
 #define BITS_PER_WORD 32
 #define SHORT_TYPE_SIZE 16
 #define INT_TYPE_SIZE 32

@@ -1,5 +1,4 @@
-// { dg-do compile { target c++11 } }
-// { dg-options "-ftrack-macro-expansion=0" }
+// { dg-options "-std=c++0x -ftrack-macro-expansion=0" }
 
 #define SA(X) static_assert (X, #X)
 

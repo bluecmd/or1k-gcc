@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x" }
 template<class...> struct Tuple { };
 
 template<class... Types> void f(Types&...);

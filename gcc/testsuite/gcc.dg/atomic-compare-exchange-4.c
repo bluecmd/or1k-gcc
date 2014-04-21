@@ -18,7 +18,6 @@ long long zero = 0;
 #define STRONG 0
 #define WEAK 1
 
-int
 main ()
 {
 

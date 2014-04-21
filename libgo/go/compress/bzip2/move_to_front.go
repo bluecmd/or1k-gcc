@@ -15,11 +15,10 @@ type moveToFrontDecoder struct {
 	// Rather than actually keep the list in memory, the symbols are stored
 	// as a circular, double linked list with the symbol indexed by head
 	// at the front of the list.
-	symbols [256]byte
-	next    [256]uint8
-	prev    [256]uint8
+	symbols []byte
+	next    []uint8
+	prev    []uint8
 	head    uint8
-	len     int
 }
 
 // newMTFDecoder creates a move-to-front decoder with an explicit initial list
@@ -29,9 +28,12 @@ func newMTFDecoder(symbols []byte) *moveToFrontDecoder {
 		panic("too many symbols")
 	}
 
-	m := new(moveToFrontDecoder)
-	copy(m.symbols[:], symbols)
-	m.len = len(symbols)
+	m := &moveToFrontDecoder{
+		symbols: symbols,
+		next:    make([]uint8, len(symbols)),
+		prev:    make([]uint8, len(symbols)),
+	}
+
 	m.threadLinkedList()
 	return m
 }
@@ -43,29 +45,34 @@ func newMTFDecoderWithRange(n int) *moveToFrontDecoder {
 		panic("newMTFDecoderWithRange: cannot have > 256 symbols")
 	}
 
-	m := new(moveToFrontDecoder)
-	for i := 0; i < n; i++ {
-		m.symbols[byte(i)] = byte(i)
+	m := &moveToFrontDecoder{
+		symbols: make([]uint8, n),
+		next:    make([]uint8, n),
+		prev:    make([]uint8, n),
 	}
-	m.len = n
+
+	for i := 0; i < n; i++ {
+		m.symbols[i] = byte(i)
+	}
+
 	m.threadLinkedList()
 	return m
 }
 
 // threadLinkedList creates the initial linked-list pointers.
 func (m *moveToFrontDecoder) threadLinkedList() {
-	if m.len == 0 {
+	if len(m.symbols) == 0 {
 		return
 	}
 
-	m.prev[0] = uint8(m.len - 1)
+	m.prev[0] = uint8(len(m.symbols) - 1)
 
-	for i := byte(0); int(i) < m.len-1; i++ {
+	for i := 0; i < len(m.symbols)-1; i++ {
 		m.next[i] = uint8(i + 1)
 		m.prev[i+1] = uint8(i)
 	}
 
-	m.next[m.len-1] = 0
+	m.next[len(m.symbols)-1] = 0
 }
 
 func (m *moveToFrontDecoder) Decode(n int) (b byte) {

@@ -1,4 +1,5 @@
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 enum E1 : unsigned { E1_en = 1 };
 enum E2 : char { E2_en = 1 };

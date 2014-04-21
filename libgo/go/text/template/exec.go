@@ -201,7 +201,7 @@ func (s *state) walkIfOrWith(typ parse.NodeType, dot reflect.Value, pipe *parse.
 	}
 }
 
-// isTrue reports whether the value is 'true', in the sense of not the zero of its type,
+// isTrue returns whether the value is 'true', in the sense of not the zero of its type,
 // and whether the value has a meaningful truth value.
 func isTrue(val reflect.Value) (truth, ok bool) {
 	if !val.IsValid() {
@@ -755,21 +755,12 @@ func indirect(v reflect.Value) (rv reflect.Value, isNil bool) {
 // the template.
 func (s *state) printValue(n parse.Node, v reflect.Value) {
 	s.at(n)
-	iface, ok := printableValue(v)
-	if !ok {
-		s.errorf("can't print %s of type %s", n, v.Type())
-	}
-	fmt.Fprint(s.wr, iface)
-}
-
-// printableValue returns the, possibly indirected, interface value inside v that
-// is best for a call to formatted printer.
-func printableValue(v reflect.Value) (interface{}, bool) {
 	if v.Kind() == reflect.Ptr {
 		v, _ = indirect(v) // fmt.Fprint handles nil.
 	}
 	if !v.IsValid() {
-		return "<no value>", true
+		fmt.Fprint(s.wr, "<no value>")
+		return
 	}
 
 	if !v.Type().Implements(errorType) && !v.Type().Implements(fmtStringerType) {
@@ -778,11 +769,11 @@ func printableValue(v reflect.Value) (interface{}, bool) {
 		} else {
 			switch v.Kind() {
 			case reflect.Chan, reflect.Func:
-				return nil, false
+				s.errorf("can't print %s of type %s", n, v.Type())
 			}
 		}
 	}
-	return v.Interface(), true
+	fmt.Fprint(s.wr, v.Interface())
 }
 
 // Types to help sort the keys in a map for reproducible output.

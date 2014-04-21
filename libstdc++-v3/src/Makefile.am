@@ -1,6 +1,6 @@
 ## Makefile for the C++11 sources of the GNU C++ Standard library.
 ##
-## Copyright (C) 1997-2014 Free Software Foundation, Inc.
+## Copyright (C) 1997-2013 Free Software Foundation, Inc.
 ##
 ## This file is part of the libstdc++ version 3 distribution.
 ## Process this file with automake to produce Makefile.in.
@@ -51,8 +51,7 @@ cxx11_sources = \
 	compatibility-c++0x.cc \
 	compatibility-atomic-c++0x.cc \
 	compatibility-thread-c++0x.cc \
-	compatibility-chrono.cc \
-	compatibility-condvar.cc
+	compatibility-chrono.cc
 
 libstdc___la_SOURCES = $(cxx98_sources) $(cxx11_sources)
 
@@ -72,6 +71,7 @@ libstdc___la_LDFLAGS = \
 	-version-info $(libtool_VERSION) ${version_arg} -lm
 
 libstdc___la_LINK = $(CXXLINK) $(libstdc___la_LDFLAGS)
+
 
 # Use special rules for compatibility-ldbl.cc compilation, as we need to
 # pass -mlong-double-64.
@@ -103,11 +103,6 @@ compatibility-chrono.lo: compatibility-chrono.cc
 compatibility-chrono.o: compatibility-chrono.cc
 	$(CXXCOMPILE) -std=gnu++11 -c $<
 
-compatibility-condvar.lo: compatibility-condvar.cc
-	$(LTCXXCOMPILE) -std=gnu++11 -c $<
-compatibility-condvar.o: compatibility-condvar.cc
-	$(CXXCOMPILE) -std=gnu++11 -c $<
-
 # A note on compatibility and static libraries.
 # 
 # static lib == linked against only this version, should not need compat
@@ -137,7 +132,7 @@ compatibility-condvar.o: compatibility-condvar.cc
 # as the occasion calls for it.
 AM_CXXFLAGS = \
 	$(glibcxx_compiler_pic_flag) \
-	$(XTEMPLATE_FLAGS) $(VTV_CXXFLAGS) \
+	$(XTEMPLATE_FLAGS) \
 	$(WARN_CXXFLAGS) $(OPTIMIZE_CXXFLAGS) $(CONFIG_CXXFLAGS)
 
 # Libtool notes
@@ -184,8 +179,8 @@ CXXLINK = \
 	$(LIBTOOL) --tag CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CXX) \
-	$(VTV_CXXLINKFLAGS) \
 	$(OPT_LDFLAGS) $(SECTION_LDFLAGS) $(AM_CXXFLAGS) $(LTLDFLAGS) -o $@
+
 
 # Symbol versioning for shared libraries.
 if ENABLE_SYMVERS
@@ -278,10 +273,12 @@ if GLIBCXX_BUILD_DEBUG
 STAMP_DEBUG = build-debug
 STAMP_INSTALL_DEBUG = install-debug
 CLEAN_DEBUG = debug
+STAMP_INSTALL_PIC = install-pic
 else
 STAMP_DEBUG =
 STAMP_INSTALL_DEBUG =
 CLEAN_DEBUG =
+STAMP_INSTALL_PIC =
 endif
 
 # Build a debug variant.
@@ -316,6 +313,7 @@ build-debug: stamp-debug
 	  mv Makefile Makefile.tmp; \
 	  sed -e 's,all-local: all-once,all-local:,' \
 	      -e 's,install-data-local: install-data-once,install-data-local:,' \
+	      -e 's,install-exec-local:.*,install-exec-local:,' \
 	      -e '/vpath/!s,src/c,src/debug/c,' \
 	  < Makefile.tmp > Makefile ; \
 	  rm -f Makefile.tmp ; \
@@ -326,3 +324,8 @@ build-debug: stamp-debug
 install-debug: build-debug
 	(cd ${debugdir} && $(MAKE) CXXFLAGS='$(DEBUG_FLAGS)' \
 	toolexeclibdir=$(glibcxx_toolexeclibdir)/debug install) ;
+
+install-exec-local: $(STAMP_INSTALL_PIC)
+$(STAMP_INSTALL_PIC):
+	$(MKDIR_P) $(DESTDIR)$(toolexeclibdir)
+	$(INSTALL_DATA) .libs/libstdc++convenience.a $(DESTDIR)$(toolexeclibdir)/libstdc++_pic.a

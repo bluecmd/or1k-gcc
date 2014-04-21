@@ -1,5 +1,5 @@
 // PR c++/42331
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 class Mesh
 {

@@ -191,16 +191,3 @@ func TestBlocking(t *testing.T) {
 		w.Close()
 	}
 }
-
-func BenchmarkEncoderEncode(b *testing.B) {
-	b.ReportAllocs()
-	type T struct {
-		X, Y string
-	}
-	v := &T{"foo", "bar"}
-	for i := 0; i < b.N; i++ {
-		if err := NewEncoder(ioutil.Discard).Encode(v); err != nil {
-			b.Fatal(err)
-		}
-	}
-}

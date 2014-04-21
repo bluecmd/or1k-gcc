@@ -1,5 +1,5 @@
 /* Configuration file for ARM GNU/Linux EABI targets.
-   Copyright (C) 2004-2014 Free Software Foundation, Inc.
+   Copyright (C) 2004-2013 Free Software Foundation, Inc.
    Contributed by CodeSourcery, LLC   
 
    This file is part of GCC.
@@ -30,11 +30,34 @@
     }						\
   while (false)
 
+#undef  TARGET_OS_D_BUILTINS
+#define TARGET_OS_D_BUILTINS() 			\
+  do 						\
+    {						\
+      TARGET_GENERIC_LINUX_OS_D_BUILTINS();	\
+      ANDROID_TARGET_OS_D_BUILTINS();		\
+    }						\
+  while (false)
+
 /* We default to a soft-float ABI so that binaries can run on all
    target hardware.  If you override this to use the hard-float ABI then
    change the setting of GLIBC_DYNAMIC_LINKER_DEFAULT as well.  */
 #undef  TARGET_DEFAULT_FLOAT_ABI
+#ifdef TARGET_CONFIGURED_FLOAT_ABI
+#if TARGET_CONFIGURED_FLOAT_ABI == 2
+#define TARGET_DEFAULT_FLOAT_ABI ARM_FLOAT_ABI_HARD
+#define MULTILIB_DEFAULT_FLOAT_ABI "mfloat-abi=hard"
+#elif TARGET_CONFIGURED_FLOAT_ABI == 1
+#define TARGET_DEFAULT_FLOAT_ABI ARM_FLOAT_ABI_SOFTFP
+#define MULTILIB_DEFAULT_FLOAT_ABI "mfloat-abi=softfp"
+#else
 #define TARGET_DEFAULT_FLOAT_ABI ARM_FLOAT_ABI_SOFT
+#define MULTILIB_DEFAULT_FLOAT_ABI "mfloat-abi=soft"
+#endif
+#else
+#define TARGET_DEFAULT_FLOAT_ABI ARM_FLOAT_ABI_SOFT
+#define MULTILIB_DEFAULT_FLOAT_ABI "mfloat-abi=soft"
+#endif
 
 /* We default to the "aapcs-linux" ABI so that enums are int-sized by
    default.  */
@@ -77,15 +100,37 @@
     %{mfloat-abi=soft*:" GLIBC_DYNAMIC_LINKER_SOFT_FLOAT "} \
     %{!mfloat-abi=*:" GLIBC_DYNAMIC_LINKER_DEFAULT "}"
 
+/* Set the multilib defaults according the configuration, needed to
+   let gcc -print-multi-dir do the right thing.  */
+
+#if TARGET_BIG_ENDIAN_DEFAULT
+#define MULTILIB_DEFAULT_ENDIAN "mbig-endian"
+#else
+#define MULTILIB_DEFAULT_ENDIAN "mlittle-endian"
+#endif
+
+#ifndef TARGET_CONFIGURED_THUMB_MODE
+#define MULTILIB_DEFAULT_MODE "marm"
+#elif TARGET_CONFIGURED_THUMB_MODE == 1
+#define MULTILIB_DEFAULT_MODE "mthumb"
+#else
+#define MULTILIB_DEFAULT_MODE "marm"
+#endif
+
+#undef  MULTILIB_DEFAULTS
+#define MULTILIB_DEFAULTS \
+	{ MULTILIB_DEFAULT_MODE, MULTILIB_DEFAULT_ENDIAN, \
+	  MULTILIB_DEFAULT_FLOAT_ABI, "mno-thumb-interwork" }
+
 /* At this point, bpabi.h will have clobbered LINK_SPEC.  We want to
    use the GNU/Linux version, not the generic BPABI version.  */
 #undef  LINK_SPEC
-#define LINK_SPEC EABI_LINK_SPEC					\
+#define LINK_SPEC BE8_LINK_SPEC						\
   LINUX_OR_ANDROID_LD (LINUX_TARGET_LINK_SPEC,				\
 		       LINUX_TARGET_LINK_SPEC " " ANDROID_LINK_SPEC)
 
 #undef  ASAN_CC1_SPEC
-#define ASAN_CC1_SPEC "%{%:sanitize(address):-funwind-tables}"
+#define ASAN_CC1_SPEC "%{fsanitize=*:-funwind-tables}"
 
 #undef  CC1_SPEC
 #define CC1_SPEC							\
@@ -99,7 +144,7 @@
 #undef  LIB_SPEC
 #define LIB_SPEC							\
   LINUX_OR_ANDROID_LD (GNU_USER_TARGET_LIB_SPEC,			\
-		    GNU_USER_TARGET_NO_PTHREADS_LIB_SPEC " " ANDROID_LIB_SPEC)
+		       GNU_USER_TARGET_LIB_SPEC " " ANDROID_LIB_SPEC)
 
 #undef	STARTFILE_SPEC
 #define STARTFILE_SPEC \

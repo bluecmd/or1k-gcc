@@ -1,5 +1,5 @@
 // PR c++/48744
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template<class T>
 struct add_rval_ref {

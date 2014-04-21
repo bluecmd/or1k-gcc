@@ -1,16 +1,6 @@
-2014-03-03  Joseph Myers  <joseph@codesourcery.com>
+2013-10-16  Release Manager
 
-	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, hr.po, id.po,
-	ja.po, nl.po, ru.po, sr.po, sv.po, tr.po, vi.po, zh_CN.po,
-	zh_TW.po: Update.
-
-2014-02-02  Joseph Myers  <joseph@codesourcery.com>
-
-	* gcc.pot: Regenerate.
-
-2014-01-02  Richard Sandiford  <rdsandiford@googlemail.com>
-
-	Update copyright years
+	* GCC 4.8.2 released.
 
 2013-07-11  Joseph Myers  <joseph@codesourcery.com>
 
@@ -23,6 +13,10 @@
 2013-06-25  Joseph Myers  <joseph@codesourcery.com>
 
 	* zh_TW.po: Update.
+
+2013-05-31  Release Manager
+
+	* GCC 4.8.1 released.
 
 2013-04-28  Joseph Myers  <joseph@codesourcery.com>
 
@@ -43,6 +37,10 @@
 2013-03-26  Joseph Myers  <joseph@codesourcery.com>
 
 	* de.po, sv.po: Update.
+
+2013-03-22  Release Manager
+
+	* GCC 4.8.0 released.
 
 2013-03-17  Joseph Myers  <joseph@codesourcery.com>
 
@@ -1872,7 +1870,7 @@ Sun Oct 31 17:17:18 1999  Jeffrey A Law  (law@cygnus.com)
 	libiberty/include directories.
 
 
-Copyright (C) 1999-2014 Free Software Foundation, Inc.
+Copyright (C) 1999-2013 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

@@ -166,7 +166,6 @@ func TestOpen(t *testing.T) {
 		} else {
 			f, err = Open(tt.file)
 		}
-		defer f.Close()
 		if err != nil {
 			t.Errorf("cannot open file %s: %v", tt.file, err)
 			continue

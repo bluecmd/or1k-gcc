@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 //A few constexpr's
 constexpr int foo() { return __alignof__(int); }

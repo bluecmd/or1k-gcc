@@ -1,6 +1,6 @@
 // PR c++/53594
-// { dg-do compile { target c++11 } }
-// { dg-options "-Wuninitialized" }
+// { dg-do compile }
+// { dg-options "-std=c++11 -Wuninitialized" }
 
 struct A
 {

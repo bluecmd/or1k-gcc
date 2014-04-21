@@ -32,7 +32,7 @@ type Response struct {
 	ProtoMinor int    // e.g. 0
 
 	// Header maps header keys to values.  If the response had multiple
-	// headers with the same key, they may be concatenated, with comma
+	// headers with the same key, they will be concatenated, with comma
 	// delimiters.  (Section 4.2 of RFC 2616 requires that multiple headers
 	// be semantically equivalent to a comma-delimited sequence.) Values
 	// duplicated by other fields in this struct (e.g., ContentLength) are
@@ -98,17 +98,18 @@ func (r *Response) Location() (*url.URL, error) {
 	return url.Parse(lv)
 }
 
-// ReadResponse reads and returns an HTTP response from r.
-// The req parameter optionally specifies the Request that corresponds
-// to this Response. If nil, a GET request is assumed.
-// Clients must call resp.Body.Close when finished reading resp.Body.
-// After that call, clients can inspect resp.Trailer to find key/value
-// pairs included in the response trailer.
-func ReadResponse(r *bufio.Reader, req *Request) (*Response, error) {
+// ReadResponse reads and returns an HTTP response from r.  The
+// req parameter specifies the Request that corresponds to
+// this Response.  Clients must call resp.Body.Close when finished
+// reading resp.Body.  After that call, clients can inspect
+// resp.Trailer to find key/value pairs included in the response
+// trailer.
+func ReadResponse(r *bufio.Reader, req *Request) (resp *Response, err error) {
+
 	tp := textproto.NewReader(r)
-	resp := &Response{
-		Request: req,
-	}
+	resp = new(Response)
+
+	resp.Request = req
 
 	// Parse the first line of the response.
 	line, err := tp.ReadLine()
@@ -167,7 +168,7 @@ func fixPragmaCacheControl(header Header) {
 	}
 }
 
-// ProtoAtLeast reports whether the HTTP protocol used
+// ProtoAtLeast returns whether the HTTP protocol used
 // in the response is at least major.minor.
 func (r *Response) ProtoAtLeast(major, minor int) bool {
 	return r.ProtoMajor > major ||

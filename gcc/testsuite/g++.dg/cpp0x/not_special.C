@@ -4,7 +4,7 @@
 //   That is, their presence should cause compiler declared
 //   copy ctor or assignment to be deleted.
 
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 #include <assert.h>
 

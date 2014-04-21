@@ -1,66 +1,26 @@
-2014-02-20  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+2014-03-11  Uros Bizjak  <ubizjak@gmail.com>
 
-	PR libgcj/55637
-	* testsuite/libjava.lang/sourcelocation.xfail: New file.
+	* java/lang/natObject.cc (_Jv_MonitorEnter): Add missing parenthesis
+	around comparison with (address | LOCKED) in JvAssert.
 
-2014-02-18  Richard Biener  <rguenther@suse.de>
+2013-10-16  Release Manager
 
-	PR libjava/60261
-	* configure.ac (dbexecdir): Remove redundant multilib addition.
-	* Makefile.am (gcc_version): Export.
-	* configure: Regenerate.
-	* Makefile.in: Likewise.
+	* GCC 4.8.2 released.
 
-2014-01-02  Tobias Burnus  <burnus@net-b.de>
-
-	* gnu/gcj/convert/Convert.java (version): Update copyright notice
-	dates.
-	* gnu/gcj/tools/gcj_dbtool/Main.java (main): Ditto.
-
-2013-12-09  Andreas Schwab  <schwab@suse.de>
-
-	* Makefile.am (toolexeclib_LTLIBRARIES) [USE_LIBGCJ_BC]: Use
-	install/libgcj_bc.la instead of libgcj_bc.la.
-	(noinst_LTLIBRARIES) [USE_LIBGCJ_BC]: Define.
-	(install_libgcj_bc_la_SOURCES): Define.
-	(install/libgcj_bc.la): New rule.
-	* Makefile.in: Regenerate.
-
-2013-09-20  Alan Modra  <amodra@gmail.com>
-
-	* configure: Regenerate.
-
-2013-06-20  Roland Lutz  <rlutz@hedmen.org>
-
- 	* contrib/aot-compile.in: Fix typo in option list.
-
-2013-06-20  Matthias Klose  <doko@ubuntu.com>
+2013-06-19  Matthias Klose  <doko@ubuntu.com>
 
 	* pkg.m4 (PKG_CHECK_MODULES): Use AC_PATH_TOOL to check for pkg-config.
 	* classpath/m4/pkg.m4 (PKG_CHECK_MODULES): Likewise.
 	* configure: Regenerate.
 	* classpath/configure: Regenerate.
 
-2013-06-20  Matthias Klose  <doko@ubuntu.com>
+2013-05-31  Release Manager
 
-	* libtool-version: Bump soversion.
+	* GCC 4.8.1 released.
 
-2013-05-22  Mark Mitchell  <mark@codesourcery.com>
-	    Sandra Loosemore  <sandra@codesourcery.com>
+2013-03-22  Release Manager
 
-	* configure.ac (dbexecdir): Base on $(toolexeclibdir), not
-	$(libdir).
-	* Makefile.am (pkgconfigdir): Likewise.
-	* configure: Regenerated.
-	* Makefile.in: Regenerated.
-	* gcj/Makefile.in: Regenerated.
-	* include/Makefile.in: Regenerated.
-	* testsuite/Makefile.in: Regenerated.
-
-2013-04-16  Andreas Schwab  <schwab@suse.de>
-
-	* configure.host: Add support for aarch64.
-	* sysdep/aarch64/locks.h: New file.
+	* GCC 4.8.0 released.
 
 2013-03-12  Andrew John Hughes  <gnu.andrew@redhat.com>
 
@@ -80,7 +40,7 @@
 	dates.
 	* gnu/gcj/tools/gcj_dbtool/Main.java (main): Likewise.
 
-Copyright (C) 2014 Free Software Foundation, Inc.
+Copyright (C) 2013 Free Software Foundation, Inc.
 
 Copying and distribution of this file, with or without modification,
 are permitted in any medium without royalty provided the copyright

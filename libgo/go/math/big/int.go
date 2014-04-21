@@ -563,13 +563,13 @@ func (z *Int) SetBytes(buf []byte) *Int {
 	return z
 }
 
-// Bytes returns the absolute value of x as a big-endian byte slice.
+// Bytes returns the absolute value of z as a big-endian byte slice.
 func (x *Int) Bytes() []byte {
 	buf := make([]byte, len(x.abs)*_S)
 	return buf[x.abs.bytes(buf):]
 }
 
-// BitLen returns the length of the absolute value of x in bits.
+// BitLen returns the length of the absolute value of z in bits.
 // The bit length of 0 is 0.
 func (x *Int) BitLen() int {
 	return x.abs.bitLen()
@@ -703,15 +703,14 @@ func (z *Int) binaryGCD(a, b *Int) *Int {
 		// reduce t
 		t.Rsh(t, t.abs.trailingZeroBits())
 		if t.neg {
-			v, t = t, v
-			v.neg = len(v.abs) > 0 && !v.neg // 0 has no sign
+			v.Neg(t)
 		} else {
-			u, t = t, u
+			u.Set(t)
 		}
 		t.Sub(u, v)
 	}
 
-	return z.Lsh(u, k)
+	return u.Lsh(u, k)
 }
 
 // ProbablyPrime performs n Miller-Rabin tests to check whether x is prime.
@@ -952,9 +951,6 @@ const intGobVersion byte = 1
 
 // GobEncode implements the gob.GobEncoder interface.
 func (x *Int) GobEncode() ([]byte, error) {
-	if x == nil {
-		return nil, nil
-	}
 	buf := make([]byte, 1+len(x.abs)*_S) // extra byte for version and sign bit
 	i := x.abs.bytes(buf) - 1            // i >= 0
 	b := intGobVersion << 1              // make space for sign bit
@@ -968,9 +964,7 @@ func (x *Int) GobEncode() ([]byte, error) {
 // GobDecode implements the gob.GobDecoder interface.
 func (z *Int) GobDecode(buf []byte) error {
 	if len(buf) == 0 {
-		// Other side sent a nil or default value.
-		*z = Int{}
-		return nil
+		return errors.New("Int.GobDecode: no data")
 	}
 	b := buf[0]
 	if b>>1 != intGobVersion {

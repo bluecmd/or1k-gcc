@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1997-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 1997-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -33,9 +33,10 @@
 
 with System.HTable;
 pragma Elaborate_All (System.HTable);
-with System.Storage_Elements; use System.Storage_Elements;
 
 package body System.VMS_Exception_Table is
+
+   use type SSL.Exception_Code;
 
    type HTable_Headers is range 1 .. 37;
 
@@ -46,7 +47,7 @@ package body System.VMS_Exception_Table is
    --  Ada exception.
 
    type Exception_Code_Data is record
-      Code       : Exception_Code;
+      Code       : SSL.Exception_Code;
       Except     : SSL.Exception_Data_Ptr;
       HTable_Ptr : Exception_Code_Data_Ptr;
    end record;
@@ -58,8 +59,8 @@ package body System.VMS_Exception_Table is
    function Get_HT_Link (T : Exception_Code_Data_Ptr)
      return Exception_Code_Data_Ptr;
 
-   function Hash (F : Exception_Code) return HTable_Headers;
-   function Get_Key (T : Exception_Code_Data_Ptr) return Exception_Code;
+   function Hash (F : SSL.Exception_Code) return HTable_Headers;
+   function Get_Key (T : Exception_Code_Data_Ptr) return SSL.Exception_Code;
 
    package Exception_Code_HTable is new System.HTable.Static_HTable (
      Header_Num => HTable_Headers,
@@ -68,7 +69,7 @@ package body System.VMS_Exception_Table is
      Null_Ptr   => null,
      Set_Next   => Set_HT_Link,
      Next       => Get_HT_Link,
-     Key        => Exception_Code,
+     Key        => SSL.Exception_Code,
      Get_Key    => Get_Key,
      Hash       => Hash,
      Equal      => "=");
@@ -78,10 +79,10 @@ package body System.VMS_Exception_Table is
    ------------------
 
    function Base_Code_In
-     (Code : Exception_Code) return Exception_Code
+     (Code : SSL.Exception_Code) return SSL.Exception_Code
    is
    begin
-      return To_Address (To_Integer (Code) and not 2#0111#);
+      return Code and not 2#0111#;
    end Base_Code_In;
 
    ---------------------
@@ -89,7 +90,7 @@ package body System.VMS_Exception_Table is
    ---------------------
 
    function Coded_Exception
-     (X : Exception_Code) return SSL.Exception_Data_Ptr
+     (X : SSL.Exception_Code) return SSL.Exception_Data_Ptr
    is
       Res : Exception_Code_Data_Ptr;
 
@@ -120,7 +121,7 @@ package body System.VMS_Exception_Table is
    -------------
 
    function Get_Key (T : Exception_Code_Data_Ptr)
-     return Exception_Code
+     return SSL.Exception_Code
    is
    begin
       return T.Code;
@@ -131,14 +132,13 @@ package body System.VMS_Exception_Table is
    ----------
 
    function Hash
-     (F : Exception_Code) return HTable_Headers
+     (F : SSL.Exception_Code) return HTable_Headers
    is
-      Headers_Magnitude : constant Exception_Code :=
-        Exception_Code (HTable_Headers'Last - HTable_Headers'First + 1);
+      Headers_Magnitude : constant SSL.Exception_Code :=
+        SSL.Exception_Code (HTable_Headers'Last - HTable_Headers'First + 1);
 
    begin
-      return HTable_Headers
-        (To_Address ((To_Integer (F) mod To_Integer (Headers_Magnitude)) + 1));
+      return HTable_Headers (F mod Headers_Magnitude + 1);
    end Hash;
 
    ----------------------------
@@ -146,13 +146,13 @@ package body System.VMS_Exception_Table is
    ----------------------------
 
    procedure Register_VMS_Exception
-     (Code : Exception_Code;
+     (Code : SSL.Exception_Code;
       E    : SSL.Exception_Data_Ptr)
    is
       --  We bind the exception data with the base code found in the
       --  input value, that is with the severity bits masked off.
 
-      Excode : constant Exception_Code := Base_Code_In (Code);
+      Excode : constant SSL.Exception_Code := Base_Code_In (Code);
 
    begin
       --  The exception data registered here is mostly filled prior to this
@@ -165,7 +165,7 @@ package body System.VMS_Exception_Table is
       --  routine attempts to match the import codes in this case.
 
       E.Lang := 'V';
-      E.Foreign_Data := Excode;
+      E.Import_Code := Excode;
 
       if Exception_Code_HTable.Get (Excode) = null then
          Exception_Code_HTable.Set (new Exception_Code_Data'(Excode, E, null));

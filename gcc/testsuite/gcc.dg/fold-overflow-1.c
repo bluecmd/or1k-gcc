@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-require-effective-target int32plus } */
+/* { dg-skip-if "consts are shorts, not longs" { "m32c-*-*" "avr-*-*" } { "*" } { "" } } */
 /* { dg-skip-if "No Inf support" { spu-*-* } } */
 /* { dg-options "-O -ftrapping-math" } */
 

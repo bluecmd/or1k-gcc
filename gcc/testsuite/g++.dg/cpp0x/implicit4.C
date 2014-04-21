@@ -1,6 +1,6 @@
 // Test that a base with only a move constructor causes the implicit copy
 // constructor to be deleted.
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 struct A			// { dg-message "declares a move" }
 {

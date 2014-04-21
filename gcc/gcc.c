@@ -1,5 +1,5 @@
 /* Compiler driver program that can handle many languages.
-   Copyright (C) 1987-2014 Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -104,9 +104,6 @@ static int verbose_only_flag;
 /* Flag indicating how to print command line options of sub-processes.  */
 
 static int print_subprocess_help;
-
-/* Linker suffix passed to -fuse-ld=... */
-static const char *use_ld;
 
 /* Whether we should report subprocess execution times to a file.  */
 
@@ -218,7 +215,7 @@ static inline void process_marked_switches (void);
 static const char *process_brace_body (const char *, const char *, const char *, int, int);
 static const struct spec_function *lookup_spec_function (const char *);
 static const char *eval_spec_function (const char *, const char *);
-static const char *handle_spec_function (const char *, bool *);
+static const char *handle_spec_function (const char *);
 static char *save_string (const char *, int);
 static void set_collect_gcc_options (void);
 static int do_spec_1 (const char *, int, const char *);
@@ -252,11 +249,13 @@ static void init_gcc_specs (struct obstack *, const char *, const char *,
 #if defined(HAVE_TARGET_OBJECT_SUFFIX) || defined(HAVE_TARGET_EXECUTABLE_SUFFIX)
 static const char *convert_filename (const char *, int, int);
 #endif
+#if !(defined (__MSDOS__) || defined (OS2) || defined (VMS))
+static void retry_ice (const char *prog, const char **argv);
+#endif
 
 static const char *getenv_spec_function (int, const char **);
 static const char *if_exists_spec_function (int, const char **);
 static const char *if_exists_else_spec_function (int, const char **);
-static const char *sanitize_spec_function (int, const char **);
 static const char *replace_outfile_spec_function (int, const char **);
 static const char *remove_outfile_spec_function (int, const char **);
 static const char *version_compare_spec_function (int, const char **);
@@ -391,8 +390,7 @@ or with constant text in a single argument.
  %2	process CC1PLUS_SPEC as a spec.
  %*	substitute the variable part of a matched option.  (See below.)
 	Note that each comma in the substituted string is replaced by
-	a single space.  A space is appended after the last substition
-	unless there is more text in current sequence.
+	a single space.
  %<S    remove all occurrences of -S from the command line.
         Note - this command is position dependent.  % commands in the
         spec string before this one will see -S, % commands in the
@@ -426,9 +424,7 @@ or with constant text in a single argument.
           once, no matter how many such switches appeared.  However,
           if %* appears somewhere in X, then X will be substituted
           once for each matching switch, with the %* replaced by the
-          part of that switch that matched the '*'.  A space will be
-	  appended after the last substition unless there is more
-	  text in current sequence.
+          part of that switch that matched the '*'.
  %{.S:X}  substitutes X, if processing a file with suffix S.
  %{!.S:X} substitutes X, if NOT processing a file with suffix S.
  %{,S:X}  substitutes X, if processing a file which will use spec S.
@@ -439,10 +435,6 @@ or with constant text in a single argument.
 	  than the OR.
 	  If %* appears in X, all of the alternatives must be starred, and
 	  only the first matching alternative is substituted.
- %{%:function(args):X}
-	  Call function named FUNCTION with args ARGS.  If the function
-	  returns non-NULL, then X is substituted, if it returns
-	  NULL, it isn't substituted.
  %{S:X;   if S was given to GCC, substitutes X;
    T:Y;   else if T was given to GCC, substitutes Y;
     :D}   else substitutes D.  There can be as many clauses as you need.
@@ -529,25 +521,45 @@ proper position among the other output files.  */
 #define LIB_SPEC "%{!shared:%{g*:-lg} %{!p:%{!pg:-lc}}%{p:-lc_p}%{pg:-lc_p}}"
 #endif
 
+/* mudflap specs */
+#ifndef MFWRAP_SPEC
+/* XXX: valid only for GNU ld */
+/* XXX: should exactly match hooks provided by libmudflap.a */
+#define MFWRAP_SPEC " %{static: %{fmudflap|fmudflapth: \
+ --wrap=malloc --wrap=free --wrap=calloc --wrap=realloc\
+ --wrap=mmap --wrap=mmap64 --wrap=munmap --wrap=alloca\
+} %{fmudflapth: --wrap=pthread_create\
+}} %{fmudflap|fmudflapth: --wrap=main}"
+#endif
+#ifndef MFLIB_SPEC
+#define MFLIB_SPEC "%{fmudflap|fmudflapth: -export-dynamic}"
+#endif
+
 /* When using -fsplit-stack we need to wrap pthread_create, in order
    to initialize the stack guard.  We always use wrapping, rather than
    shared library ordering, and we keep the wrapper function in
    libgcc.  This is not yet a real spec, though it could become one;
    it is currently just stuffed into LINK_SPEC.  FIXME: This wrapping
-   only works with GNU ld and gold.  */
+   only works with GNU ld and gold.  FIXME: This is incompatible with
+   -fmudflap when linking statically, which wants to do its own
+   wrapping.  */
 #define STACK_SPLIT_SPEC " %{fsplit-stack: --wrap=pthread_create}"
 
 #ifndef LIBASAN_SPEC
-#define STATIC_LIBASAN_LIBS \
-  " %{static-libasan:%:include(libsanitizer.spec)%(link_libasan)}"
+#ifdef STATIC_LIBASAN_LIBS
+#define ADD_STATIC_LIBASAN_LIBS \
+  " %{static-libasan:" STATIC_LIBASAN_LIBS "}"
+#else
+#define ADD_STATIC_LIBASAN_LIBS
+#endif
 #ifdef LIBASAN_EARLY_SPEC
-#define LIBASAN_SPEC STATIC_LIBASAN_LIBS
+#define LIBASAN_SPEC ADD_STATIC_LIBASAN_LIBS
 #elif defined(HAVE_LD_STATIC_DYNAMIC)
 #define LIBASAN_SPEC "%{static-libasan:" LD_STATIC_OPTION \
 		     "} -lasan %{static-libasan:" LD_DYNAMIC_OPTION "}" \
-		     STATIC_LIBASAN_LIBS
+		     ADD_STATIC_LIBASAN_LIBS
 #else
-#define LIBASAN_SPEC "-lasan" STATIC_LIBASAN_LIBS
+#define LIBASAN_SPEC "-lasan" ADD_STATIC_LIBASAN_LIBS
 #endif
 #endif
 
@@ -556,45 +568,25 @@ proper position among the other output files.  */
 #endif
 
 #ifndef LIBTSAN_SPEC
-#define STATIC_LIBTSAN_LIBS \
-  " %{static-libtsan:%:include(libsanitizer.spec)%(link_libtsan)}"
+#ifdef STATIC_LIBTSAN_LIBS
+#define ADD_STATIC_LIBTSAN_LIBS \
+  " %{static-libtsan:" STATIC_LIBTSAN_LIBS "}"
+#else
+#define ADD_STATIC_LIBTSAN_LIBS
+#endif
 #ifdef LIBTSAN_EARLY_SPEC
-#define LIBTSAN_SPEC STATIC_LIBTSAN_LIBS
+#define LIBTSAN_SPEC ADD_STATIC_LIBTSAN_LIBS
 #elif defined(HAVE_LD_STATIC_DYNAMIC)
 #define LIBTSAN_SPEC "%{static-libtsan:" LD_STATIC_OPTION \
 		     "} -ltsan %{static-libtsan:" LD_DYNAMIC_OPTION "}" \
-		     STATIC_LIBTSAN_LIBS
+		     ADD_STATIC_LIBTSAN_LIBS
 #else
-#define LIBTSAN_SPEC "-ltsan" STATIC_LIBTSAN_LIBS
+#define LIBTSAN_SPEC "-ltsan" ADD_STATIC_LIBTSAN_LIBS
 #endif
 #endif
 
 #ifndef LIBTSAN_EARLY_SPEC
 #define LIBTSAN_EARLY_SPEC ""
-#endif
-
-#ifndef LIBLSAN_SPEC
-#define STATIC_LIBLSAN_LIBS \
-  " %{static-liblsan:%:include(libsanitizer.spec)%(link_liblsan)}"
-#ifdef HAVE_LD_STATIC_DYNAMIC
-#define LIBLSAN_SPEC "%{!shared:%{static-liblsan:" LD_STATIC_OPTION \
-		     "} -llsan %{static-liblsan:" LD_DYNAMIC_OPTION "}" \
-		     STATIC_LIBLSAN_LIBS "}"
-#else
-#define LIBLSAN_SPEC "%{!shared:-llsan" STATIC_LIBLSAN_LIBS "}"
-#endif
-#endif
-
-#ifndef LIBUBSAN_SPEC
-#define STATIC_LIBUBSAN_LIBS \
-  " %{static-libubsan:%:include(libsanitizer.spec)%(link_libubsan)}"
-#ifdef HAVE_LD_STATIC_DYNAMIC
-#define LIBUBSAN_SPEC "%{static-libubsan:" LD_STATIC_OPTION \
-		     "} -lubsan %{static-libubsan:" LD_DYNAMIC_OPTION "}" \
-		     STATIC_LIBUBSAN_LIBS
-#else
-#define LIBUBSAN_SPEC "-lubsan" STATIC_LIBUBSAN_LIBS
-#endif
 #endif
 
 /* config.h can define LIBGCC_SPEC to override how and when libgcc.a is
@@ -638,7 +630,7 @@ proper position among the other output files.  */
      && defined(HAVE_AS_GDWARF2_DEBUG_FLAG) && defined(HAVE_AS_GSTABS_DEBUG_FLAG)
 #  define ASM_DEBUG_SPEC						\
       (PREFERRED_DEBUGGING_TYPE == DBX_DEBUG				\
-       ? "%{!g0:%{gdwarf*:--gdwarf2}%{!gdwarf*:%{g*:--gstabs}}}" ASM_MAP	\
+       ? "%{!g0:%{gdwarf-2*:--gdwarf2}%{!gdwarf-2*:%{g*:--gstabs}}}" ASM_MAP	\
        : "%{!g0:%{gstabs*:--gstabs}%{!gstabs*:%{g*:--gdwarf2}}}" ASM_MAP)
 # else
 #  if defined(DBX_DEBUGGING_INFO) && defined(HAVE_AS_GSTABS_DEBUG_FLAG)
@@ -666,7 +658,7 @@ proper position among the other output files.  */
 #ifdef TARGET_LIBC_PROVIDES_SSP
 #define LINK_SSP_SPEC "%{fstack-protector:}"
 #else
-#define LINK_SSP_SPEC "%{fstack-protector|fstack-protector-strong|fstack-protector-all:-lssp_nonshared -lssp}"
+#define LINK_SSP_SPEC "%{fstack-protector|fstack-protector-all:-lssp_nonshared -lssp}"
 #endif
 #endif
 
@@ -695,7 +687,7 @@ proper position among the other output files.  */
 #if HAVE_LTO_PLUGIN > 0
 /* The linker used has full plugin support, use LTO plugin by default.  */
 #if HAVE_LTO_PLUGIN == 2
-#define PLUGIN_COND "!fno-use-linker-plugin:%{!fno-lto"
+#define PLUGIN_COND "!fno-use-linker-plugin:%{flto|flto=*|fuse-linker-plugin"
 #define PLUGIN_COND_CLOSE "}"
 #else
 /* The linker used has limited plugin support, use LTO plugin with explicit
@@ -719,30 +711,18 @@ proper position among the other output files.  */
 /* Linker command line options for -fsanitize= early on the command line.  */
 #ifndef SANITIZER_EARLY_SPEC
 #define SANITIZER_EARLY_SPEC "\
-%{!nostdlib:%{!nodefaultlibs:%{%:sanitize(address):" LIBASAN_EARLY_SPEC "} \
-    %{%:sanitize(thread):" LIBTSAN_EARLY_SPEC "}}}"
+%{!nostdlib:%{!nodefaultlibs:%{fsanitize=address:" LIBASAN_EARLY_SPEC "} \
+    %{fsanitize=thread:" LIBTSAN_EARLY_SPEC "}}}"
 #endif
 
 /* Linker command line options for -fsanitize= late on the command line.  */
 #ifndef SANITIZER_SPEC
 #define SANITIZER_SPEC "\
-%{!nostdlib:%{!nodefaultlibs:%{%:sanitize(address):" LIBASAN_SPEC "\
+%{!nostdlib:%{!nodefaultlibs:%{fsanitize=address:" LIBASAN_SPEC "\
     %{static:%ecannot specify -static with -fsanitize=address}\
-    %{%:sanitize(thread):%e-fsanitize=address is incompatible with -fsanitize=thread}}\
-    %{%:sanitize(thread):" LIBTSAN_SPEC "\
-    %{!pie:%{!shared:%e-fsanitize=thread linking must be done with -pie or -shared}}}\
-    %{%:sanitize(undefined):" LIBUBSAN_SPEC "}\
-    %{%:sanitize(leak):" LIBLSAN_SPEC "}}}"
-#endif
-
-/*  This is the spec to use, once the code for creating the vtable
-    verification runtime library, libvtv.so, has been created.  Currently
-    the vtable verification runtime functions are in libstdc++, so we use
-    the spec just below this one.  */
-#ifndef VTABLE_VERIFICATION_SPEC
-#define VTABLE_VERIFICATION_SPEC "\
-%{!nostdlib:%{fvtable-verify=std: -lvtv -u_vtable_map_vars_start -u_vtable_map_vars_end}\
-    %{fvtable-verify=preinit: -lvtv -u_vtable_map_vars_start -u_vtable_map_vars_end}}"
+    %{fsanitize=thread:%e-fsanitize=address is incompatible with -fsanitize=thread}}\
+    %{fsanitize=thread:" LIBTSAN_SPEC "\
+    %{!pie:%{!shared:%e-fsanitize=thread linking must be done with -pie or -shared}}}}}"
 #endif
 
 /* -u* was put back because both BSD and SysV seem to support it.  */
@@ -763,7 +743,7 @@ proper position among the other output files.  */
     %{flto} %{flto=*} %l " LINK_PIE_SPEC \
    "%{fuse-ld=*:-fuse-ld=%*}\
     %X %{o*} %{e*} %{N} %{n} %{r}\
-    %{s} %{t} %{u*} %{z} %{Z} %{!nostdlib:%{!nostartfiles:%S}} " VTABLE_VERIFICATION_SPEC " \
+    %{s} %{t} %{u*} %{z} %{Z} %{!nostdlib:%{!nostartfiles:%S}}\
     %{static:} %{L*} %(mfwrap) %(link_libgcc) " SANITIZER_EARLY_SPEC " %o\
     %{fopenmp|ftree-parallelize-loops=*:%:include(libgomp.spec)%(link_gomp)}\
     %{fgnu-tm:%:include(libitm.spec)%(link_itm)}\
@@ -804,6 +784,8 @@ static const char *asm_spec = ASM_SPEC;
 static const char *asm_final_spec = ASM_FINAL_SPEC;
 static const char *link_spec = LINK_SPEC;
 static const char *lib_spec = LIB_SPEC;
+static const char *mfwrap_spec = MFWRAP_SPEC;
+static const char *mflib_spec = MFLIB_SPEC;
 static const char *link_gomp_spec = "";
 static const char *libgcc_spec = LIBGCC_SPEC;
 static const char *endfile_spec = ENDFILE_SPEC;
@@ -844,6 +826,8 @@ static const char *cpp_unique_options =
  %{remap} %{g3|ggdb3|gstabs3|gcoff3|gxcoff3|gvms3:-dD}\
  %{!iplugindir*:%{fplugin*:%:find-plugindir()}}\
  %{H} %C %{D*&U*&A*} %{i*} %Z %i\
+ %{fmudflap:-D_MUDFLAP -include mf-runtime.h}\
+ %{fmudflapth:-D_MUDFLAP -D_MUDFLAPTH -include mf-runtime.h}\
  %{E|M|MM:%W{o*}}";
 
 /* This contains cpp options which are common with cc1_options and are passed
@@ -875,6 +859,7 @@ static const char *cc1_options =
  %{-help=*:--help=%*}\
  %{!fsyntax-only:%{S:%W{o*}%{!o*:-o %b.s}}}\
  %{fsyntax-only:-o %j} %{-param*}\
+ %{fmudflap|fmudflapth:-fno-builtin -fno-merge-constants}\
  %{coverage:-fprofile-arcs -ftest-coverage}";
 
 static const char *asm_options =
@@ -888,12 +873,12 @@ static const char *asm_options =
 
 static const char *invoke_as =
 #ifdef AS_NEEDS_DASH_FOR_PIPED_INPUT
-"%{!fwpa*:\
+"%{!fwpa:\
    %{fcompare-debug=*|fdump-final-insns=*:%:compare-debug-dump-opt()}\
    %{!S:-o %|.s |\n as %(asm_options) %|.s %A }\
   }";
 #else
-"%{!fwpa*:\
+"%{!fwpa:\
    %{fcompare-debug=*|fdump-final-insns=*:%:compare-debug-dump-opt()}\
    %{!S:-o %|.s |\n as %(asm_options) %m.s %A }\
   }";
@@ -921,7 +906,7 @@ static const char *const multilib_defaults_raw[] = MULTILIB_DEFAULTS;
 #define DRIVER_SELF_SPECS ""
 #endif
 
-/* Linking to libgomp implies pthreads.  This is particularly important
+/* Adding -fopenmp should imply pthreads.  This is particularly important
    for targets that use different start files and suchlike.  */
 #ifndef GOMP_SELF_SPECS
 #define GOMP_SELF_SPECS "%{fopenmp|ftree-parallelize-loops=*: -pthread}"
@@ -1021,6 +1006,7 @@ static const struct compiler default_compilers[] =
   {".java", "#Java", 0, 0, 0}, {".class", "#Java", 0, 0, 0},
   {".zip", "#Java", 0, 0, 0}, {".jar", "#Java", 0, 0, 0},
   {".go", "#Go", 0, 1, 0},
+  {".d", "#D", 0, 1, 0}, {".dd", "#D", 0, 1, 0}, {".di", "#D", 0, 1, 0},
   /* Next come the entries for C.  */
   {".c", "@c", 0, 0, 1},
   {"@c",
@@ -1288,6 +1274,8 @@ static struct spec_list static_specs[] =
   INIT_STATIC_SPEC ("endfile",			&endfile_spec),
   INIT_STATIC_SPEC ("link",			&link_spec),
   INIT_STATIC_SPEC ("lib",			&lib_spec),
+  INIT_STATIC_SPEC ("mfwrap",			&mfwrap_spec),
+  INIT_STATIC_SPEC ("mflib",			&mflib_spec),
   INIT_STATIC_SPEC ("link_gomp",		&link_gomp_spec),
   INIT_STATIC_SPEC ("libgcc",			&libgcc_spec),
   INIT_STATIC_SPEC ("startfile",		&startfile_spec),
@@ -1339,7 +1327,6 @@ static const struct spec_function static_spec_functions[] =
   { "getenv",                   getenv_spec_function },
   { "if-exists",		if_exists_spec_function },
   { "if-exists-else",		if_exists_else_spec_function },
-  { "sanitize",			sanitize_spec_function },
   { "replace-outfile",		replace_outfile_spec_function },
   { "remove-outfile",		remove_outfile_spec_function },
   { "version-compare",		version_compare_spec_function },
@@ -1379,8 +1366,7 @@ init_gcc_specs (struct obstack *obstack, const char *shared_name,
 		"%{!static:%{!static-libgcc:"
 #if USE_LD_AS_NEEDED
 		"%{!shared-libgcc:",
-		static_name, " " LD_AS_NEEDED_OPTION " ",
-		shared_name, " " LD_NO_AS_NEEDED_OPTION
+		static_name, " --as-needed ", shared_name, " --no-as-needed"
 		"}"
 		"%{shared-libgcc:",
 		shared_name, "%{!shared: ", static_name, "}"
@@ -1533,7 +1519,7 @@ init_spec (void)
   /* Prepend "--traditional-format" to whatever asm_spec we had before.  */
   {
     static const char tf[] = "--traditional-format ";
-    obstack_grow (&obstack, tf, sizeof (tf) - 1);
+    obstack_grow (&obstack, tf, sizeof(tf) - 1);
     obstack_grow0 (&obstack, asm_spec, strlen (asm_spec));
     asm_spec = XOBFINISH (&obstack, const char *);
   }
@@ -1543,19 +1529,19 @@ init_spec (void)
     defined LINKER_HASH_STYLE
 # ifdef LINK_BUILDID_SPEC
   /* Prepend LINK_BUILDID_SPEC to whatever link_spec we had before.  */
-  obstack_grow (&obstack, LINK_BUILDID_SPEC, sizeof (LINK_BUILDID_SPEC) - 1);
+  obstack_grow (&obstack, LINK_BUILDID_SPEC, sizeof(LINK_BUILDID_SPEC) - 1);
 # endif
 # ifdef LINK_EH_SPEC
   /* Prepend LINK_EH_SPEC to whatever link_spec we had before.  */
-  obstack_grow (&obstack, LINK_EH_SPEC, sizeof (LINK_EH_SPEC) - 1);
+  obstack_grow (&obstack, LINK_EH_SPEC, sizeof(LINK_EH_SPEC) - 1);
 # endif
 # ifdef LINKER_HASH_STYLE
   /* Prepend --hash-style=LINKER_HASH_STYLE to whatever link_spec we had
      before.  */
   {
     static const char hash_style[] = "--hash-style=";
-    obstack_grow (&obstack, hash_style, sizeof (hash_style) - 1);
-    obstack_grow (&obstack, LINKER_HASH_STYLE, sizeof (LINKER_HASH_STYLE) - 1);
+    obstack_grow (&obstack, hash_style, sizeof(hash_style) - 1);
+    obstack_grow (&obstack, LINKER_HASH_STYLE, sizeof(LINKER_HASH_STYLE) - 1);
     obstack_1grow (&obstack, ' ');
   }
 # endif
@@ -1621,7 +1607,7 @@ set_spec (const char *name, const char *spec, bool user_p)
 
   /* Free the old spec.  */
   if (old_spec && sl->alloc_p)
-    free (CONST_CAST (char *, old_spec));
+    free (CONST_CAST(char *, old_spec));
 
   sl->user_p = user_p;
   sl->alloc_p = true;
@@ -2467,7 +2453,7 @@ find_a_file (const struct path_prefix *pprefix, const char *name, int mode,
 #endif
 
 #ifdef DEFAULT_LINKER
-  if (! strcmp (name, "ld") && access (DEFAULT_LINKER, mode) == 0)
+  if (! strcmp(name, "ld") && access (DEFAULT_LINKER, mode) == 0)
     return xstrdup (DEFAULT_LINKER);
 #endif
 
@@ -2790,7 +2776,7 @@ execute (void)
 	    }
 	}
 
-      if (string != commands[i].prog)
+      if (i && string != commands[i].prog)
 	free (CONST_CAST (char *, string));
     }
 
@@ -2843,6 +2829,16 @@ execute (void)
 	else if (WIFEXITED (status)
 		 && WEXITSTATUS (status) >= MIN_FATAL_STATUS)
 	  {
+#if !(defined (__MSDOS__) || defined (OS2) || defined (VMS))
+	    /* For ICEs in cc1, cc1obj, cc1plus see if it is
+	       reproducible or not.  */
+	    const char *p;
+	    if (WEXITSTATUS (status) == ICE_EXIT_CODE
+		&& i == 0
+		&& (p = strrchr (commands[0].argv[0], DIR_SEPARATOR))
+		&& ! strncmp (p + 1, "cc1", 3))
+	      retry_ice (commands[0].prog, commands[0].argv);
+#endif
 	    if (WEXITSTATUS (status) > greatest_status)
 	      greatest_status = WEXITSTATUS (status);
 	    ret_code = -1;
@@ -2899,6 +2895,9 @@ execute (void)
 	      }
 	  }
       }
+
+    if (commands[0].argv[0] != commands[0].prog)
+      free (CONST_CAST (char *, commands[0].argv[0]));
 
     return ret_code;
   }
@@ -3383,14 +3382,6 @@ driver_handle_option (struct gcc_options *opts,
       do_save = false;
       break;
 
-    case OPT_fuse_ld_bfd:
-       use_ld = ".bfd";
-       break;
-
-    case OPT_fuse_ld_gold:
-       use_ld = ".gold";
-       break;
-
     case OPT_fcompare_debug_second:
       compare_debug_second = 1;
       break;
@@ -3649,10 +3640,6 @@ driver_handle_option (struct gcc_options *opts,
 	 first two, gfortranspec.c understands -static-libgfortran and
 	 g++spec.c understands -static-libstdc++ */
       validated = true;
-      break;
-
-    case OPT_fwpa:
-      flag_wpa = "";
       break;
 
     default:
@@ -5302,7 +5289,7 @@ do_spec_1 (const char *spec, int inswitch, const char *soft_matched_part)
 	    break;
 
 	  case ':':
-	    p = handle_spec_function (p, NULL);
+	    p = handle_spec_function (p);
 	    if (p == 0)
 	      return -1;
 	    break;
@@ -5364,17 +5351,7 @@ do_spec_1 (const char *spec, int inswitch, const char *soft_matched_part)
 	      {
 		if (soft_matched_part[0])
 		  do_spec_1 (soft_matched_part, 1, NULL);
-		/* Only insert a space after the substitution if it is at the
-		   end of the current sequence.  So if:
-
-		     "%{foo=*:bar%*}%{foo=*:one%*two}"
-
-		   matches -foo=hello then it will produce:
-		   
-		     barhello onehellotwo
-		*/
-		if (*p == 0 || *p == '}')
-		  do_spec_1 (" ", 0, NULL);
+		do_spec_1 (" ", 0, NULL);
 	      }
 	    else
 	      /* Catch the case where a spec string contains something like
@@ -5481,7 +5458,7 @@ eval_spec_function (const char *func, const char *args)
   const char *save_suffix_subst;
 
   int save_growing_size;
-  void *save_growing_value;
+  void *save_growing_value = NULL;
 
   sf = lookup_spec_function (func);
   if (sf == NULL)
@@ -5548,13 +5525,10 @@ eval_spec_function (const char *func, const char *args)
    ARGS is processed as a spec in a separate context and split into an
    argument vector in the normal fashion.  The function returns a string
    containing a spec which we then process in the caller's context, or
-   NULL if no processing is required.
-
-   If RETVAL_NONNULL is not NULL, then store a bool whether function
-   returned non-NULL.  */
+   NULL if no processing is required.  */
 
 static const char *
-handle_spec_function (const char *p, bool *retval_nonnull)
+handle_spec_function (const char *p)
 {
   char *func, *args;
   const char *endp, *funcval;
@@ -5600,8 +5574,6 @@ handle_spec_function (const char *p, bool *retval_nonnull)
   funcval = eval_spec_function (func, args);
   if (funcval != NULL && do_spec_1 (funcval, 0, NULL) < 0)
     p = NULL;
-  if (retval_nonnull)
-    *retval_nonnull = funcval != NULL;
 
   free (func);
   free (args);
@@ -5740,35 +5712,26 @@ handle_braces (const char *p)
       a_is_negated = false;
       a_is_spectype = false;
 
-      SKIP_WHITE ();
+      SKIP_WHITE();
       if (*p == '!')
 	p++, a_is_negated = true;
 
-      SKIP_WHITE ();
-      if (*p == '%' && p[1] == ':')
-	{
-	  atom = NULL;
-	  end_atom = NULL;
-	  p = handle_spec_function (p + 2, &a_matched);
-	}
-      else
-	{
-	  if (*p == '.')
-	    p++, a_is_suffix = true;
-	  else if (*p == ',')
-	    p++, a_is_spectype = true;
+      SKIP_WHITE();
+      if (*p == '.')
+	p++, a_is_suffix = true;
+      else if (*p == ',')
+	p++, a_is_spectype = true;
 
-	  atom = p;
-	  while (ISIDNUM (*p) || *p == '-' || *p == '+' || *p == '='
-		 || *p == ',' || *p == '.' || *p == '@')
-	    p++;
-	  end_atom = p;
+      atom = p;
+      while (ISIDNUM(*p) || *p == '-' || *p == '+' || *p == '='
+	     || *p == ',' || *p == '.' || *p == '@')
+	p++;
+      end_atom = p;
 
-	  if (*p == '*')
-	    p++, a_is_starred = 1;
-	}
+      if (*p == '*')
+	p++, a_is_starred = 1;
 
-      SKIP_WHITE ();
+      SKIP_WHITE();
       switch (*p)
 	{
 	case '&': case '}':
@@ -5791,7 +5754,7 @@ handle_braces (const char *p)
 	  if (ordered_set)
 	    goto invalid;
 
-	  if (atom && atom == end_atom)
+	  if (atom == end_atom)
 	    {
 	      if (!n_way_choice || disj_matched || *p == '|'
 		  || a_is_negated || a_is_suffix || a_is_spectype
@@ -5816,9 +5779,7 @@ handle_braces (const char *p)
 		 match.  */
 	      if (!disj_matched && !n_way_matched)
 		{
-		  if (atom == NULL)
-		    /* a_matched is already set by handle_spec_function.  */;
-		  else if (a_is_suffix)
+		  if (a_is_suffix)
 		    a_matched = input_suffix_matches (atom, end_atom);
 		  else if (a_is_spectype)
 		    a_matched = input_spec_matches (atom, end_atom);
@@ -6073,13 +6034,13 @@ give_switch (int switchnum, int omit_first_word)
 	      while (length-- && !IS_DIR_SEPARATOR (arg[length]))
 		if (arg[length] == '.')
 		  {
-		    (CONST_CAST (char *, arg))[length] = 0;
+		    (CONST_CAST(char *, arg))[length] = 0;
 		    dot = 1;
 		    break;
 		  }
 	      do_spec_1 (arg, 1, NULL);
 	      if (dot)
-		(CONST_CAST (char *, arg))[length] = '.';
+		(CONST_CAST(char *, arg))[length] = '.';
 	      do_spec_1 (suffix_subst, 1, NULL);
 	    }
 	  else
@@ -6090,6 +6051,237 @@ give_switch (int switchnum, int omit_first_word)
   do_spec_1 (" ", 0, NULL);
   switches[switchnum].validated = true;
 }
+
+#if !(defined (__MSDOS__) || defined (OS2) || defined (VMS))
+#define RETRY_ICE_ATTEMPTS 2
+
+static void
+retry_ice (const char *prog, const char **argv)
+{
+  int nargs, out_arg = -1, quiet = 0, attempt;
+  int pid, retries, sleep_interval;
+  const char **new_argv;
+  char *temp_filenames[RETRY_ICE_ATTEMPTS * 2 + 2];
+
+  if (gcc_input_filename == NULL || ! strcmp (gcc_input_filename, "-"))
+    return;
+
+  for (nargs = 0; argv[nargs] != NULL; ++nargs)
+    /* Only retry compiler ICEs, not preprocessor ones.  */
+    if (! strcmp (argv[nargs], "-E"))
+      return;
+    else if (argv[nargs][0] == '-' && argv[nargs][1] == 'o')
+      {
+	if (out_arg == -1)
+	  out_arg = nargs;
+	else
+	  return;
+      }
+    /* If the compiler is going to output any time information,
+       it might varry between invocations.  */
+    else if (! strcmp (argv[nargs], "-quiet"))
+      quiet = 1;
+    else if (! strcmp (argv[nargs], "-ftime-report"))
+      return;
+
+  if (out_arg == -1 || !quiet)
+    return;
+
+  memset (temp_filenames, '\0', sizeof (temp_filenames));
+  new_argv = XALLOCAVEC (const char *, nargs + 3);
+  memcpy (new_argv, argv, (nargs + 1) * sizeof (const char *));
+  new_argv[nargs++] = "-frandom-seed=0";
+  new_argv[nargs] = NULL;
+  if (new_argv[out_arg][2] == '\0')
+    new_argv[out_arg + 1] = "-";
+  else
+    new_argv[out_arg] = "-o-";
+
+  for (attempt = 0; attempt < RETRY_ICE_ATTEMPTS + 1; ++attempt)
+    {
+      int fd = -1;
+      int status;
+
+      temp_filenames[attempt * 2] = make_temp_file (".out");
+      temp_filenames[attempt * 2 + 1] = make_temp_file (".err");
+
+      if (attempt == RETRY_ICE_ATTEMPTS)
+        {
+	  int i;
+	  int fd1, fd2;
+	  struct stat st1, st2;
+	  size_t n, len;
+	  char *buf;
+
+	  buf = XNEWVEC (char, 8192);
+
+	  for (i = 0; i < 2; ++i)
+	    {
+	      fd1 = open (temp_filenames[i], O_RDONLY);
+	      fd2 = open (temp_filenames[2 + i], O_RDONLY);
+
+	      if (fd1 < 0 || fd2 < 0)
+		{
+		  i = -1;
+		  close (fd1);
+		  close (fd2);
+		  break;
+		}
+
+	      if (fstat (fd1, &st1) < 0 || fstat (fd2, &st2) < 0)
+		{
+		  i = -1;
+		  close (fd1);
+		  close (fd2);
+		  break;
+		}
+
+	      if (st1.st_size != st2.st_size)
+		{
+		  close (fd1);
+		  close (fd2);
+		  break;
+		}
+
+	      len = 0;
+	      for (n = st1.st_size; n; n -= len)
+		{
+		  len = n;
+		  if (len > 4096)
+		    len = 4096;
+
+		  if (read (fd1, buf, len) != (int) len
+		      || read (fd2, buf + 4096, len) != (int) len)
+		    {
+		      i = -1;
+		      break;
+		    }
+
+		  if (memcmp (buf, buf + 4096, len) != 0)
+		    break;
+		}
+
+	      close (fd1);
+	      close (fd2);
+
+	      if (n)
+		break;
+	    }
+
+	  free (buf);
+	  if (i == -1)
+	    break;
+
+	  if (i != 2)
+	    {
+	      fnotice (stderr, "The bug is not reproducible, so it is"
+			       " likely a hardware or OS problem.\n");
+	      break;
+	    }
+
+          fd = open (temp_filenames[attempt * 2], O_RDWR);
+	  if (fd < 0)
+	    break;
+	  write (fd, "//", 2);
+	  for (i = 0; i < nargs; i++)
+	    {
+	      write (fd, " ", 1);
+	      write (fd, new_argv[i], strlen (new_argv[i]));
+	    }
+	  write (fd, "\n", 1);
+	  new_argv[nargs] = "-E";
+	  new_argv[nargs + 1] = NULL;
+        }
+
+      /* Fork a subprocess; wait and retry if it fails.  */
+      sleep_interval = 1;
+      pid = -1;
+      for (retries = 0; retries < 4; retries++)
+	{
+	  pid = fork ();
+	  if (pid >= 0)
+	    break;
+	  sleep (sleep_interval);
+	  sleep_interval *= 2;
+	}
+
+      if (pid < 0)
+	break;
+      else if (pid == 0)
+	{
+	  if (attempt != RETRY_ICE_ATTEMPTS)
+	    fd = open (temp_filenames[attempt * 2], O_RDWR);
+	  if (fd < 0)
+	    exit (-1);
+	  if (fd != 1)
+	    {
+	      close (1);
+	      dup (fd);
+	      close (fd);
+	    }
+
+	  fd = open (temp_filenames[attempt * 2 + 1], O_RDWR);
+	  if (fd < 0)
+	    exit (-1);
+	  if (fd != 2)
+	    {
+	      close (2);
+	      dup (fd);
+	      close (fd);
+	    }
+
+	  if (prog == new_argv[0])
+	    execvp (prog, CONST_CAST2 (char *const *, const char **, new_argv));
+	  else
+	    execv (new_argv[0], CONST_CAST2 (char *const *, const char **, new_argv));
+	  exit (-1);
+	}
+
+      if (waitpid (pid, &status, 0) < 0)
+	break;
+
+      if (attempt < RETRY_ICE_ATTEMPTS
+	  && (! WIFEXITED (status) || WEXITSTATUS (status) != ICE_EXIT_CODE))
+	{
+	  fnotice (stderr, "The bug is not reproducible, so it is"
+			   " likely a hardware or OS problem.\n");
+	  break;
+	}
+      else if (attempt == RETRY_ICE_ATTEMPTS)
+	{
+	  close (fd);
+	  if (WIFEXITED (status)
+	      && WEXITSTATUS (status) == SUCCESS_EXIT_CODE)
+	    {
+	      fnotice (stderr, "Preprocessed source stored into %s file,"
+			       " please attach this to your bugreport.\n",
+		       temp_filenames[attempt * 2]);
+	      if (!getenv ("GCC_NOAPPORT")
+		  && !access ("/usr/share/apport/gcc_ice_hook", R_OK | X_OK))
+		{
+		  char *cmd = XNEWVEC (char, 50 + strlen (temp_filenames[attempt * 2])
+				             + strlen (new_argv[0]));
+		  sprintf (cmd, "/usr/share/apport/gcc_ice_hook %s %s",
+			   new_argv[0], temp_filenames[attempt * 2]);
+		  system (cmd);
+		  free (cmd);
+		}
+	      /* Make sure it is not deleted.  */
+	      free (temp_filenames[attempt * 2]);
+	      temp_filenames[attempt * 2] = NULL;
+	      break;
+	    }
+	}
+    }
+
+  for (attempt = 0; attempt < RETRY_ICE_ATTEMPTS * 2 + 2; attempt++)
+    if (temp_filenames[attempt])
+      {
+	unlink (temp_filenames[attempt]);
+	free (temp_filenames[attempt]);
+      }
+}
+#endif
 
 /* Search for a file named NAME trying various prefixes including the
    user's -B prefix and some standard ones.
@@ -6723,38 +6915,6 @@ main (int argc, char **argv)
 
   if (print_prog_name)
     {
-      if (use_ld != NULL && ! strcmp (print_prog_name, "ld"))
-	{
-	  /* Append USE_LD to to the default linker.  */
-#ifdef DEFAULT_LINKER
-	  char *ld;
-# ifdef HAVE_HOST_EXECUTABLE_SUFFIX
-	  int len = (sizeof (DEFAULT_LINKER)
-		     - sizeof (HOST_EXECUTABLE_SUFFIX));
-	  ld = NULL;
-	  if (len > 0)
-	    {
-	      char *default_linker = xstrdup (DEFAULT_LINKER);
-	      /* Strip HOST_EXECUTABLE_SUFFIX if DEFAULT_LINKER contains
-		 HOST_EXECUTABLE_SUFFIX.  */
-	      if (! strcmp (&default_linker[len], HOST_EXECUTABLE_SUFFIX))
-		{
-		  default_linker[len] = '\0';
-		  ld = concat (default_linker, use_ld,
-			       HOST_EXECUTABLE_SUFFIX, NULL);
-		}
-	    }
-	  if (ld == NULL)
-# endif
-	  ld = concat (DEFAULT_LINKER, use_ld, NULL);
-	  if (access (ld, X_OK) == 0)
-	    {
-	      printf ("%s\n", ld);
-	      return (0);
-	    }
-#endif
-	  print_prog_name = concat (print_prog_name, use_ld, NULL);
-	}
       char *newname = find_a_file (&exec_prefixes, print_prog_name, X_OK, 0);
       printf ("%s\n", (newname ? newname : print_prog_name));
       return (0);
@@ -6844,7 +7004,7 @@ main (int argc, char **argv)
     {
       printf (_("%s %s%s\n"), progname, pkgversion_string,
 	      version_string);
-      printf ("Copyright %s 2014 Free Software Foundation, Inc.\n",
+      printf ("Copyright %s 2013 Free Software Foundation, Inc.\n",
 	      _("(C)"));
       fputs (_("This is free software; see the source for copying conditions.  There is NO\n\
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"),
@@ -8147,30 +8307,6 @@ if_exists_else_spec_function (int argc, const char **argv)
   return argv[1];
 }
 
-/* sanitize built-in spec function.
-
-   This returns non-NULL, if sanitizing address, thread or
-   any of the undefined behavior sanitizers.  */
-
-static const char *
-sanitize_spec_function (int argc, const char **argv)
-{
-  if (argc != 1)
-    return NULL;
-
-  if (strcmp (argv[0], "address") == 0)
-    return (flag_sanitize & SANITIZE_ADDRESS) ? "" : NULL;
-  if (strcmp (argv[0], "thread") == 0)
-    return (flag_sanitize & SANITIZE_THREAD) ? "" : NULL;
-  if (strcmp (argv[0], "undefined") == 0)
-    return (flag_sanitize & SANITIZE_UNDEFINED) ? "" : NULL;
-  if (strcmp (argv[0], "leak") == 0)
-    return ((flag_sanitize
-	     & (SANITIZE_ADDRESS | SANITIZE_LEAK | SANITIZE_THREAD))
-	    == SANITIZE_LEAK) ? "" : NULL;
-  return NULL;
-}
-
 /* replace-outfile built-in spec function.
 
    This looks for the first argument in the outfiles array's name and
@@ -8429,7 +8565,7 @@ get_random_number (void)
   }
 #endif
 
-  return ret ^ getpid ();
+  return ret ^ getpid();
 }
 
 /* %:compare-debug-dump-opt spec function.  Save the last argument,
@@ -8641,7 +8777,7 @@ replace_extension_spec_func (int argc, const char **argv)
 
   name = xstrdup (argv[0]);
 
-  for (i = strlen (name) - 1; i >= 0; i--)
+  for (i = strlen(name) - 1; i >= 0; i--)
     if (IS_DIR_SEPARATOR (name[i]))
       break;
 

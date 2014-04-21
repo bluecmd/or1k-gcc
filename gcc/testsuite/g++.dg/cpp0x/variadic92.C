@@ -1,5 +1,5 @@
 // Various tests for variadic templates and partial specialization.
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 // PR c++/36846
 template<typename A, typename B>

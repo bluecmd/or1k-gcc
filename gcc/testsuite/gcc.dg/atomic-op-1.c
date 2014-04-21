@@ -527,7 +527,6 @@ test_or ()
     abort ();
 }
 
-int
 main ()
 {
   test_fetch_add ();

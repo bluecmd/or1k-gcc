@@ -1,5 +1,5 @@
 // PR c++/51666 (DR 325)
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template<typename T, typename U>
 struct tuple

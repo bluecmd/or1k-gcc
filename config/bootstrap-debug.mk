@@ -9,4 +9,5 @@
 # For more thorough testing, see bootstrap-debug-lean.mk
 
 STAGE2_CFLAGS += -gtoggle
+STAGE3_CFLAGS += -gtoggle
 do-compare = $(SHELL) $(srcdir)/contrib/compare-debug $$f1 $$f2

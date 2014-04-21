@@ -1,5 +1,5 @@
 // Origin PR c++/51143
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++11" }
 
 using A0 = struct B0 { void f() {} };
 

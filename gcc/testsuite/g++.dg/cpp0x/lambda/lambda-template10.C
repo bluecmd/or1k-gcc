@@ -1,6 +1,6 @@
 // PR c++/50276
-// { dg-options "-Wuninitialized" }
-// { dg-do run { target c++11 } }
+// { dg-options "-std=c++11 -Wuninitialized" }
+// { dg-do run }
 
 template<typename T>
 unsigned testfun(const T& func)

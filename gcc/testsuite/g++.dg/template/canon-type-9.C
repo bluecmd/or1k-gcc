@@ -1,5 +1,6 @@
 // Contributed by Dodji Seketeli <dodji@redhat.com>
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
+// { dg-do compile }
 
 struct F { F(int) {}};
 

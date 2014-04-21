@@ -1,4 +1,4 @@
-/* { dg-options "-fno-common" } */
+/* { dg-do compile } */
 /* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
 /* { dg-final { scan-assembler-not "\tlbu\t" } } */
 

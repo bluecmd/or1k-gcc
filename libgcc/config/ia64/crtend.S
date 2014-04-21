@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2014 Free Software Foundation, Inc.
+/* Copyright (C) 2000-2013 Free Software Foundation, Inc.
    Contributed by Jes Sorensen, <Jes.Sorensen@cern.ch>
 
    This file is part of GCC.
@@ -119,3 +119,7 @@ __do_global_ctors_aux:
 
 	br.ret.sptk.many rp
 	.endp __do_global_ctors_aux
+
+#ifdef __linux__
+.section .note.GNU-stack; .previous
+#endif

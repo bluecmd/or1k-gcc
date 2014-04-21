@@ -18,13 +18,15 @@ type netFD struct {
 	laddr, raddr     Addr
 }
 
+var canCancelIO = true // used for testing current package
+
 func sysInit() {
 }
 
-func dial(net string, ra Addr, dialer func(time.Time) (Conn, error), deadline time.Time) (Conn, error) {
+func resolveAndDial(net, addr string, localAddr Addr, deadline time.Time) (Conn, error) {
 	// On plan9, use the relatively inefficient
 	// goroutine-racing implementation.
-	return dialChannel(net, ra, dialer, deadline)
+	return resolveAndDialChannel(net, addr, localAddr, deadline)
 }
 
 func newFD(proto, name string, ctl, data *os.File, laddr, raddr Addr) *netFD {
@@ -106,15 +108,15 @@ func (fd *netFD) file(f *os.File, s string) (*os.File, error) {
 	return os.NewFile(uintptr(dfd), s), nil
 }
 
-func (fd *netFD) setDeadline(t time.Time) error {
+func setDeadline(fd *netFD, t time.Time) error {
 	return syscall.EPLAN9
 }
 
-func (fd *netFD) setReadDeadline(t time.Time) error {
+func setReadDeadline(fd *netFD, t time.Time) error {
 	return syscall.EPLAN9
 }
 
-func (fd *netFD) setWriteDeadline(t time.Time) error {
+func setWriteDeadline(fd *netFD, t time.Time) error {
 	return syscall.EPLAN9
 }
 
@@ -124,8 +126,4 @@ func setReadBuffer(fd *netFD, bytes int) error {
 
 func setWriteBuffer(fd *netFD, bytes int) error {
 	return syscall.EPLAN9
-}
-
-func skipRawSocketTests() (skip bool, skipmsg string, err error) {
-	return true, "skipping test on plan9", nil
 }

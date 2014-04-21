@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 template<typename... T> struct A
 {
   template<T> struct B {}; // { dg-error "not expanded|T" }

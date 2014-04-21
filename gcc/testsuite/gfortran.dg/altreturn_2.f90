@@ -1,6 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-std=gnu" }
-
        program altreturn_2
          call foo()  ! { dg-error "Missing alternate return" }
        contains

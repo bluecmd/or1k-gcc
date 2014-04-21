@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x" }
 template<int I, typename... Args>
 void get_ith(const Args&... args); // { dg-message "note" }
 

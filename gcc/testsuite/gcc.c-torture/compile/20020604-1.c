@@ -1,6 +1,7 @@
 /* { dg-do assemble } */
-/* { dg-require-effective-target ptr32plus } */
+/* { dg-skip-if "The array is too big" { "avr-*-*" "pdp11-*-*" } { "*" } { "" } } */ 
 /* { dg-xfail-if "The array too big" { "h8300-*-*" } { "-mno-h" "-mn" } { "" } } */
+/* { dg-skip-if "" { m32c-*-* } { } { } } */
 
 /* PR c/6957
    This testcase ICEd at -O2 on IA-32, because

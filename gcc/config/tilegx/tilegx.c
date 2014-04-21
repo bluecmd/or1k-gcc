@@ -1,5 +1,5 @@
 /* Subroutines used for code generation on the Tilera TILE-Gx.
-   Copyright (C) 2011-2014 Free Software Foundation, Inc.
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
    Contributed by Walter Lee (walt@tilera.com)
 
    This file is part of GCC.
@@ -39,24 +39,7 @@
 #include "function.h"
 #include "dwarf2.h"
 #include "timevar.h"
-#include "tree.h"
-#include "pointer-set.h"
-#include "hash-table.h"
-#include "vec.h"
-#include "ggc.h"
-#include "basic-block.h"
-#include "tree-ssa-alias.h"
-#include "internal-fn.h"
-#include "gimple-fold.h"
-#include "tree-eh.h"
-#include "gimple-expr.h"
-#include "is-a.h"
 #include "gimple.h"
-#include "stringpool.h"
-#include "stor-layout.h"
-#include "varasm.h"
-#include "calls.h"
-#include "gimplify.h"
 #include "cfgloop.h"
 #include "tilegx-builtins.h"
 #include "tilegx-multiply.h"
@@ -175,17 +158,6 @@ tilegx_pass_by_reference (cumulative_args_t cum ATTRIBUTE_UNUSED,
 }
 
 
-/* Implement TARGET_RETURN_IN_MSB.  We return a value in the most
-   significant part of a register if:
-   - the target is big-endian; and
-   - the value has an aggregate type (e.g., structure or union).  */
-static bool
-tilegx_return_in_msb (const_tree valtype)
-{
-  return (TARGET_BIG_ENDIAN && AGGREGATE_TYPE_P (valtype));
-}
-
-
 /* Implement TARGET_RETURN_IN_MEMORY.  */
 static bool
 tilegx_return_in_memory (const_tree type, const_tree fndecl ATTRIBUTE_UNUSED)
@@ -231,17 +203,9 @@ tilegx_function_arg (cumulative_args_t cum_v,
   CUMULATIVE_ARGS cum = *get_cumulative_args (cum_v);
   int byte_size = ((mode == BLKmode)
 		   ? int_size_in_bytes (type) : GET_MODE_SIZE (mode));
-  bool doubleword_aligned_p;
 
   if (cum >= TILEGX_NUM_ARG_REGS)
     return NULL_RTX;
-
-  /* See whether the argument has doubleword alignment.  */
-  doubleword_aligned_p =
-    tilegx_function_arg_boundary (mode, type) > BITS_PER_WORD;
-
-  if (doubleword_aligned_p)
-    cum += cum & 1;
 
   /* The ABI does not allow parameters to be passed partially in reg
      and partially in stack.  */
@@ -264,14 +228,6 @@ tilegx_function_arg_advance (cumulative_args_t cum_v,
   int byte_size = ((mode == BLKmode)
 		   ? int_size_in_bytes (type) : GET_MODE_SIZE (mode));
   int word_size = (byte_size + UNITS_PER_WORD - 1) / UNITS_PER_WORD;
-  bool doubleword_aligned_p;
-
-  /* See whether the argument has doubleword alignment.  */
-  doubleword_aligned_p =
-    tilegx_function_arg_boundary (mode, type) > BITS_PER_WORD;
-
-  if (doubleword_aligned_p)
-    *cum += *cum & 1;
 
   /* If the current argument does not fit in the pretend_args space,
      skip over it.  */
@@ -444,17 +400,14 @@ tilegx_setup_incoming_varargs (cumulative_args_t cum,
 
    generates code equivalent to:
   
-    paddedsize = (sizeof(TYPE) + 7) & -8;
+    paddedsize = (sizeof(TYPE) + 3) & -4;
     if (  (VALIST.__args + paddedsize > VALIST.__skip)
 	& (VALIST.__args <= VALIST.__skip))
       addr = VALIST.__skip + STACK_POINTER_OFFSET;
     else
       addr = VALIST.__args;
     VALIST.__args = addr + paddedsize;
-    if (BYTES_BIG_ENDIAN)
-      ret = *(TYPE *)(addr + paddedsize - sizeof(TYPE));
-    else
-      ret = *(TYPE *)addr;
+    ret = *(TYPE *)addr;
  */
 static tree
 tilegx_gimplify_va_arg_expr (tree valist, tree type, gimple_seq *pre_p,
@@ -487,23 +440,9 @@ tilegx_gimplify_va_arg_expr (tree valist, tree type, gimple_seq *pre_p,
   size = int_size_in_bytes (type);
   rsize = ((size + UNITS_PER_WORD - 1) / UNITS_PER_WORD) * UNITS_PER_WORD;
 
-  /* If the alignment of the type is greater than the default for a
-     parameter, align to the STACK_BOUNDARY. */
-  if (TYPE_ALIGN (type) > PARM_BOUNDARY)
-    {
-      /* Assert the only case we generate code for: when
-	 stack boundary = 2 * parm boundary. */
-      gcc_assert (STACK_BOUNDARY == PARM_BOUNDARY * 2);
+  /* Assert alignment assumption.  */
+  gcc_assert (STACK_BOUNDARY == PARM_BOUNDARY);
 
-      tmp = build2 (BIT_AND_EXPR, sizetype,
-		    fold_convert (sizetype, unshare_expr (args)),
-		    size_int (PARM_BOUNDARY / 8));
-      tmp = build2 (POINTER_PLUS_EXPR, ptr_type_node,
-		    unshare_expr (args), tmp);
-
-      gimplify_assign (unshare_expr (args), tmp, pre_p);
-    }
- 
   /* Build conditional expression to calculate addr. The expression
      will be gimplified later.  */
   tmp = fold_build_pointer_plus_hwi (unshare_expr (args), rsize);
@@ -517,17 +456,10 @@ tilegx_gimplify_va_arg_expr (tree valist, tree type, gimple_seq *pre_p,
 			size_int (STACK_POINTER_OFFSET)),
 		unshare_expr (args));
 
-  /* Adjust the address of va_arg if it is in big endian mode.  */
-  if (BYTES_BIG_ENDIAN && rsize > size)
-    tmp = fold_build_pointer_plus_hwi (tmp, rsize - size);
   gimplify_assign (addr, tmp, pre_p);
 
   /* Update VALIST.__args.  */
-  
-  if (BYTES_BIG_ENDIAN && rsize > size)
-    tmp = fold_build_pointer_plus_hwi (addr, size);
-  else
-    tmp = fold_build_pointer_plus_hwi (addr, rsize);
+  tmp = fold_build_pointer_plus_hwi (addr, rsize);
   gimplify_assign (unshare_expr (args), tmp, pre_p);
 
   addr = fold_convert (build_pointer_type (type), addr);
@@ -1868,51 +1800,39 @@ tilegx_expand_unaligned_load (rtx dest_reg, rtx mem, HOST_WIDE_INT bitsize,
 
   mode = GET_MODE (dest_reg);
 
+  hi = gen_reg_rtx (mode);
+
   if (bitsize == 2 * BITS_PER_UNIT && (bit_offset % BITS_PER_UNIT) == 0)
     {
-      rtx mem_left, mem_right;
-      rtx left = gen_reg_rtx (mode);
-
       /* When just loading a two byte value, we can load the two bytes
 	 individually and combine them efficiently.  */
 
       mem_lo = adjust_address (mem, QImode, byte_offset);
       mem_hi = adjust_address (mem, QImode, byte_offset + 1);
 
-      if (BYTES_BIG_ENDIAN)
-	{
-	  mem_left = mem_lo;
-	  mem_right = mem_hi;
-	}
-      else
-	{
-	  mem_left = mem_hi;
-	  mem_right = mem_lo;
-	}
-
       if (sign)
 	{
 	  /* Do a signed load of the second byte and use bfins to set
 	     the high bits of the result.  */
 	  emit_insn (gen_zero_extendqidi2 (gen_lowpart (DImode, dest_reg),
-					   mem_right));
-	  emit_insn (gen_extendqidi2 (gen_lowpart (DImode, left), mem_left));
+					   mem_lo));
+	  emit_insn (gen_extendqidi2 (gen_lowpart (DImode, hi), mem_hi));
 	  emit_insn (gen_insv (gen_lowpart (DImode, dest_reg),
 			       GEN_INT (64 - 8), GEN_INT (8),
-			       gen_lowpart (DImode, left)));
+			       gen_lowpart (DImode, hi)));
 	}
       else
 	{
 	  /* Do two unsigned loads and use v1int_l to interleave
 	     them.  */
-	  rtx right = gen_reg_rtx (mode);
-	  emit_insn (gen_zero_extendqidi2 (gen_lowpart (DImode, right),
-					   mem_right));
-	  emit_insn (gen_zero_extendqidi2 (gen_lowpart (DImode, left),
-					   mem_left));
+	  rtx lo = gen_reg_rtx (mode);
+	  emit_insn (gen_zero_extendqidi2 (gen_lowpart (DImode, lo),
+					   mem_lo));
+	  emit_insn (gen_zero_extendqidi2 (gen_lowpart (DImode, hi),
+					   mem_hi));
 	  emit_insn (gen_insn_v1int_l (gen_lowpart (DImode, dest_reg),
-				       gen_lowpart (DImode, left),
-				       gen_lowpart (DImode, right)));
+				       gen_lowpart (DImode, hi),
+				       gen_lowpart (DImode, lo)));
 	}
 
       return;
@@ -1950,7 +1870,6 @@ tilegx_expand_unaligned_load (rtx dest_reg, rtx mem, HOST_WIDE_INT bitsize,
     }
 
   /* Load hi first in case dest_reg is used in mema.  */
-  hi = gen_reg_rtx (mode);
   emit_move_insn (hi, mem_hi);
   emit_move_insn (wide_result, mem_lo);
 
@@ -1963,7 +1882,7 @@ tilegx_expand_unaligned_load (rtx dest_reg, rtx mem, HOST_WIDE_INT bitsize,
       rtx extracted =
 	extract_bit_field (gen_lowpart (DImode, wide_result),
 			   bitsize, bit_offset % BITS_PER_UNIT,
-			   !sign, gen_lowpart (DImode, dest_reg),
+			   !sign, false, gen_lowpart (DImode, dest_reg),
 			   DImode, DImode);
 
       if (extracted != dest_reg)
@@ -1979,17 +1898,12 @@ tilegx_expand_unaligned_store (rtx mem, rtx src, HOST_WIDE_INT bitsize,
 {
   HOST_WIDE_INT byte_offset = bit_offset / BITS_PER_UNIT;
   HOST_WIDE_INT bytesize = bitsize / BITS_PER_UNIT;
-  HOST_WIDE_INT shift_init, shift_increment, shift_amt;
+  HOST_WIDE_INT shift_amt;
   HOST_WIDE_INT i;
   rtx mem_addr;
   rtx store_val;
 
-  shift_init = BYTES_BIG_ENDIAN ? (bitsize - BITS_PER_UNIT) : 0;
-  shift_increment = BYTES_BIG_ENDIAN ? -BITS_PER_UNIT : BITS_PER_UNIT;
-
-  for (i = 0, shift_amt = shift_init;
-       i < bytesize;
-       i++, shift_amt += shift_increment)
+  for (i = 0, shift_amt = 0; i < bytesize; i++, shift_amt += BITS_PER_UNIT)
     {
       mem_addr = adjust_address (mem, QImode, byte_offset + i);
 
@@ -2625,7 +2539,7 @@ cbranch_predicted_p (rtx insn)
 
   if (x)
     {
-      int pred_val = XINT (x, 0);
+      int pred_val = INTVAL (XEXP (x, 0));
 
       return pred_val >= REG_BR_PROB_BASE / 2;
     }
@@ -4468,7 +4382,7 @@ static void
 tilegx_gen_bundles (void)
 {
   basic_block bb;
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     {
       rtx insn, next, prev;
       rtx end = NEXT_INSN (BB_END (bb));
@@ -4808,7 +4722,7 @@ static void
 reorder_var_tracking_notes (void)
 {
   basic_block bb;
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
   {
     rtx insn, next;
     rtx queue = NULL_RTX;
@@ -5569,9 +5483,6 @@ tilegx_file_end (void)
 #undef  TARGET_PASS_BY_REFERENCE
 #define TARGET_PASS_BY_REFERENCE tilegx_pass_by_reference
 
-#undef  TARGET_RETURN_IN_MSB
-#define TARGET_RETURN_IN_MSB tilegx_return_in_msb
-
 #undef  TARGET_RETURN_IN_MEMORY
 #define TARGET_RETURN_IN_MEMORY tilegx_return_in_memory
 
@@ -5699,8 +5610,6 @@ tilegx_file_end (void)
 #undef  TARGET_ASM_ALIGNED_DI_OP
 #define TARGET_ASM_ALIGNED_DI_OP "\t.quad\t"
 
-#undef  TARGET_CAN_USE_DOLOOP_P
-#define TARGET_CAN_USE_DOLOOP_P can_use_doloop_if_innermost
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 

@@ -1,6 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-std=gnu" }
-
        subroutine foo (a)
        real t, a, baz
        call bar (*10)

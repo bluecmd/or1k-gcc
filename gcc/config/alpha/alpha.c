@@ -1,5 +1,5 @@
 /* Subroutines used for code generation on the DEC Alpha.
-   Copyright (C) 1992-2014 Free Software Foundation, Inc.
+   Copyright (C) 1992-2013 Free Software Foundation, Inc.
    Contributed by Richard Kenner (kenner@vlsi1.ultra.nyu.edu)
 
 This file is part of GCC.
@@ -25,9 +25,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "rtl.h"
 #include "tree.h"
-#include "stor-layout.h"
-#include "calls.h"
-#include "varasm.h"
 #include "regs.h"
 #include "hard-reg-set.h"
 #include "insn-config.h"
@@ -51,21 +48,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "debug.h"
 #include "langhooks.h"
 #include "splay-tree.h"
-#include "pointer-set.h"
-#include "hash-table.h"
-#include "vec.h"
-#include "basic-block.h"
-#include "tree-ssa-alias.h"
-#include "internal-fn.h"
-#include "gimple-fold.h"
-#include "tree-eh.h"
-#include "gimple-expr.h"
-#include "is-a.h"
 #include "gimple.h"
-#include "gimplify.h"
-#include "gimple-ssa.h"
-#include "stringpool.h"
-#include "tree-ssanames.h"
+#include "tree-flow.h"
 #include "tree-stdarg.h"
 #include "tm-constrs.h"
 #include "df.h"
@@ -4243,12 +4227,12 @@ alpha_expand_builtin_vector_binop (rtx (*gen) (rtx, rtx, rtx),
 static void
 emit_unlikely_jump (rtx cond, rtx label)
 {
-  int very_unlikely = REG_BR_PROB_BASE / 100 - 1;
+  rtx very_unlikely = GEN_INT (REG_BR_PROB_BASE / 100 - 1);
   rtx x;
 
   x = gen_rtx_IF_THEN_ELSE (VOIDmode, cond, label, pc_rtx);
   x = emit_jump_insn (gen_rtx_SET (VOIDmode, pc_rtx, x));
-  add_int_reg_note (x, REG_BR_PROB, very_unlikely);
+  add_reg_note (x, REG_BR_PROB, very_unlikely);
 }
 
 /* A subroutine of the atomic operation splitters.  Emit a load-locked
@@ -4845,8 +4829,7 @@ alpha_gp_save_rtx (void)
 	 label.  Emit the sequence properly on the edge.  We are only
 	 invoked from dw2_build_landing_pads and finish_eh_generation
 	 will call commit_edge_insertions thanks to a kludge.  */
-      insert_insn_on_edge (seq,
-			   single_succ_edge (ENTRY_BLOCK_PTR_FOR_FN (cfun)));
+      insert_insn_on_edge (seq, single_succ_edge (ENTRY_BLOCK_PTR));
 
       cfun->machine->gp_save_rtx = m;
     }
@@ -5875,7 +5858,7 @@ va_list_skip_additions (tree lhs)
       if (!CONVERT_EXPR_CODE_P (code)
 	  && ((code != PLUS_EXPR && code != POINTER_PLUS_EXPR)
 	      || TREE_CODE (gimple_assign_rhs2 (stmt)) != INTEGER_CST
-	      || !tree_fits_uhwi_p (gimple_assign_rhs2 (stmt))))
+	      || !host_integerp (gimple_assign_rhs2 (stmt), 1)))
 	return stmt;
 
       lhs = gimple_assign_rhs1 (stmt);
@@ -6001,10 +5984,10 @@ alpha_stdarg_optimize_hook (struct stdarg_info *si, const_gimple stmt)
 	  else
 	    goto escapes;
 
-	  if (!tree_fits_shwi_p (gimple_assign_rhs2 (arg2_stmt)))
+	  if (!host_integerp (gimple_assign_rhs2 (arg2_stmt), 0))
 	    goto escapes;
 
-	  sub = tree_to_shwi (gimple_assign_rhs2 (arg2_stmt));
+	  sub = tree_low_cst (gimple_assign_rhs2 (arg2_stmt), 0);
 	  if (code2 == MINUS_EXPR)
 	    sub = -sub;
 	  if (sub < -48 || sub > -32)
@@ -7469,6 +7452,7 @@ alpha_does_function_need_gp (void)
 
   for (; insn; insn = NEXT_INSN (insn))
     if (NONDEBUG_INSN_P (insn)
+	&& ! JUMP_TABLE_DATA_P (insn)
 	&& GET_CODE (PATTERN (insn)) != USE
 	&& GET_CODE (PATTERN (insn)) != CLOBBER
 	&& get_attr_usegp (insn))
@@ -9379,7 +9363,7 @@ alpha_file_start (void)
     fputs ("\t.set nomacro\n", asm_out_file);
   if (TARGET_SUPPORT_ARCH | TARGET_BWX | TARGET_MAX | TARGET_FIX | TARGET_CIX)
     {
-      const char *arch;
+      const char *arch = NULL;
 
       if (alpha_cpu == PROCESSOR_EV6 || TARGET_FIX || TARGET_CIX)
 	arch = "ev6";
@@ -9389,10 +9373,9 @@ alpha_file_start (void)
 	arch = "ev56";
       else if (alpha_cpu == PROCESSOR_EV5)
 	arch = "ev5";
-      else
-	arch = "ev4";
 
-      fprintf (asm_out_file, "\t.arch %s\n", arch);
+      if (arch)
+        fprintf (asm_out_file, "\t.arch %s\n", arch);
     }
 }
 

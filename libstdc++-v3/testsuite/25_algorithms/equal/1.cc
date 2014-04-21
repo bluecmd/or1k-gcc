@@ -1,4 +1,4 @@
-// Copyright (C) 2005-2014 Free Software Foundation, Inc.
+// Copyright (C) 2005-2013 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -27,8 +27,6 @@ int array1[] = {0, 1};
 int array2[] = {1, 0};
 int array3[] = {1, 0};
 
-bool __attribute__((unused)) test = false;
-
 void test1()
 {
   Container con1(array1, array1);
@@ -47,10 +45,17 @@ void test3()
 {
   Container con1(array1, array1 + 2);
   Container con2(array2, array2 + 2);
-  VERIFY( !std::equal(con1.begin(), con1.end(), con2.begin()) );
+  VERIFY( !std::equal(con2.begin(), con2.end(), con1.begin()) );
 }
 
 void test4()
+{
+  Container con1(array1, array1 + 2);
+  Container con2(array2, array2 + 2);
+  VERIFY( !std::equal(con1.begin(), con1.end(), con2.begin()) );
+}
+
+void test5()
 {
   Container con3(array3, array3 + 2);
   Container con2(array2, array2 + 2);
@@ -63,4 +68,5 @@ int main()
   test2();
   test3();
   test4();
+  test5();
 }

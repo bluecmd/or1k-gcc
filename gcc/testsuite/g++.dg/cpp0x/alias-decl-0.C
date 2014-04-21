@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template<template<class> class TT> struct X { };
 template<class> struct Y { };
@@ -10,13 +10,14 @@ void g(X<Z>);
 void
 foo()
 {
-    // Below x and y have the same type (DR 1286)
+    // Below x and y don't have the same type, because Y and Z don't
+    // designate the same template ...
     X<Y> y; 
     X<Z> z;
 
-    // ... So these must compile.
-    f(z);   // { dg-bogus "" }
-    g(y);   // { dg-bogus "" }
+    // ... So these must fail to compile.
+    f(z);   // { dg-error "" }
+    g(y);   // { dg-error "" }
 }
 
 template<class> struct A0 {};

@@ -16,19 +16,19 @@ contains
        call abort()
     end if
 
-    if(.not. c_associated(my_c_ptr, my_c_ptr, my_c_ptr)) then ! { dg-error "Too many arguments in call" }
+    if(.not. c_associated(my_c_ptr, my_c_ptr, my_c_ptr)) then ! { dg-error "More actual than formal arguments" }
        call abort()
     end if
 
-    if(.not. c_associated()) then ! { dg-error "Missing actual argument 'C_PTR_1' in call to 'c_associated'" }
+    if(.not. c_associated()) then ! { dg-error "Missing argument" }
        call abort()
-    end if
+    end if ! { dg-error "Expecting END SUBROUTINE" }
 
     if(.not. c_associated(my_c_ptr_2)) then
        call abort()
     end if
 
-    if(.not. c_associated(my_integer)) then ! { dg-error "shall have the type TYPE.C_PTR. or TYPE.C_FUNPTR." }
+    if(.not. c_associated(my_integer)) then ! { dg-error "Type mismatch" }
        call abort()
     end if
   end subroutine sub0

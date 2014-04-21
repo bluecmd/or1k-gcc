@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler for Renesas / SuperH SH.
-   Copyright (C) 1993-2014 Free Software Foundation, Inc.
+   Copyright (C) 1993-2013 Free Software Foundation, Inc.
    Contributed by Steve Chamberlain (sac@cygnus.com).
    Improved by Jim Wilson (wilson@cygnus.com).
 
@@ -30,6 +30,22 @@ along with GCC; see the file COPYING3.  If not see
 extern int code_for_indirect_jump_scratch;
 
 #define TARGET_CPU_CPP_BUILTINS() sh_cpu_cpp_builtins (pfile)
+
+/* Target CPU builtins for D.  */
+#define TARGET_CPU_D_BUILTINS()			\
+  do						\
+    {						\
+      if (TARGET_SHMEDIA64)			\
+	builtin_define ("SH64");		\
+      else					\
+	builtin_define ("SH");			\
+						\
+      if (TARGET_FPU_ANY)			\
+	builtin_define ("D_HardFloat");		\
+      else					\
+	builtin_define ("D_SoftFloat");		\
+    }						\
+  while (0)
 
 /* Value should be nonzero if functions must have frame pointers.
    Zero means the frame pointer need not be set up (and parms may be accessed
@@ -405,21 +421,16 @@ extern enum sh_divide_strategy_e sh_div_strategy;
 
 /* Target machine storage layout.  */
 
-#define TARGET_BIG_ENDIAN (!TARGET_LITTLE_ENDIAN)
-
-#define SH_REG_MSW_OFFSET (TARGET_LITTLE_ENDIAN ? 1 : 0)
-#define SH_REG_LSW_OFFSET (TARGET_LITTLE_ENDIAN ? 0 : 1)
-
 /* Define this if most significant bit is lowest numbered
    in instructions that operate on numbered bit-fields.  */
 #define BITS_BIG_ENDIAN  0
 
 /* Define this if most significant byte of a word is the lowest numbered.  */
-#define BYTES_BIG_ENDIAN TARGET_BIG_ENDIAN
+#define BYTES_BIG_ENDIAN (TARGET_LITTLE_ENDIAN == 0)
 
 /* Define this if most significant word of a multiword number is the lowest
    numbered.  */
-#define WORDS_BIG_ENDIAN TARGET_BIG_ENDIAN
+#define WORDS_BIG_ENDIAN (TARGET_LITTLE_ENDIAN == 0)
 
 #define MAX_BITS_PER_WORD 64
 
@@ -989,6 +1000,7 @@ enum reg_class
   GENERAL_REGS,
   FP0_REGS,
   FP_REGS,
+  DF_HI_REGS,
   DF_REGS,
   FPSCR_REGS,
   GENERAL_FP_REGS,
@@ -1014,6 +1026,7 @@ enum reg_class
   "GENERAL_REGS",	\
   "FP0_REGS",		\
   "FP_REGS",		\
+  "DF_HI_REGS",		\
   "DF_REGS",		\
   "FPSCR_REGS",		\
   "GENERAL_FP_REGS",	\
@@ -1049,6 +1062,8 @@ enum reg_class
   { 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x00000000 },	\
 /* FP_REGS:  */								\
   { 0x00000000, 0x00000000, 0xffffffff, 0xffffffff, 0x00000000 },	\
+/* DF_HI_REGS:  Initialized in TARGET_CONDITIONAL_REGISTER_USAGE.  */	\
+  { 0x00000000, 0x00000000, 0xffffffff, 0xffffffff, 0x0000ff00 },	\
 /* DF_REGS:  */								\
   { 0x00000000, 0x00000000, 0xffffffff, 0xffffffff, 0x0000ff00 },	\
 /* FPSCR_REGS:  */							\
@@ -1442,7 +1457,7 @@ struct sh_args {
 #define SHCOMPACT_FORCE_ON_STACK(MODE,TYPE) \
   ((MODE) == BLKmode \
    && TARGET_SHCOMPACT \
-   && TARGET_BIG_ENDIAN \
+   && ! TARGET_LITTLE_ENDIAN \
    && int_size_in_bytes (TYPE) > 4 \
    && int_size_in_bytes (TYPE) < 8)
 
@@ -1923,7 +1938,7 @@ struct sh_args {
 
 #define REGCLASS_HAS_FP_REG(CLASS) \
   ((CLASS) == FP0_REGS || (CLASS) == FP_REGS \
-   || (CLASS) == DF_REGS)
+   || (CLASS) == DF_REGS || (CLASS) == DF_HI_REGS)
 
 /* ??? Perhaps make MEMORY_MOVE_COST depend on compiler option?  This
    would be so that people with slow memory systems could generate

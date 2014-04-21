@@ -31,6 +31,7 @@
 
 int32 runtime_class_to_size[NumSizeClasses];
 int32 runtime_class_to_allocnpages[NumSizeClasses];
+int32 runtime_class_to_transfercount[NumSizeClasses];
 
 // The SizeToClass lookup is implemented using two arrays,
 // one mapping sizes <= 1024 to their class and one mapping
@@ -41,17 +42,17 @@ int32 runtime_class_to_allocnpages[NumSizeClasses];
 // size divided by 128 (rounded up).  The arrays are filled in
 // by InitSizes.
 
-int8 runtime_size_to_class8[1024/8 + 1];
-int8 runtime_size_to_class128[(MaxSmallSize-1024)/128 + 1];
+static int32 size_to_class8[1024/8 + 1];
+static int32 size_to_class128[(MaxSmallSize-1024)/128 + 1];
 
-static int32
-SizeToClass(int32 size)
+int32
+runtime_SizeToClass(int32 size)
 {
 	if(size > MaxSmallSize)
 		runtime_throw("SizeToClass - invalid size");
 	if(size > 1024-8)
-		return runtime_size_to_class128[(size-1024+127) >> 7];
-	return runtime_size_to_class8[(size+7)>>3];
+		return size_to_class128[(size-1024+127) >> 7];
+	return size_to_class8[(size+7)>>3];
 }
 
 void
@@ -110,16 +111,16 @@ runtime_InitSizes(void)
 	nextsize = 0;
 	for (sizeclass = 1; sizeclass < NumSizeClasses; sizeclass++) {
 		for(; nextsize < 1024 && nextsize <= runtime_class_to_size[sizeclass]; nextsize+=8)
-			runtime_size_to_class8[nextsize/8] = sizeclass;
+			size_to_class8[nextsize/8] = sizeclass;
 		if(nextsize >= 1024)
 			for(; nextsize <= runtime_class_to_size[sizeclass]; nextsize += 128)
-				runtime_size_to_class128[(nextsize-1024)/128] = sizeclass;
+				size_to_class128[(nextsize-1024)/128] = sizeclass;
 	}
 
 	// Double-check SizeToClass.
 	if(0) {
 		for(n=0; n < MaxSmallSize; n++) {
-			sizeclass = SizeToClass(n);
+			sizeclass = runtime_SizeToClass(n);
 			if(sizeclass < 1 || sizeclass >= NumSizeClasses || runtime_class_to_size[sizeclass] < n) {
 				runtime_printf("size=%d sizeclass=%d runtime_class_to_size=%d\n", n, sizeclass, runtime_class_to_size[sizeclass]);
 				runtime_printf("incorrect SizeToClass");
@@ -136,6 +137,16 @@ runtime_InitSizes(void)
 	// Copy out for statistics table.
 	for(i=0; i<nelem(runtime_class_to_size); i++)
 		mstats.by_size[i].size = runtime_class_to_size[i];
+
+	// Initialize the runtime_class_to_transfercount table.
+	for(sizeclass = 1; sizeclass < NumSizeClasses; sizeclass++) {
+		n = 64*1024 / runtime_class_to_size[sizeclass];
+		if(n < 2)
+			n = 2;
+		if(n > 32)
+			n = 32;
+		runtime_class_to_transfercount[sizeclass] = n;
+	}
 	return;
 
 dump:
@@ -146,14 +157,12 @@ dump:
 			runtime_printf(" %d", runtime_class_to_size[sizeclass]);
 		runtime_printf("\n\n");
 		runtime_printf("size_to_class8:");
-		for(i=0; i<nelem(runtime_size_to_class8); i++)
-			runtime_printf(" %d=>%d(%d)\n", i*8, runtime_size_to_class8[i],
-				runtime_class_to_size[runtime_size_to_class8[i]]);
+		for(i=0; i<nelem(size_to_class8); i++)
+			runtime_printf(" %d=>%d(%d)\n", i*8, size_to_class8[i], runtime_class_to_size[size_to_class8[i]]);
 		runtime_printf("\n");
 		runtime_printf("size_to_class128:");
-		for(i=0; i<nelem(runtime_size_to_class128); i++)
-			runtime_printf(" %d=>%d(%d)\n", i*128, runtime_size_to_class128[i],
-				runtime_class_to_size[runtime_size_to_class128[i]]);
+		for(i=0; i<nelem(size_to_class128); i++)
+			runtime_printf(" %d=>%d(%d)\n", i*128, size_to_class128[i], runtime_class_to_size[size_to_class128[i]]);
 		runtime_printf("\n");
 	}
 	runtime_throw("InitSizes failed");

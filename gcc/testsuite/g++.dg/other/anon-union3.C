@@ -2,7 +2,7 @@
 
 class C
 {
-  auto union      // { dg-error "storage class" "" { target { ! c++11 } } }
+  auto union      // { dg-error "storage class" "" { target c++98 } }
     {
       int a;
     };            // { dg-error "multiple|specified" "" { target c++11 } }

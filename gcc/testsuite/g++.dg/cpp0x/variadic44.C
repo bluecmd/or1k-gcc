@@ -1,4 +1,5 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x" }
+// { dg-do compile }
 template<typename... Args>
 int f(const Args&...);
 

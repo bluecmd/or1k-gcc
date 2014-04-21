@@ -1,5 +1,5 @@
-// { dg-options "-w" }
-// { dg-do run { target c++11 } }
+// { dg-options "-std=gnu++0x -w" }
+// { dg-do run }
 
 #include<typeinfo>
 #include<cassert>

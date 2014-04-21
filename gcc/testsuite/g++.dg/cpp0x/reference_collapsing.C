@@ -3,7 +3,8 @@
 // Test the reference collapsing rules.  Note that there are recent differences
 //    for how cv-qualifications are applied to reference types. 7.1.3, 14.3.1
 
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 template <bool> struct sa;
 template <> struct sa<true> {};

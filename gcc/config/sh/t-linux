@@ -1,2 +1,4 @@
 MULTILIB_DIRNAMES= 
 MULTILIB_MATCHES = 
+
+MULTILIB_OSDIRNAMES = sh4-linux-gnu:sh4-linux-gnu sh4_nofpu-linux-gnu:sh4-linux-gnu

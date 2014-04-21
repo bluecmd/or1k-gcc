@@ -1,5 +1,5 @@
 /* Control flow graph building code for GNU compiler.
-   Copyright (C) 1987-2014 Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -51,15 +51,19 @@ inside_basic_block_p (const_rtx insn)
     case CODE_LABEL:
       /* Avoid creating of basic block for jumptables.  */
       return (NEXT_INSN (insn) == 0
-	      || ! JUMP_TABLE_DATA_P (NEXT_INSN (insn)));
+	      || !JUMP_P (NEXT_INSN (insn))
+	      || (GET_CODE (PATTERN (NEXT_INSN (insn))) != ADDR_VEC
+		  && GET_CODE (PATTERN (NEXT_INSN (insn))) != ADDR_DIFF_VEC));
 
     case JUMP_INSN:
+      return (GET_CODE (PATTERN (insn)) != ADDR_VEC
+	      && GET_CODE (PATTERN (insn)) != ADDR_DIFF_VEC);
+
     case CALL_INSN:
     case INSN:
     case DEBUG_INSN:
       return true;
 
-    case JUMP_TABLE_DATA:
     case BARRIER:
     case NOTE:
       return false;
@@ -83,7 +87,9 @@ control_flow_insn_p (const_rtx insn)
       return false;
 
     case JUMP_INSN:
-      return true;
+      /* Jump insn always causes control transfer except for tablejumps.  */
+      return (GET_CODE (PATTERN (insn)) != ADDR_VEC
+	      && GET_CODE (PATTERN (insn)) != ADDR_DIFF_VEC);
 
     case CALL_INSN:
       /* Noreturn and sibling call instructions terminate the basic blocks
@@ -107,9 +113,8 @@ control_flow_insn_p (const_rtx insn)
 	return false;
       break;
 
-    case JUMP_TABLE_DATA:
     case BARRIER:
-      /* It is nonsense to reach this when looking for the
+      /* It is nonsense to reach barrier when looking for the
 	 end of basic block, but before dead code is eliminated
 	 this may happen.  */
       return false;
@@ -209,12 +214,12 @@ make_edges (basic_block min, basic_block max, int update_p)
      nearly fully-connected CFGs.  In that case we spend a significant
      amount of time searching the edge lists for duplicates.  */
   if (forced_labels || cfun->cfg->max_jumptable_ents > 100)
-    edge_cache = sbitmap_alloc (last_basic_block_for_fn (cfun));
+    edge_cache = sbitmap_alloc (last_basic_block);
 
   /* By nature of the way these get numbered, ENTRY_BLOCK_PTR->next_bb block
      is always the entry.  */
-  if (min == ENTRY_BLOCK_PTR_FOR_FN (cfun)->next_bb)
-    make_edge (ENTRY_BLOCK_PTR_FOR_FN (cfun), min, EDGE_FALLTHRU);
+  if (min == ENTRY_BLOCK_PTR->next_bb)
+    make_edge (ENTRY_BLOCK_PTR, min, EDGE_FALLTHRU);
 
   FOR_BB_BETWEEN (bb, min, max->next_bb, next_bb)
     {
@@ -233,14 +238,14 @@ make_edges (basic_block min, basic_block max, int update_p)
 	  if (update_p)
 	    {
 	      FOR_EACH_EDGE (e, ei, bb->succs)
-		if (e->dest != EXIT_BLOCK_PTR_FOR_FN (cfun))
+		if (e->dest != EXIT_BLOCK_PTR)
 		  bitmap_set_bit (edge_cache, e->dest->index);
 	    }
 	}
 
       if (LABEL_P (BB_HEAD (bb))
 	  && LABEL_ALT_ENTRY_P (BB_HEAD (bb)))
-	cached_make_edge (NULL, ENTRY_BLOCK_PTR_FOR_FN (cfun), bb, 0);
+	cached_make_edge (NULL, ENTRY_BLOCK_PTR, bb, 0);
 
       /* Examine the last instruction of the block, and discover the
 	 ways we can leave the block.  */
@@ -294,7 +299,7 @@ make_edges (basic_block min, basic_block max, int update_p)
 
 	  /* Returns create an exit out.  */
 	  else if (returnjump_p (insn))
-	    cached_make_edge (edge_cache, bb, EXIT_BLOCK_PTR_FOR_FN (cfun), 0);
+	    cached_make_edge (edge_cache, bb, EXIT_BLOCK_PTR, 0);
 
 	  /* Recognize asm goto and do the right thing.  */
 	  else if ((tmp = extract_asm_operands (PATTERN (insn))) != NULL)
@@ -318,7 +323,7 @@ make_edges (basic_block min, basic_block max, int update_p)
 	 worry about EH edges, since we wouldn't have created the sibling call
 	 in the first place.  */
       if (code == CALL_INSN && SIBLING_CALL_P (insn))
-	cached_make_edge (edge_cache, bb, EXIT_BLOCK_PTR_FOR_FN (cfun),
+	cached_make_edge (edge_cache, bb, EXIT_BLOCK_PTR,
 			  EDGE_SIBCALL | EDGE_ABNORMAL);
 
       /* If this is a CALL_INSN, then mark it as reaching the active EH
@@ -359,7 +364,7 @@ make_edges (basic_block min, basic_block max, int update_p)
 
       /* Find out if we can drop through to the next block.  */
       insn = NEXT_INSN (insn);
-      e = find_edge (bb, EXIT_BLOCK_PTR_FOR_FN (cfun));
+      e = find_edge (bb, EXIT_BLOCK_PTR);
       if (e && e->flags & EDGE_FALLTHRU)
 	insn = NULL;
 
@@ -369,9 +374,8 @@ make_edges (basic_block min, basic_block max, int update_p)
 	insn = NEXT_INSN (insn);
 
       if (!insn)
-	cached_make_edge (edge_cache, bb, EXIT_BLOCK_PTR_FOR_FN (cfun),
-			  EDGE_FALLTHRU);
-      else if (bb->next_bb != EXIT_BLOCK_PTR_FOR_FN (cfun))
+	cached_make_edge (edge_cache, bb, EXIT_BLOCK_PTR, EDGE_FALLTHRU);
+      else if (bb->next_bb != EXIT_BLOCK_PTR)
 	{
 	  if (insn == BB_HEAD (bb->next_bb))
 	    cached_make_edge (edge_cache, bb, bb->next_bb, EDGE_FALLTHRU);
@@ -481,7 +485,7 @@ find_bb_boundaries (basic_block bb)
 	  remove_edge (fallthru);
 	  flow_transfer_insn = NULL_RTX;
 	  if (code == CODE_LABEL && LABEL_ALT_ENTRY_P (insn))
-	    make_edge (ENTRY_BLOCK_PTR_FOR_FN (cfun), bb, 0);
+	    make_edge (ENTRY_BLOCK_PTR, bb, 0);
 	}
       else if (code == BARRIER)
 	{
@@ -543,10 +547,11 @@ compute_outgoing_frequencies (basic_block b)
 
       if (note)
 	{
-	  probability = XINT (note, 0);
+	  probability = INTVAL (XEXP (note, 0));
 	  e = BRANCH_EDGE (b);
 	  e->probability = probability;
-	  e->count = apply_probability (b->count, probability);
+	  e->count = ((b->count * probability + REG_BR_PROB_BASE / 2)
+		      / REG_BR_PROB_BASE);
 	  f = FALLTHRU_EDGE (b);
 	  f->probability = REG_BR_PROB_BASE - probability;
 	  f->count = b->count - e->count;
@@ -583,7 +588,8 @@ compute_outgoing_frequencies (basic_block b)
 
   if (b->count)
     FOR_EACH_EDGE (e, ei, b->succs)
-      e->count = apply_probability (b->count, e->probability);
+      e->count = ((b->count * e->probability + REG_BR_PROB_BASE / 2)
+		  / REG_BR_PROB_BASE);
 }
 
 /* Assume that some pass has inserted labels or control flow
@@ -595,20 +601,20 @@ find_many_sub_basic_blocks (sbitmap blocks)
 {
   basic_block bb, min, max;
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     SET_STATE (bb,
 	       bitmap_bit_p (blocks, bb->index) ? BLOCK_TO_SPLIT : BLOCK_ORIGINAL);
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     if (STATE (bb) == BLOCK_TO_SPLIT)
       find_bb_boundaries (bb);
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     if (STATE (bb) != BLOCK_ORIGINAL)
       break;
 
   min = max = bb;
-  for (; bb != EXIT_BLOCK_PTR_FOR_FN (cfun); bb = bb->next_bb)
+  for (; bb != EXIT_BLOCK_PTR; bb = bb->next_bb)
     if (STATE (bb) != BLOCK_ORIGINAL)
       max = bb;
 
@@ -618,7 +624,7 @@ find_many_sub_basic_blocks (sbitmap blocks)
 
   /* Update branch probabilities.  Expect only (un)conditional jumps
      to be created with only the forward edges.  */
-  if (profile_status_for_fn (cfun) != PROFILE_ABSENT)
+  if (profile_status != PROFILE_ABSENT)
     FOR_BB_BETWEEN (bb, min, max->next_bb, next_bb)
       {
 	edge e;
@@ -640,6 +646,6 @@ find_many_sub_basic_blocks (sbitmap blocks)
 	compute_outgoing_frequencies (bb);
       }
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     SET_STATE (bb, 0);
 }

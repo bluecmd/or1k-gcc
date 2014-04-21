@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *                     Copyright (C) 2008-2013, AdaCore                     *
+ *                     Copyright (C) 2008-2012, AdaCore                     *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -295,7 +295,7 @@ nt_spawnve (char *exe, char **argv, char *env, struct TTY_Process *process)
 
      Note that using backslash to escape embedded quotes requires
      additional special handling if an embedded quote is already
-     preceded by backslash, or if an arg requiring quoting ends with
+     preceeded by backslash, or if an arg requiring quoting ends with
      backslash.  In such cases, the run of escape characters needs to be
      doubled.  For consistency, we apply this special handling as long
      as the escape character is not quote.
@@ -987,6 +987,7 @@ __gnat_setup_winsize (void *desc, int rows, int columns)
 /* On some system termio is either absent or including it will disable termios
    (HP-UX) */
 #if ! defined (__hpux__) && ! defined (FREEBSD) && \
+    ! defined (__FreeBSD_kernel__) && \
     ! defined (__APPLE__) && ! defined(__rtems__)
 #   include <termio.h>
 #endif
@@ -1332,7 +1333,7 @@ __gnat_setup_child_communication
 #endif
 
 #ifdef TIOCSCTTY
-  /* make the tty the controlling terminal */
+  /* make the tty the controling terminal */
   status = ioctl (desc->slave_fd, TIOCSCTTY, 0);
 #endif
 
@@ -1420,7 +1421,7 @@ int __gnat_terminate_process (pty_desc *desc)
   return kill (desc->child_pid, SIGKILL);
 }
 
-/* __gnat_tty_waitpid - wait for the child process to die
+/* __gnat_tty_waitpid - wait for the child proces to die
  *
  * PARAMETERS
  *   desc pty_desc structure

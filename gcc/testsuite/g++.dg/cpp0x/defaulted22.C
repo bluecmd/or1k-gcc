@@ -1,5 +1,6 @@
 // Test that a virtual defaulted constructor is still virtual.
-// { dg-do run { target c++11 } }
+// { dg-do run }
+// { dg-options -std=c++0x }
 
 int r = 1;
 

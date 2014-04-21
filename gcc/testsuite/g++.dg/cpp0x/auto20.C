@@ -1,6 +1,6 @@
 // Test for proper non-deduced context handling of the initializer
 // for an auto declaration/new.
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 struct with_apply
 {

@@ -1,6 +1,7 @@
 // Contributed by Kris Van Hees <kris.van.hees@oracle.com>
 // Test the support for char16_t character constants.
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 void f0 (char16_t c) {}
 void f1 (char32_t c) {}

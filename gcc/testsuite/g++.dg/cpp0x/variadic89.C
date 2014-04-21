@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 // Contributed by Eric Niebler
 template<typename T, typename U>
 struct pair

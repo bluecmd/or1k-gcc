@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -gdwarf" } */
+/* { dg-options "-O2 -gdwarf-2" } */
 void
 main(void)
 {

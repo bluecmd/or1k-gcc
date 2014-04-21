@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd
+// +build darwin freebsd linux netbsd openbsd
 
 package net
 
@@ -12,11 +12,14 @@ import (
 )
 
 func newFileFD(f *os.File) (*netFD, error) {
-	fd, err := dupCloseOnExec(int(f.Fd()))
+	syscall.ForkLock.RLock()
+	fd, err := syscall.Dup(int(f.Fd()))
 	if err != nil {
+		syscall.ForkLock.RUnlock()
 		return nil, os.NewSyscallError("dup", err)
 	}
-
+	syscall.CloseOnExec(fd)
+	syscall.ForkLock.RUnlock()
 	if err = syscall.SetNonblock(fd, true); err != nil {
 		closesocket(fd)
 		return nil, err
@@ -65,10 +68,6 @@ func newFileFD(f *os.File) (*netFD, error) {
 	netfd, err := newFD(fd, family, sotype, laddr.Network())
 	if err != nil {
 		closesocket(fd)
-		return nil, err
-	}
-	if err := netfd.init(); err != nil {
-		netfd.Close()
 		return nil, err
 	}
 	netfd.setAddr(laddr, raddr)

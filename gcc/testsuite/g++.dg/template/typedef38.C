@@ -1,5 +1,6 @@
 // Origin: PR c++/46394
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
+// { dg-do compile }
 
 template<class T>
 struct S0

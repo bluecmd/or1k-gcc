@@ -1,0 +1,266 @@
+// d-incpath.cc -- D frontend for GCC.
+// Copyright (C) 2011, 2012 Free Software Foundation, Inc.
+
+// GCC is free software; you can redistribute it and/or modify it under
+// the terms of the GNU General Public License as published by the Free
+// Software Foundation; either version 3, or (at your option) any later
+// version.
+
+// GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or
+// FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+// for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with GCC; see the file COPYING3.  If not see
+// <http://www.gnu.org/licenses/>.
+
+#include "d-system.h"
+#include "options.h"
+#include "cppdefault.h"
+
+#include "d-lang.h"
+#include "d-codegen.h"
+#include "d-confdefs.h"
+
+#include "cond.h"
+
+// Global options removed from d-lang.cc
+const char *iprefix = NULL;
+const char *multilib_dir = NULL;
+
+
+// Read ENV_VAR for a PATH_SEPARATOR-separated list of file names; and
+// append all the names to the import search path.
+
+static void
+add_env_var_paths (const char *env_var)
+{
+  char *p, *q, *path;
+
+  q = getenv (env_var);
+
+  if (!q)
+    return;
+
+  for (p = q; *q; p = q + 1)
+    {
+      q = p;
+      while (*q != 0 && *q != PATH_SEPARATOR)
+	q++;
+
+      if (p == q)
+	path = xstrdup (".");
+      else
+	{
+	  path = XNEWVEC (char, q - p + 1);
+	  memcpy (path, p, q - p);
+	  path[q - p] = '\0';
+	}
+
+      global.params.imppath->push (path);
+    }
+}
+
+
+// Look for directories that start with the standard prefix.
+// "Translate" them, i.e. replace /usr/local/lib/gcc... with
+// IPREFIX and search them first.
+
+static char *
+prefixed_path (const char *path)
+{
+  // based on incpath.c
+  size_t len;
+
+  if (cpp_relocated() && (len = cpp_PREFIX_len) != 0)
+  {
+    if (!strncmp (path, cpp_PREFIX, len))
+      {
+	static const char *relocated_prefix;
+	/* If this path starts with the configure-time prefix,
+	   but the compiler has been relocated, replace it
+	   with the run-time prefix.  The run-time exec prefix
+	   is GCC_EXEC_PREFIX.  Compute the path from there back
+	   to the toplevel prefix.  */
+	if (!relocated_prefix)
+	  {
+	    char *dummy;
+	    /* Make relative prefix expects the first argument
+	       to be a program, not a directory.  */
+	    dummy = concat (gcc_exec_prefix, "dummy", NULL);
+	    relocated_prefix
+	      = make_relative_prefix (dummy,
+				      cpp_EXEC_PREFIX,
+				      cpp_PREFIX);
+	    free (dummy);
+	  }
+	return concat (relocated_prefix, path + len, NULL);
+      }
+  }
+
+  if (iprefix && (len = cpp_GCC_INCLUDE_DIR_len) != 0)
+    {
+      if (!strncmp (path, cpp_GCC_INCLUDE_DIR, len))
+	return concat (iprefix, path + len, NULL);
+    }
+
+  return xstrdup (path);
+}
+
+
+// Given a pointer to a string containing a pathname, returns a
+// canonical version of the filename.
+
+static char *
+make_absolute (char *path)
+{
+#if defined (HAVE_DOS_BASED_FILE_SYSTEM)
+  /* Remove unnecessary trailing slashes.  On some versions of MS
+     Windows, trailing  _forward_ slashes cause no problems for stat().
+     On newer versions, stat() does not recognize a directory that ends
+     in a '\\' or '/', unless it is a drive root dir, such as "c:/",
+     where it is obligatory.  */
+  int pathlen = strlen (path);
+  char *end = path + pathlen - 1;
+  /* Preserve the lead '/' or lead "c:/".  */
+  char *start = path + (pathlen > 2 && path[1] == ':' ? 3 : 1);
+
+  for (; end > start && IS_DIR_SEPARATOR (*end); end--)
+    *end = 0;
+#endif
+
+  return lrealpath (path);
+}
+
+/* Add PATHS to the global import lookup path.  */
+
+static void
+add_import_path (Strings *paths)
+{
+  if (paths)
+    {
+      if (!global.path)
+	global.path = new Strings();
+
+      for (size_t i = 0; i < paths->dim; i++)
+	{
+	  String p = (*paths)[i];
+	  char *target_dir = make_absolute (p.toChars());
+
+	  if (!FileName::exists (target_dir))
+	    {
+	      free (target_dir);
+	      continue;
+	    }
+
+	  global.path->push (target_dir);
+	}
+    }
+}
+
+/* Add PATHS to the global file import lookup path.  */
+
+static void
+add_fileimp_path (Strings *paths)
+{
+  if (paths)
+    {
+      if (!global.filePath)
+	global.filePath = new Strings();
+
+      for (size_t i = 0; i < paths->dim; i++)
+	{
+	  String p = (*paths)[i];
+	  char *target_dir = make_absolute (p.toChars());
+
+	  if (!FileName::exists (target_dir))
+	    {
+	      free (target_dir);
+	      continue;
+	    }
+
+	  global.filePath->push (target_dir);
+	}
+    }
+}
+
+
+// Add all search directories to compiler runtime.
+// if STDINC, also include standard library paths.
+
+void
+add_import_paths (bool stdinc)
+{
+  // %%TODO: front or back?
+  if (stdinc)
+    {
+      char *phobos_dir = prefixed_path (D_PHOBOS_DIR);
+      char *target_dir = prefixed_path (D_PHOBOS_TARGET_DIR);
+
+      if (multilib_dir)
+	target_dir = concat (target_dir, "/", multilib_dir, NULL);
+
+      global.params.imppath->shift (phobos_dir);
+      global.params.imppath->shift (target_dir);
+    }
+
+  // Language-dependent environment variables may add to the include chain.
+  add_env_var_paths ("D_IMPORT_PATH");
+
+  // Build import search path
+  if (global.params.imppath)
+    {
+      for (size_t i = 0; i < global.params.imppath->dim; i++)
+	{
+	  char *path = (*global.params.imppath)[i];
+	  if (path)
+	    add_import_path (FileName::splitPath (path));
+	}
+    }
+
+  // Build string import search path
+  if (global.params.fileImppath)
+    {
+      for (size_t i = 0; i < global.params.fileImppath->dim; i++)
+	{
+	  char *path = (*global.params.fileImppath)[i];
+	  if (path)
+	    add_fileimp_path (FileName::splitPath (path));
+	}
+    }
+}
+
+// Read from the library file phobos-ver-syms and add
+// all version identifiers into compilation runtime.
+
+void add_phobos_versyms (void)
+{
+  const char *path = FileName::searchPath (global.path, "phobos-ver-syms", 1);
+  if (path)
+    {
+      FILE *f = fopen (path, "r");
+      if (f)
+	{
+	  char buf[256];
+	  while (!feof (f) && fgets (buf, 256, f))
+	    {
+	      char *p = buf;
+	      while (*p && ISSPACE (*p))
+		p++;
+	      char *q = p;
+	      while (*q && !ISSPACE (*q))
+		q++;
+	      *q = 0;
+	      if (p != q)
+		{
+		  /* Needs to be predefined because we define
+		     Unix/Windows this way. */
+		  VersionCondition::addPredefinedGlobalIdent (xstrdup (p));
+		}
+	    }
+	  fclose (f);
+	}
+    }
+}
+

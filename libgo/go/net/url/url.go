@@ -451,16 +451,13 @@ func (u *URL) String() string {
 	} else {
 		if u.Scheme != "" || u.Host != "" || u.User != nil {
 			buf.WriteString("//")
-			if ui := u.User; ui != nil {
-				buf.WriteString(ui.String())
+			if u := u.User; u != nil {
+				buf.WriteString(u.String())
 				buf.WriteByte('@')
 			}
 			if h := u.Host; h != "" {
 				buf.WriteString(h)
 			}
-		}
-		if u.Path != "" && u.Path[0] != '/' && u.Host != "" {
-			buf.WriteByte('/')
 		}
 		buf.WriteString(escape(u.Path, encodePath))
 	}
@@ -558,8 +555,8 @@ func parseQuery(m Values, query string) (err error) {
 	return err
 }
 
-// Encode encodes the values into ``URL encoded'' form
-// ("bar=baz&foo=quux") sorted by key.
+// Encode encodes the values into ``URL encoded'' form.
+// e.g. "foo=bar&bar=baz"
 func (v Values) Encode() string {
 	if v == nil {
 		return ""

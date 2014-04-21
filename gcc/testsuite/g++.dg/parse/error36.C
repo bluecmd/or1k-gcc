@@ -26,6 +26,7 @@ template <class T> struct B
 // PR c++/40738
 template <class T>
 void g(const A<T>::type &t);	// { dg-error "typename" "typename" }
+// { dg-error "no type" "no type" { target *-*-* } 28 }
 
 // PR c++/18451
 template <class T> A<T>::B A<T>::b; // { dg-error "typename" }

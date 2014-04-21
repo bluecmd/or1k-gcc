@@ -2,8 +2,8 @@
 
 // Test cast from lvalue to rvalue
 
-// { dg-do compile { target c++11 } }
-// { dg-skip-if "packed attribute missing for struct one" { "epiphany-*-*" } { "*" } { "" } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 template <bool> struct sa;
 template <> struct sa<true> {};

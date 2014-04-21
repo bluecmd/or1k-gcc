@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 enum class Color1 {
   Red, 
   Green,
@@ -6,7 +6,7 @@ enum class Color1 {
 };
 
 enum struct Color2 {
-  Red, // { dg-message "previously declared here" }
+  Red, // { dg-error "previously declared here" }
   Orange,
   Yellow,
   Green,

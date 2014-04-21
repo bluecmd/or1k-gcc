@@ -5,7 +5,6 @@
 package x509
 
 import (
-	"fmt"
 	"net"
 	"runtime"
 	"strings"
@@ -92,27 +91,10 @@ func (h HostnameError) Error() string {
 // UnknownAuthorityError results when the certificate issuer is unknown
 type UnknownAuthorityError struct {
 	cert *Certificate
-	// hintErr contains an error that may be helpful in determining why an
-	// authority wasn't found.
-	hintErr error
-	// hintCert contains a possible authority certificate that was rejected
-	// because of the error in hintErr.
-	hintCert *Certificate
 }
 
 func (e UnknownAuthorityError) Error() string {
-	s := "x509: certificate signed by unknown authority"
-	if e.hintErr != nil {
-		certName := e.hintCert.Subject.CommonName
-		if len(certName) == 0 {
-			if len(e.hintCert.Subject.Organization) > 0 {
-				certName = e.hintCert.Subject.Organization[0]
-			}
-			certName = "serial:" + e.hintCert.SerialNumber.String()
-		}
-		s += fmt.Sprintf(" (possibly because of %q while trying to verify candidate authority certificate %q)", e.hintErr, certName)
-	}
-	return s
+	return "x509: certificate signed by unknown authority"
 }
 
 // SystemRootsError results when we fail to load the system root certificates.
@@ -154,18 +136,14 @@ func (c *Certificate) isValid(certType int, currentChain []*Certificate, opts *V
 	}
 
 	if len(c.PermittedDNSDomains) > 0 {
-		ok := false
 		for _, domain := range c.PermittedDNSDomains {
 			if opts.DNSName == domain ||
 				(strings.HasSuffix(opts.DNSName, domain) &&
 					len(opts.DNSName) >= 1+len(domain) &&
 					opts.DNSName[len(opts.DNSName)-len(domain)-1] == '.') {
-				ok = true
-				break
+				continue
 			}
-		}
 
-		if !ok {
 			return CertificateInvalidError{c, CANotAuthorizedForThisName}
 		}
 	}
@@ -271,8 +249,7 @@ func appendToFreshChain(chain []*Certificate, cert *Certificate) []*Certificate 
 }
 
 func (c *Certificate) buildChains(cache map[int][][]*Certificate, currentChain []*Certificate, opts *VerifyOptions) (chains [][]*Certificate, err error) {
-	possibleRoots, failedRoot, rootErr := opts.Roots.findVerifiedParents(c)
-	for _, rootNum := range possibleRoots {
+	for _, rootNum := range opts.Roots.findVerifiedParents(c) {
 		root := opts.Roots.certs[rootNum]
 		err = root.isValid(rootCertificate, currentChain, opts)
 		if err != nil {
@@ -281,9 +258,8 @@ func (c *Certificate) buildChains(cache map[int][][]*Certificate, currentChain [
 		chains = append(chains, appendToFreshChain(currentChain, root))
 	}
 
-	possibleIntermediates, failedIntermediate, intermediateErr := opts.Intermediates.findVerifiedParents(c)
 nextIntermediate:
-	for _, intermediateNum := range possibleIntermediates {
+	for _, intermediateNum := range opts.Intermediates.findVerifiedParents(c) {
 		intermediate := opts.Intermediates.certs[intermediateNum]
 		for _, cert := range currentChain {
 			if cert == intermediate {
@@ -308,13 +284,7 @@ nextIntermediate:
 	}
 
 	if len(chains) == 0 && err == nil {
-		hintErr := rootErr
-		hintCert := failedRoot
-		if hintErr == nil {
-			hintErr = intermediateErr
-			hintCert = failedIntermediate
-		}
-		err = UnknownAuthorityError{c, hintErr, hintCert}
+		err = UnknownAuthorityError{c}
 	}
 
 	return

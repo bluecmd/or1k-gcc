@@ -1,6 +1,7 @@
 // Test for errors in range-based for loops
 
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 struct container
 {
@@ -46,7 +47,7 @@ void test1()
 
   //Check the correct scopes
   int i;
-  for (int i : a)		// { dg-message "previously declared" }
+  for (int i : a)		// { dg-error "previously declared" }
   {
     int i;			// { dg-error "redeclaration" }
   }

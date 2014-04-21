@@ -1,6 +1,6 @@
 // 2004-11-29  Paolo Carlini  <pcarlini@suse.de>
 
-// Copyright (C) 2004-2014 Free Software Foundation, Inc.
+// Copyright (C) 2004-2013 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -19,6 +19,7 @@
 
 // 21.3.3 string capacity
 
+// { dg-options " -DSTR_MAX_SIZE=16" { target { or1k-*-elf } } }
 // { dg-options "-DMAX_SIZE=16" { target simulator } }
 
 #ifndef MAX_SIZE

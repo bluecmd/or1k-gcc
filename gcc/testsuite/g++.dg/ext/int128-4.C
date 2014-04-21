@@ -1,7 +1,6 @@
 // Test for int128 arithmetic conversions.
 // { dg-do compile { target int128 } }
-// { dg-require-effective-target c++11 }
-// { dg-options "" }
+// { dg-options "-std=gnu++11" }
 
 template <class T, class U> struct same;
 template <class T> struct same<T,T> { };

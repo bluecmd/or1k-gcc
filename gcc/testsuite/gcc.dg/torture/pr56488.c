@@ -1,5 +1,4 @@
-/* { dg-do run { target { size32plus } } } */
-/* { dg-require-effective-target int32plus } */
+/* { dg-do run } */
 
 int a, c, d = 1;
 struct S { int s; } b, f;

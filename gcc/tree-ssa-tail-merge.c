@@ -1,5 +1,5 @@
 /* Tail merging for gimple.
-   Copyright (C) 2011-2014 Free Software Foundation, Inc.
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
    Contributed by Tom de Vries (tom@codesourcery.com)
 
 This file is part of GCC.
@@ -176,11 +176,6 @@ along with GCC; see the file COPYING3.  If not see
    - handle blocks with gimple_reg phi_nodes.
 
 
-   PASS PLACEMENT
-   This 'pass' is not a stand-alone gimple pass, but runs as part of
-   pass_pre, in order to share the value numbering.
-
-
    SWITCHES
 
    - ftree-tail-merge.  On at -O2.  We may have to enable it only at -Os.  */
@@ -190,32 +185,22 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "tree.h"
-#include "stor-layout.h"
-#include "trans-mem.h"
 #include "tm_p.h"
 #include "basic-block.h"
 #include "flags.h"
 #include "function.h"
-#include "hash-table.h"
+#include "tree-flow.h"
+#include "bitmap.h"
 #include "tree-ssa-alias.h"
-#include "internal-fn.h"
-#include "tree-eh.h"
-#include "gimple-expr.h"
-#include "is-a.h"
-#include "gimple.h"
-#include "gimple-iterator.h"
-#include "gimple-ssa.h"
-#include "tree-cfg.h"
-#include "tree-phinodes.h"
-#include "ssa-iterators.h"
-#include "tree-into-ssa.h"
 #include "params.h"
+#include "hash-table.h"
 #include "gimple-pretty-print.h"
 #include "tree-ssa-sccvn.h"
 #include "tree-dump.h"
-#include "cfgloop.h"
+
+/* ??? This currently runs as part of tree-ssa-pre.  Why is this not
+   a stand-alone GIMPLE pass?  */
 #include "tree-pass.h"
-#include "trans-mem.h"
 
 /* Describes a group of bbs with the same successors.  The successor bbs are
    cached in succs, and the successor edge flags are cached in succ_flags.
@@ -313,7 +298,6 @@ stmt_local_def (gimple stmt)
   def_operand_p def_p;
 
   if (gimple_has_side_effects (stmt)
-      || stmt_could_throw_p (stmt)
       || gimple_vdef (stmt) != NULL_TREE)
     return false;
 
@@ -454,7 +438,7 @@ same_succ_hash (const_same_succ e)
   int flags;
   unsigned int i;
   unsigned int first = bitmap_first_set_bit (e->bbs);
-  basic_block bb = BASIC_BLOCK_FOR_FN (cfun, first);
+  basic_block bb = BASIC_BLOCK (first);
   int size = 0;
   gimple_stmt_iterator gsi;
   gimple stmt;
@@ -502,8 +486,8 @@ same_succ_hash (const_same_succ e)
 
   EXECUTE_IF_SET_IN_BITMAP (e->succs, 0, s, bs)
     {
-      int n = find_edge (bb, BASIC_BLOCK_FOR_FN (cfun, s))->dest_idx;
-      for (gsi = gsi_start_phis (BASIC_BLOCK_FOR_FN (cfun, s)); !gsi_end_p (gsi);
+      int n = find_edge (bb, BASIC_BLOCK (s))->dest_idx;
+      for (gsi = gsi_start_phis (BASIC_BLOCK (s)); !gsi_end_p (gsi);
 	   gsi_next (&gsi))
 	{
 	  gimple phi = gsi_stmt (gsi);
@@ -572,8 +556,8 @@ same_succ_def::equal (const value_type *e1, const compare_type *e2)
   first1 = bitmap_first_set_bit (e1->bbs);
   first2 = bitmap_first_set_bit (e2->bbs);
 
-  bb1 = BASIC_BLOCK_FOR_FN (cfun, first1);
-  bb2 = BASIC_BLOCK_FOR_FN (cfun, first2);
+  bb1 = BASIC_BLOCK (first1);
+  bb2 = BASIC_BLOCK (first2);
 
   if (BB_SIZE (bb1) != BB_SIZE (bb2))
     return 0;
@@ -705,15 +689,7 @@ find_same_succ_bb (basic_block bb, same_succ *same_p)
   edge_iterator ei;
   edge e;
 
-  if (bb == NULL
-      /* Be conservative with loop structure.  It's not evident that this test
-	 is sufficient.  Before tail-merge, we've just called
-	 loop_optimizer_finalize, and LOOPS_MAY_HAVE_MULTIPLE_LATCHES is now
-	 set, so there's no guarantee that the loop->latch value is still valid.
-	 But we assume that, since we've forced LOOPS_HAVE_SIMPLE_LATCHES at the
-	 start of pre, we've kept that property intact throughout pre, and are
-	 keeping it throughout tail-merge using this test.  */
-      || bb->loop_father->latch == bb)
+  if (bb == NULL)
     return;
   bitmap_set_bit (same->bbs, bb->index);
   FOR_EACH_EDGE (e, ei, bb->succs)
@@ -754,7 +730,7 @@ find_same_succ (void)
   same_succ same = same_succ_alloc ();
   basic_block bb;
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     {
       find_same_succ_bb (bb, &same);
       if (same == NULL)
@@ -770,11 +746,11 @@ static void
 init_worklist (void)
 {
   alloc_aux_for_blocks (sizeof (struct aux_bb_info));
-  same_succ_htab.create (n_basic_blocks_for_fn (cfun));
-  same_succ_edge_flags = XCNEWVEC (int, last_basic_block_for_fn (cfun));
+  same_succ_htab.create (n_basic_blocks);
+  same_succ_edge_flags = XCNEWVEC (int, last_basic_block);
   deleted_bbs = BITMAP_ALLOC (NULL);
   deleted_bb_preds = BITMAP_ALLOC (NULL);
-  worklist.create (n_basic_blocks_for_fn (cfun));
+  worklist.create (n_basic_blocks);
   find_same_succ ();
 
   if (dump_file && (dump_flags & TDF_DETAILS))
@@ -834,7 +810,7 @@ same_succ_flush_bbs (bitmap bbs)
   bitmap_iterator bi;
 
   EXECUTE_IF_SET_IN_BITMAP (bbs, 0, i, bi)
-    same_succ_flush_bb (BASIC_BLOCK_FOR_FN (cfun, i));
+    same_succ_flush_bb (BASIC_BLOCK (i));
 }
 
 /* Release the last vdef in BB, either normal or phi result.  */
@@ -887,7 +863,7 @@ update_worklist (void)
   same = same_succ_alloc ();
   EXECUTE_IF_SET_IN_BITMAP (deleted_bb_preds, 0, i, bi)
     {
-      bb = BASIC_BLOCK_FOR_FN (cfun, i);
+      bb = BASIC_BLOCK (i);
       gcc_assert (bb != NULL);
       find_same_succ_bb (bb, &same);
       if (same == NULL)
@@ -1002,7 +978,7 @@ static vec<bb_cluster> all_clusters;
 static void
 alloc_cluster_vectors (void)
 {
-  all_clusters.create (n_basic_blocks_for_fn (cfun));
+  all_clusters.create (n_basic_blocks);
 }
 
 /* Reset all cluster vectors.  */
@@ -1015,7 +991,7 @@ reset_cluster_vectors (void)
   for (i = 0; i < all_clusters.length (); ++i)
     delete_cluster (all_clusters[i]);
   all_clusters.truncate (0);
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     BB_CLUSTER (bb) = NULL;
 }
 
@@ -1075,31 +1051,13 @@ set_cluster (basic_block bb1, basic_block bb2)
       merge = BB_CLUSTER (bb1);
       merge_clusters (merge, old);
       EXECUTE_IF_SET_IN_BITMAP (old->bbs, 0, i, bi)
-	BB_CLUSTER (BASIC_BLOCK_FOR_FN (cfun, i)) = merge;
+	BB_CLUSTER (BASIC_BLOCK (i)) = merge;
       all_clusters[old->index] = NULL;
       update_rep_bb (merge, old->rep_bb);
       delete_cluster (old);
     }
   else
     gcc_unreachable ();
-}
-
-/* Return true if gimple operands T1 and T2 have the same value.  */
-
-static bool
-gimple_operand_equal_value_p (tree t1, tree t2)
-{
-  if (t1 == t2)
-    return true;
-
-  if (t1 == NULL_TREE
-      || t2 == NULL_TREE)
-    return false;
-
-  if (operand_equal_p (t1, t2, 0))
-    return true;
-
-  return gvn_uses_equal (t1, t2);
 }
 
 /* Return true if gimple statements S1 and S2 are equal.  Gimple_bb (s1) and
@@ -1112,7 +1070,7 @@ gimple_equal_p (same_succ same_succ, gimple s1, gimple s2)
   tree lhs1, lhs2;
   basic_block bb1 = gimple_bb (s1), bb2 = gimple_bb (s2);
   tree t1, t2;
-  bool inv_cond;
+  bool equal, inv_cond;
   enum tree_code code1, code2;
 
   if (gimple_code (s1) != gimple_code (s2))
@@ -1126,14 +1084,28 @@ gimple_equal_p (same_succ same_succ, gimple s1, gimple s2)
       if (!gimple_call_same_target_p (s1, s2))
         return false;
 
+      /* Eventually, we'll significantly complicate the CFG by adding
+	 back edges to properly model the effects of transaction restart.
+	 For the bulk of optimization this does not matter, but what we
+	 cannot recover from is tail merging blocks between two separate
+	 transactions.  Avoid that by making commit not match.  */
+      if (gimple_call_builtin_p (s1, BUILT_IN_TM_COMMIT))
+	return false;
+
+      equal = true;
       for (i = 0; i < gimple_call_num_args (s1); ++i)
 	{
 	  t1 = gimple_call_arg (s1, i);
 	  t2 = gimple_call_arg (s2, i);
-	  if (gimple_operand_equal_value_p (t1, t2))
+	  if (operand_equal_p (t1, t2, 0))
 	    continue;
-	  return false;
+	  if (gvn_uses_equal (t1, t2))
+	    continue;
+	  equal = false;
+	  break;
 	}
+      if (!equal)
+	return false;
 
       lhs1 = gimple_get_lhs (s1);
       lhs2 = gimple_get_lhs (s2);
@@ -1150,17 +1122,8 @@ gimple_equal_p (same_succ same_succ, gimple s1, gimple s2)
       lhs2 = gimple_get_lhs (s2);
       if (TREE_CODE (lhs1) != SSA_NAME
 	  && TREE_CODE (lhs2) != SSA_NAME)
-	{
-	  /* If the vdef is the same, it's the same statement.  */
-	  if (vn_valueize (gimple_vdef (s1))
-	      == vn_valueize (gimple_vdef (s2)))
-	    return true;
-
-	  /* Test for structural equality.  */
-	  return (operand_equal_p (lhs1, lhs2, 0)
-		  && gimple_operand_equal_value_p (gimple_assign_rhs1 (s1),
-						   gimple_assign_rhs1 (s2)));
-	}
+	return (vn_valueize (gimple_vdef (s1))
+		== vn_valueize (gimple_vdef (s2)));
       else if (TREE_CODE (lhs1) == SSA_NAME
 	       && TREE_CODE (lhs2) == SSA_NAME)
 	return vn_valueize (lhs1) == vn_valueize (lhs2);
@@ -1169,12 +1132,14 @@ gimple_equal_p (same_succ same_succ, gimple s1, gimple s2)
     case GIMPLE_COND:
       t1 = gimple_cond_lhs (s1);
       t2 = gimple_cond_lhs (s2);
-      if (!gimple_operand_equal_value_p (t1, t2))
+      if (!operand_equal_p (t1, t2, 0)
+	  && !gvn_uses_equal (t1, t2))
 	return false;
 
       t1 = gimple_cond_rhs (s1);
       t2 = gimple_cond_rhs (s2);
-      if (!gimple_operand_equal_value_p (t1, t2))
+      if (!operand_equal_p (t1, t2, 0)
+	  && !gvn_uses_equal (t1, t2))
 	return false;
 
       code1 = gimple_expr_code (s1);
@@ -1244,14 +1209,15 @@ find_duplicate (same_succ same_succ, basic_block bb1, basic_block bb2)
       gimple stmt1 = gsi_stmt (gsi1);
       gimple stmt2 = gsi_stmt (gsi2);
 
-      /* What could be better than to this this here is to blacklist the bb
-	 containing the stmt, when encountering the stmt f.i. in
-	 same_succ_hash.  */
-      if (is_tm_ending (stmt1)
-	  || is_tm_ending (stmt2))
+      if (!gimple_equal_p (same_succ, stmt1, stmt2))
 	return;
 
-      if (!gimple_equal_p (same_succ, stmt1, stmt2))
+      // We cannot tail-merge the builtins that end transactions.
+      // ??? The alternative being unsharing of BBs in the tm_init pass.
+      if (flag_tm
+	  && is_gimple_call (stmt1)
+	  && (gimple_call_flags (stmt1) & ECF_TM_BUILTIN)
+	  && is_tm_ending_fndecl (gimple_call_fndecl (stmt1)))
 	return;
 
       gsi_prev_nondebug (&gsi1);
@@ -1320,7 +1286,7 @@ same_phi_alternatives (same_succ same_succ, basic_block bb1, basic_block bb2)
 
   EXECUTE_IF_SET_IN_BITMAP (same_succ->succs, 0, s, bs)
     {
-      succ = BASIC_BLOCK_FOR_FN (cfun, s);
+      succ = BASIC_BLOCK (s);
       e1 = find_edge (bb1, succ);
       e2 = find_edge (bb2, succ);
       if (e1->flags & EDGE_COMPLEX
@@ -1406,7 +1372,7 @@ find_clusters_1 (same_succ same_succ)
 
   EXECUTE_IF_SET_IN_BITMAP (same_succ->bbs, 0, i, bi)
     {
-      bb1 = BASIC_BLOCK_FOR_FN (cfun, i);
+      bb1 = BASIC_BLOCK (i);
 
       /* TODO: handle blocks with phi-nodes.  We'll have to find corresponding
 	 phi-nodes in bb1 and bb2, with the same alternatives for the same
@@ -1417,7 +1383,7 @@ find_clusters_1 (same_succ same_succ)
       nr_comparisons = 0;
       EXECUTE_IF_SET_IN_BITMAP (same_succ->bbs, i + 1, j, bj)
 	{
-	  bb2 = BASIC_BLOCK_FOR_FN (cfun, j);
+	  bb2 = BASIC_BLOCK (j);
 
 	  if (bb_has_non_vop_phi (bb2))
 	    continue;
@@ -1486,8 +1452,6 @@ static void
 replace_block_by (basic_block bb1, basic_block bb2)
 {
   edge pred_edge;
-  edge e1, e2;
-  edge_iterator ei;
   unsigned int i;
   gimple bb2_phi;
 
@@ -1519,24 +1483,6 @@ replace_block_by (basic_block bb1, basic_block bb2)
     bb2->frequency = BB_FREQ_MAX;
 
   bb2->count += bb1->count;
-
-  /* Merge the outgoing edge counts from bb1 onto bb2.  */
-  gcov_type out_sum = 0;
-  FOR_EACH_EDGE (e1, ei, bb1->succs)
-    {
-      e2 = find_edge (bb2, e1->dest);
-      gcc_assert (e2);
-      e2->count += e1->count;
-      out_sum += e2->count;
-    }
-  /* Recompute the edge probabilities from the new merged edge count.
-     Use the sum of the new merged edge counts computed above instead
-     of bb2's merged count, in case there are profile count insanities
-     making the bb count inconsistent with the edge weights.  */
-  FOR_EACH_EDGE (e2, ei, bb2->succs)
-    {
-      e2->probability = GCOV_COMPUTE_SCALE (e2->count, out_sum);
-    }
 
   /* Do updates that use bb1, before deleting bb1.  */
   release_last_vdef (bb1);
@@ -1573,7 +1519,7 @@ apply_clusters (void)
       bitmap_clear_bit (c->bbs, bb2->index);
       EXECUTE_IF_SET_IN_BITMAP (c->bbs, 0, j, bj)
 	{
-	  bb1 = BASIC_BLOCK_FOR_FN (cfun, j);
+	  bb1 = BASIC_BLOCK (j);
 	  bitmap_clear_bit (update_bbs, bb1->index);
 
 	  replace_block_by (bb1, bb2);
@@ -1633,7 +1579,7 @@ update_debug_stmts (void)
       gimple stmt;
       gimple_stmt_iterator gsi;
 
-      bb = BASIC_BLOCK_FOR_FN (cfun, i);
+      bb = BASIC_BLOCK (i);
       for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
 	{
 	  stmt = gsi_stmt (gsi);
@@ -1655,19 +1601,7 @@ tail_merge_optimize (unsigned int todo)
   int iteration_nr = 0;
   int max_iterations = PARAM_VALUE (PARAM_MAX_TAIL_MERGE_ITERATIONS);
 
-  if (!flag_tree_tail_merge
-      || max_iterations == 0
-      /* We try to be conservative with respect to loop structure, since:
-	 - the cases where tail-merging could both affect loop structure and be
-	   beneficial are rare,
-	 - it prevents us from having to fixup the loops using
-	   loops_state_set (LOOPS_NEED_FIXUP), and
-	 - keeping loop structure may allow us to simplify the pass.
-	 In order to be conservative, we need loop information.	 In rare cases
-	 (about 7 test-cases in the g++ testsuite) there is none (because
-	 loop_optimizer_finalize has been called before tail-merge, and
-	 PROP_loops is not set), so we bail out.  */
-      || current_loops == NULL)
+  if (!flag_tree_tail_merge || max_iterations == 0)
     return 0;
 
   timevar_push (TV_TREE_TAIL_MERGE);

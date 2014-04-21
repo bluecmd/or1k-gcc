@@ -1,7 +1,7 @@
 /* PR middle-end/31309 */
 /* Origin: Peeter Joot <peeterj@ca.ibm.com> */
 
-/* { dg-do run { target *-*-linux* *-*-gnu* } } */
+/* { dg-do run { target *-*-linux* } } */
 
 #include <sys/mman.h>
 #include <string.h>

@@ -1,5 +1,5 @@
 // PR c++/50500
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 // If a class declares move operations, the implicitly declared copy
 // operations are deleted.

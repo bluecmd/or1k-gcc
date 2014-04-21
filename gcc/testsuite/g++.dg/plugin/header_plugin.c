@@ -17,6 +17,7 @@
 #include "c-family/c-pretty-print.h"
 #include "tree-iterator.h"
 #include "plugin.h"
+#include "tree-flow.h"
 #include "langhooks.h"
 #include "cp/cxx-pretty-print.h"
 #include "cp/name-lookup.h"

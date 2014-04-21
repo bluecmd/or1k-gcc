@@ -1,5 +1,6 @@
 // Testcase for deduction of std::initializer_list for auto.
-// { dg-do run { target c++11 } }
+// { dg-do run }
+// { dg-options "-std=c++0x" }
 
 #include <typeinfo>
 #include <initializer_list>

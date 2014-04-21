@@ -1,5 +1,5 @@
 // Testcase from N2998
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 void f1(int i) {
   int const N = 20;

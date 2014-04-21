@@ -1,5 +1,5 @@
 // PR c++/41896
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 void nested_lambda()
 {

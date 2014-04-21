@@ -32,11 +32,3 @@ func raceDisable() {
 func raceEnable() {
 	runtime.RaceEnable()
 }
-
-func raceRead(addr unsafe.Pointer) {
-	runtime.RaceRead(addr)
-}
-
-func raceWrite(addr unsafe.Pointer) {
-	runtime.RaceWrite(addr)
-}

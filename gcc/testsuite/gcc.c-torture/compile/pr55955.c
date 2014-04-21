@@ -1,4 +1,3 @@
-/* { dg-require-effective-target int32plus } */
 /* PR tree-optimization/55955 */
 
 int b;

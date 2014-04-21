@@ -1,6 +1,6 @@
 // PR c++/22405
 
-template <typename T> void foo(T &arg) { // { dg-message "declared" }
+template <typename T> void foo(T &arg) { // { dg-error "declared" }
   arg+=1;
 }
 

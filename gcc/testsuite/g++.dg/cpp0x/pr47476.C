@@ -1,5 +1,6 @@
 // PR c++/47476
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 int
 foo (int a, int b)

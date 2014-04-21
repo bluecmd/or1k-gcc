@@ -1,5 +1,5 @@
 // PR c++/50248, DR 1358
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template<class Elt, unsigned max>
 struct earray

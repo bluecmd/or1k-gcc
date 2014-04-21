@@ -1,7 +1,6 @@
 // PR c++/43031
-// { dg-options "-pedantic" }
+// { dg-options "-std=c++11 -pedantic" }
 // { dg-do compile { target { { i?86-*-* x86_64-*-* } && ia32 } } }
-// { dg-require-effective-target c++11 }
 
 // c++11 attributes that apply to types are ignored for now
 

@@ -107,9 +107,6 @@ func TestClean(t *testing.T) {
 		}
 	}
 
-	if testing.Short() {
-		t.Skip("skipping malloc count in short mode")
-	}
 	if runtime.GOMAXPROCS(0) > 1 {
 		t.Log("skipping AllocsPerRun checks; GOMAXPROCS>1")
 		return
@@ -636,10 +633,6 @@ func simpleJoin(dir, path string) string {
 }
 
 func TestEvalSymlinks(t *testing.T) {
-	if runtime.GOOS == "plan9" {
-		t.Skip("Skipping test: symlinks don't exist under Plan 9")
-	}
-
 	tmpDir, err := ioutil.TempDir("", "evalsymlink")
 	if err != nil {
 		t.Fatal("creating temp dir:", err)
@@ -933,33 +926,28 @@ func TestDriveLetterInEvalSymlinks(t *testing.T) {
    differently.
 
 func TestBug3486(t *testing.T) { // http://code.google.com/p/go/issues/detail?id=3486
-	root, err := filepath.EvalSymlinks(runtime.GOROOT() + "/test")
+	root, err := filepath.EvalSymlinks(runtime.GOROOT())
 	if err != nil {
 		t.Fatal(err)
 	}
-	bugs := filepath.Join(root, "bugs")
-	ken := filepath.Join(root, "ken")
-	seenBugs := false
-	seenKen := false
+	lib := filepath.Join(root, "lib")
+	src := filepath.Join(root, "src")
+	seenSrc := false
 	filepath.Walk(root, func(pth string, info os.FileInfo, err error) error {
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		switch pth {
-		case bugs:
-			seenBugs = true
+		case lib:
 			return filepath.SkipDir
-		case ken:
-			if !seenBugs {
-				t.Fatal("filepath.Walk out of order - ken before bugs")
-			}
-			seenKen = true
+		case src:
+			seenSrc = true
 		}
 		return nil
 	})
-	if !seenKen {
-		t.Fatalf("%q not seen", ken)
+	if !seenSrc {
+		t.Fatalf("%q not seen", src)
 	}
 }
 

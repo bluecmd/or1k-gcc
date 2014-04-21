@@ -35,13 +35,11 @@ func escapeTemplates(tmpl *Template, names ...string) error {
 			for _, name := range names {
 				if t := tmpl.set[name]; t != nil {
 					t.text.Tree = nil
-					t.Tree = nil
 				}
 			}
 			return err
 		}
 		tmpl.escaped = true
-		tmpl.Tree = tmpl.text.Tree
 	}
 	e.commit()
 	return nil
@@ -303,7 +301,7 @@ func indexOfStr(s string, strs []string, eq func(a, b string) bool) int {
 	return -1
 }
 
-// escFnsEq reports whether the two escaping functions are equivalent.
+// escFnsEq returns whether the two escaping functions are equivalent.
 func escFnsEq(a, b string) bool {
 	if e := equivEscapers[a]; e != "" {
 		a = e

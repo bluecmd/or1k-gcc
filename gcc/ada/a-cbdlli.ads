@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2004-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2012, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -34,7 +34,6 @@
 with Ada.Iterator_Interfaces;
 
 private with Ada.Streams;
-private with Ada.Finalization;
 
 generic
    type Element_Type is private;
@@ -249,7 +248,6 @@ private
    pragma Inline (Previous);
 
    use Ada.Streams;
-   use Ada.Finalization;
 
    type Node_Type is record
       Prev    : Count_Type'Base;
@@ -335,25 +333,5 @@ private
    Empty_List : constant List := (Capacity => 0, others => <>);
 
    No_Element : constant Cursor := Cursor'(null, 0);
-
-   type Iterator is new Limited_Controlled and
-     List_Iterator_Interfaces.Reversible_Iterator with
-   record
-      Container : List_Access;
-      Node      : Count_Type;
-   end record;
-
-   overriding procedure Finalize (Object : in out Iterator);
-
-   overriding function First (Object : Iterator) return Cursor;
-   overriding function Last  (Object : Iterator) return Cursor;
-
-   overriding function Next
-     (Object   : Iterator;
-      Position : Cursor) return Cursor;
-
-   overriding function Previous
-     (Object   : Iterator;
-      Position : Cursor) return Cursor;
 
 end Ada.Containers.Bounded_Doubly_Linked_Lists;

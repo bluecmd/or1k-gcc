@@ -3,7 +3,8 @@
 // the compiler doesn't get clever about optimizing the calls based on
 // knowledge about the called functions.
 
-// { dg-do run { target c++11 } }
+// { dg-options "-std=c++0x" }
+// { dg-do run }
 
 #include <exception>
 #include <cstdlib>

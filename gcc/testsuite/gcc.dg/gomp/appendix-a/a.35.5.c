@@ -9,7 +9,7 @@ wrong5 (int n)
     {
       work (n, 0);
 /* incorrect nesting of barrier region in a critical region */
-#pragma omp barrier	/* { dg-error "may not be closely nested" } */
+#pragma omp barrier
       work (n, 1);
     }
   }

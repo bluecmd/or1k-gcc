@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -gdwarf -dA" } */
+/* { dg-options "-O2 -gdwarf-2 -dA" } */
 void q(int p);
 static void
 t(int constant_propagated_par)

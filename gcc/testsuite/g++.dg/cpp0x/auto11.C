@@ -1,5 +1,5 @@
 // PR c++/38256
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template<int> struct A
 {
@@ -8,5 +8,5 @@ template<int> struct A
 
 void foo()
 {
-  A<0>().operator auto();	// { dg-error "auto" }
+  A<0>().operator auto();	// { dg-error "auto.*conversion" }
 }

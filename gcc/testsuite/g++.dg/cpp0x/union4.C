@@ -1,9 +1,9 @@
 // PR c++/48537
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 struct SFoo
 {
-  SFoo() =delete;		// { dg-message "declared" }
+  SFoo() =delete;		// { dg-error "declared" }
 };
 
 union UFoo			// { dg-error "deleted" }

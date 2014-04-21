@@ -1,6 +1,5 @@
 // PR c++/53186
-// { dg-do compile { target c++11 } }
-// { dg-options "-fdump-tree-original"  }
+// { dg-options "-fdump-tree-original -std=c++11"  }
 
 struct F1
 {

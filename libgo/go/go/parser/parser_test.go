@@ -34,12 +34,13 @@ func TestParse(t *testing.T) {
 
 func nameFilter(filename string) bool {
 	switch filename {
-	case "parser.go", "interface.go", "parser_test.go":
-		return true
-	case "parser.go.orig":
-		return true // permit but should be ignored by ParseDir
+	case "parser.go":
+	case "interface.go":
+	case "parser_test.go":
+	default:
+		return false
 	}
-	return false
+	return true
 }
 
 func dirFilter(f os.FileInfo) bool { return nameFilter(f.Name()) }
@@ -50,16 +51,13 @@ func TestParseDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseDir(%s): %v", path, err)
 	}
-	if n := len(pkgs); n != 1 {
-		t.Errorf("got %d packages; want 1", n)
+	if len(pkgs) != 1 {
+		t.Errorf("incorrect number of packages: %d", len(pkgs))
 	}
 	pkg := pkgs["parser"]
 	if pkg == nil {
 		t.Errorf(`package "parser" not found`)
 		return
-	}
-	if n := len(pkg.Files); n != 3 {
-		t.Errorf("got %d package files; want 3", n)
 	}
 	for filename := range pkg.Files {
 		if !nameFilter(filename) {

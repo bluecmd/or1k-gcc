@@ -1,5 +1,5 @@
 /* PR c/39323 */
-/* { dg-do compile { target *-*-linux* *-*-gnu* } } */
+/* { dg-do compile { target *-*-linux* } } */
 
 int bar __attribute__ ((aligned(1 << 28))) =  20;
 

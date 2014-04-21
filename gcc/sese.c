@@ -1,5 +1,5 @@
 /* Single entry single exit control flow regions.
-   Copyright (C) 2008-2014 Free Software Foundation, Inc.
+   Copyright (C) 2008-2013 Free Software Foundation, Inc.
    Contributed by Jan Sjodin <jan.sjodin@amd.com> and
    Sebastian Pop <sebastian.pop@amd.com>.
 
@@ -22,28 +22,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "hash-table.h"
-#include "tree.h"
 #include "tree-pretty-print.h"
-#include "basic-block.h"
-#include "tree-ssa-alias.h"
-#include "internal-fn.h"
-#include "gimple-fold.h"
-#include "tree-eh.h"
-#include "gimple-expr.h"
-#include "is-a.h"
-#include "gimple.h"
-#include "gimplify.h"
-#include "gimple-iterator.h"
-#include "gimplify-me.h"
-#include "gimple-ssa.h"
-#include "tree-cfg.h"
-#include "tree-phinodes.h"
-#include "ssa-iterators.h"
-#include "stringpool.h"
-#include "tree-ssanames.h"
-#include "tree-ssa-loop.h"
-#include "tree-into-ssa.h"
+#include "tree-flow.h"
 #include "cfgloop.h"
 #include "tree-chrec.h"
 #include "tree-data-ref.h"
@@ -51,7 +31,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-pass.h"
 #include "value-prof.h"
 #include "sese.h"
-#include "tree-ssa-propagate.h"
 
 /* Print to stderr the element ELT.  */
 
@@ -67,50 +46,20 @@ debug_rename_elt (rename_map_elt elt)
 
 /* Helper function for debug_rename_map.  */
 
-int
-debug_rename_map_1 (rename_map_elt_s **slot, void *s ATTRIBUTE_UNUSED)
+static int
+debug_rename_map_1 (void **slot, void *s ATTRIBUTE_UNUSED)
 {
-  struct rename_map_elt_s *entry = *slot;
+  struct rename_map_elt_s *entry = (struct rename_map_elt_s *) *slot;
   debug_rename_elt (entry);
   return 1;
 }
-
-
-/* Hashtable helpers.  */
-
-struct rename_map_hasher : typed_free_remove <rename_map_elt_s>
-{
-  typedef rename_map_elt_s value_type;
-  typedef rename_map_elt_s compare_type;
-  static inline hashval_t hash (const value_type *);
-  static inline bool equal (const value_type *, const compare_type *);
-};
-
-/* Computes a hash function for database element ELT.  */
-
-inline hashval_t
-rename_map_hasher::hash (const value_type *elt)
-{
-  return SSA_NAME_VERSION (elt->old_name);
-}
-
-/* Compares database elements E1 and E2.  */
-
-inline bool
-rename_map_hasher::equal (const value_type *elt1, const compare_type *elt2)
-{
-  return (elt1->old_name == elt2->old_name);
-}
-
-typedef hash_table <rename_map_hasher> rename_map_type;
-
 
 /* Print to stderr all the elements of RENAME_MAP.  */
 
 DEBUG_FUNCTION void
-debug_rename_map (rename_map_type rename_map)
+debug_rename_map (htab_t rename_map)
 {
-  rename_map.traverse <void *, debug_rename_map_1> (NULL);
+  htab_traverse (rename_map, debug_rename_map_1, NULL);
 }
 
 /* Computes a hash function for database element ELT.  */
@@ -130,6 +79,55 @@ eq_rename_map_elts (const void *e1, const void *e2)
   const struct rename_map_elt_s *elt2 = (const struct rename_map_elt_s *) e2;
 
   return (elt1->old_name == elt2->old_name);
+}
+
+
+
+/* Print to stderr the element ELT.  */
+
+static void
+debug_ivtype_elt (ivtype_map_elt elt)
+{
+  fprintf (stderr, "(%s, ", elt->cloog_iv);
+  print_generic_expr (stderr, elt->type, 0);
+  fprintf (stderr, ")\n");
+}
+
+/* Helper function for debug_ivtype_map.  */
+
+static int
+debug_ivtype_map_1 (void **slot, void *s ATTRIBUTE_UNUSED)
+{
+  struct ivtype_map_elt_s *entry = (struct ivtype_map_elt_s *) *slot;
+  debug_ivtype_elt (entry);
+  return 1;
+}
+
+/* Print to stderr all the elements of MAP.  */
+
+DEBUG_FUNCTION void
+debug_ivtype_map (htab_t map)
+{
+  htab_traverse (map, debug_ivtype_map_1, NULL);
+}
+
+/* Computes a hash function for database element ELT.  */
+
+hashval_t
+ivtype_map_elt_info (const void *elt)
+{
+  return htab_hash_pointer (((const struct ivtype_map_elt_s *) elt)->cloog_iv);
+}
+
+/* Compares database elements E1 and E2.  */
+
+int
+eq_ivtype_map_elts (const void *e1, const void *e2)
+{
+  const struct ivtype_map_elt_s *elt1 = (const struct ivtype_map_elt_s *) e1;
+  const struct ivtype_map_elt_s *elt2 = (const struct ivtype_map_elt_s *) e2;
+
+  return (elt1->cloog_iv == elt2->cloog_iv);
 }
 
 
@@ -156,7 +154,7 @@ build_sese_loop_nests (sese region)
   basic_block bb;
   struct loop *loop0, *loop1;
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     if (bb_in_sese_p (bb, region))
       {
 	struct loop *loop = bb->loop_father;
@@ -303,10 +301,10 @@ sese_build_liveouts (sese region, bitmap liveouts)
 {
   basic_block bb;
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     sese_build_liveouts_bb (region, liveouts, bb);
   if (MAY_HAVE_DEBUG_STMTS)
-    FOR_EACH_BB_FN (bb, cfun)
+    FOR_EACH_BB (bb)
       sese_reset_debug_liveouts_bb (region, liveouts, bb);
 }
 
@@ -416,17 +414,17 @@ get_false_edge_from_guard_bb (basic_block bb)
 /* Returns the expression associated to OLD_NAME in RENAME_MAP.  */
 
 static tree
-get_rename (rename_map_type rename_map, tree old_name)
+get_rename (htab_t rename_map, tree old_name)
 {
   struct rename_map_elt_s tmp;
-  rename_map_elt_s **slot;
+  PTR *slot;
 
   gcc_assert (TREE_CODE (old_name) == SSA_NAME);
   tmp.old_name = old_name;
-  slot = rename_map.find_slot (&tmp, NO_INSERT);
+  slot = htab_find_slot (rename_map, &tmp, NO_INSERT);
 
   if (slot && *slot)
-    return (*slot)->expr;
+    return ((rename_map_elt) *slot)->expr;
 
   return NULL_TREE;
 }
@@ -434,16 +432,16 @@ get_rename (rename_map_type rename_map, tree old_name)
 /* Register in RENAME_MAP the rename tuple (OLD_NAME, EXPR).  */
 
 static void
-set_rename (rename_map_type rename_map, tree old_name, tree expr)
+set_rename (htab_t rename_map, tree old_name, tree expr)
 {
   struct rename_map_elt_s tmp;
-  rename_map_elt_s **slot;
+  PTR *slot;
 
   if (old_name == expr)
     return;
 
   tmp.old_name = old_name;
-  slot = rename_map.find_slot (&tmp, INSERT);
+  slot = htab_find_slot (rename_map, &tmp, INSERT);
 
   if (!slot)
     return;
@@ -461,8 +459,7 @@ set_rename (rename_map_type rename_map, tree old_name, tree expr)
    is set when the code generation cannot continue.  */
 
 static bool
-rename_uses (gimple copy, rename_map_type rename_map,
-	     gimple_stmt_iterator *gsi_tgt,
+rename_uses (gimple copy, htab_t rename_map, gimple_stmt_iterator *gsi_tgt,
 	     sese region, loop_p loop, vec<tree> iv_map,
 	     bool *gloog_error)
 {
@@ -568,7 +565,7 @@ rename_uses (gimple copy, rename_map_type rename_map,
 
 static void
 graphite_copy_stmts_from_block (basic_block bb, basic_block new_bb,
-				rename_map_type rename_map,
+				htab_t rename_map,
 				vec<tree> iv_map, sese region,
 				bool *gloog_error)
 {
@@ -636,14 +633,14 @@ copy_bb_and_scalar_dependences (basic_block bb, sese region,
 				bool *gloog_error)
 {
   basic_block new_bb = split_edge (next_e);
-  rename_map_type rename_map;
-  rename_map.create (10);
+  htab_t rename_map = htab_create (10, rename_map_elt_info,
+				   eq_rename_map_elts, free);
 
   next_e = single_succ_edge (new_bb);
   graphite_copy_stmts_from_block (bb, new_bb, rename_map, iv_map, region,
 				  gloog_error);
   remove_phi_nodes (new_bb);
-  rename_map.dispose ();
+  htab_delete (rename_map);
 
   return next_e;
 }

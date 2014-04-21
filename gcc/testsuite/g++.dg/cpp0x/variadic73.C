@@ -1,4 +1,5 @@
-// { dg-do run { target c++11 } }
+// { dg-do run }
+// { dg-options "-std=gnu++0x" }
 struct A {};
 struct B {};
 struct C {};

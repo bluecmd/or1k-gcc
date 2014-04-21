@@ -1,4 +1,3 @@
-// { dg-do compile { target c++11 } }
 // { dg-options "-std=c++98 -Wc++11-compat" }
 
 template<int N> struct X {};

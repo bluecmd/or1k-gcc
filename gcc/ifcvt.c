@@ -1,5 +1,5 @@
 /* If-conversion support.
-   Copyright (C) 2000-2014 Free Software Foundation, Inc.
+   Copyright (C) 2000-2013 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -67,9 +67,6 @@
 
 #define NULL_BLOCK	((basic_block) NULL)
 
-/* True if after combine pass.  */
-static bool ifcvt_after_combine;
-
 /* # of IF-THEN or IF-THEN-ELSE blocks we looked at  */
 static int num_possible_if_blocks;
 
@@ -91,16 +88,16 @@ static rtx last_active_insn (basic_block, int);
 static rtx find_active_insn_before (basic_block, rtx);
 static rtx find_active_insn_after (basic_block, rtx);
 static basic_block block_fallthru (basic_block);
-static int cond_exec_process_insns (ce_if_block *, rtx, rtx, rtx, int, int);
+static int cond_exec_process_insns (ce_if_block_t *, rtx, rtx, rtx, rtx, int);
 static rtx cond_exec_get_condition (rtx);
 static rtx noce_get_condition (rtx, rtx *, bool);
 static int noce_operand_ok (const_rtx);
-static void merge_if_block (ce_if_block *);
+static void merge_if_block (ce_if_block_t *);
 static int find_cond_trap (basic_block, edge, edge);
 static basic_block find_if_header (basic_block, int);
 static int block_jumps_and_fallthru_p (basic_block, basic_block);
 static int noce_find_if_block (basic_block, edge, edge, int);
-static int cond_exec_find_if_block (ce_if_block *);
+static int cond_exec_find_if_block (ce_if_block_t *);
 static int find_if_case_1 (basic_block, edge, edge);
 static int find_if_case_2 (basic_block, edge, edge);
 static int dead_or_predicable (basic_block, basic_block, basic_block,
@@ -118,7 +115,11 @@ count_bb_insns (const_basic_block bb)
 
   while (1)
     {
-      if (active_insn_p (insn) && !JUMP_P (insn))
+      if ((CALL_P (insn) || NONJUMP_INSN_P (insn))
+	  /* Don't count USE/CLOBBER insns, flow_find_cross_jump etc.
+	     don't count them either and we need consistency.  */
+	  && GET_CODE (PATTERN (insn)) != USE
+	  && GET_CODE (PATTERN (insn)) != CLOBBER)
 	count++;
 
       if (insn == BB_END (bb))
@@ -144,24 +145,11 @@ cheap_bb_rtx_cost_p (const_basic_block bb, int scale, int max_cost)
   rtx insn = BB_HEAD (bb);
   bool speed = optimize_bb_for_speed_p (bb);
 
-  /* Set scale to REG_BR_PROB_BASE to void the identical scaling
-     applied to insn_rtx_cost when optimizing for size.  Only do
-     this after combine because if-conversion might interfere with
-     passes before combine.
-
-     Use optimize_function_for_speed_p instead of the pre-defined
-     variable speed to make sure it is set to same value for all
-     basic blocks in one if-conversion transformation.  */
-  if (!optimize_function_for_speed_p (cfun) && ifcvt_after_combine)
-    scale = REG_BR_PROB_BASE;
   /* Our branch probability/scaling factors are just estimates and don't
      account for cases where we can get speculation for free and other
      secondary benefits.  So we fudge the scale factor to make speculating
-     appear a little more profitable when optimizing for performance.  */
-  else
-    scale += REG_BR_PROB_BASE / 8;
-
-
+     appear a little more profitable.  */
+  scale += REG_BR_PROB_BASE / 8;
   max_cost *= scale;
 
   while (1)
@@ -312,11 +300,11 @@ block_fallthru (basic_block bb)
    insns were processed.  */
 
 static int
-cond_exec_process_insns (ce_if_block *ce_info ATTRIBUTE_UNUSED,
+cond_exec_process_insns (ce_if_block_t *ce_info ATTRIBUTE_UNUSED,
 			 /* if block information */rtx start,
 			 /* first insn to look at */rtx end,
 			 /* last insn to look at */rtx test,
-			 /* conditional execution test */int prob_val,
+			 /* conditional execution test */rtx prob_val,
 			 /* probability of branch taken. */int mod_ok)
 {
   int must_be_last = FALSE;
@@ -336,11 +324,7 @@ cond_exec_process_insns (ce_if_block *ce_info ATTRIBUTE_UNUSED,
       if (NOTE_P (insn) || DEBUG_INSN_P (insn))
 	goto insn_done;
 
-      gcc_assert (NONJUMP_INSN_P (insn) || CALL_P (insn));
-
-      /* dwarf2out can't cope with conditional unwind info.  */
-      if (RTX_FRAME_RELATED_P (insn))
-	return FALSE;
+      gcc_assert(NONJUMP_INSN_P (insn) || CALL_P (insn));
 
       /* Remove USE insns that get in the way.  */
       if (reload_completed && GET_CODE (PATTERN (insn)) == USE)
@@ -391,10 +375,10 @@ cond_exec_process_insns (ce_if_block *ce_info ATTRIBUTE_UNUSED,
 
       validate_change (insn, &PATTERN (insn), pattern, 1);
 
-      if (CALL_P (insn) && prob_val >= 0)
+      if (CALL_P (insn) && prob_val)
 	validate_change (insn, &REG_NOTES (insn),
-			 gen_rtx_INT_LIST ((enum machine_mode) REG_BR_PROB,
-					   prob_val, REG_NOTES (insn)), 1);
+			 alloc_EXPR_LIST (REG_BR_PROB, prob_val,
+					  REG_NOTES (insn)), 1);
 
     insn_done:
       if (insn == end)
@@ -438,7 +422,7 @@ cond_exec_get_condition (rtx jump)
    converting the block.  */
 
 static int
-cond_exec_process_if_block (ce_if_block * ce_info,
+cond_exec_process_if_block (ce_if_block_t * ce_info,
 			    /* if block information */int do_multiple_p)
 {
   basic_block test_bb = ce_info->test_bb;	/* last test block */
@@ -453,15 +437,14 @@ cond_exec_process_if_block (ce_if_block * ce_info,
   int then_mod_ok;		/* whether conditional mods are ok in THEN */
   rtx true_expr;		/* test for else block insns */
   rtx false_expr;		/* test for then block insns */
-  int true_prob_val;		/* probability of else block */
-  int false_prob_val;		/* probability of then block */
+  rtx true_prob_val;		/* probability of else block */
+  rtx false_prob_val;		/* probability of then block */
   rtx then_last_head = NULL_RTX;	/* Last match at the head of THEN */
   rtx else_last_head = NULL_RTX;	/* Last match at the head of ELSE */
   rtx then_first_tail = NULL_RTX;	/* First match at the tail of THEN */
   rtx else_first_tail = NULL_RTX;	/* First match at the tail of ELSE */
   int then_n_insns, else_n_insns, n_insns;
   enum rtx_code false_code;
-  rtx note;
 
   /* If test is comprised of && or || elements, and we've failed at handling
      all of them together, just use the last test if it is the special case of
@@ -596,17 +579,14 @@ cond_exec_process_if_block (ce_if_block * ce_info,
     goto fail;
 #endif
 
-  note = find_reg_note (BB_END (test_bb), REG_BR_PROB, NULL_RTX);
-  if (note)
+  true_prob_val = find_reg_note (BB_END (test_bb), REG_BR_PROB, NULL_RTX);
+  if (true_prob_val)
     {
-      true_prob_val = XINT (note, 0);
-      false_prob_val = REG_BR_PROB_BASE - true_prob_val;
+      true_prob_val = XEXP (true_prob_val, 0);
+      false_prob_val = GEN_INT (REG_BR_PROB_BASE - INTVAL (true_prob_val));
     }
   else
-    {
-      true_prob_val = -1;
-      false_prob_val = -1;
-    }
+    false_prob_val = NULL_RTX;
 
   /* If we have && or || tests, do them here.  These tests are in the adjacent
      blocks after the first block containing the test.  */
@@ -1119,13 +1099,12 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
       ifalse = INTVAL (if_info->a);
       itrue = INTVAL (if_info->b);
 
-      diff = (unsigned HOST_WIDE_INT) itrue - ifalse;
       /* Make sure we can represent the difference between the two values.  */
-      if ((diff > 0)
+      if ((itrue - ifalse > 0)
 	  != ((ifalse < 0) != (itrue < 0) ? ifalse < 0 : ifalse < itrue))
 	return FALSE;
 
-      diff = trunc_int_for_mode (diff, mode);
+      diff = trunc_int_for_mode (itrue - ifalse, mode);
 
       can_reverse = (reversed_comparison_code (if_info->cond, if_info->jump)
 		     != UNKNOWN);
@@ -1156,7 +1135,7 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
       if (reversep)
 	{
 	  tmp = itrue; itrue = ifalse; ifalse = tmp;
-	  diff = trunc_int_for_mode (-(unsigned HOST_WIDE_INT) diff, mode);
+	  diff = trunc_int_for_mode (-diff, mode);
 	}
 
       start_sequence ();
@@ -1174,8 +1153,8 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
 	  target = expand_simple_binop (mode,
 					(diff == STORE_FLAG_VALUE
 					 ? PLUS : MINUS),
-					gen_int_mode (ifalse, mode), target,
-					if_info->x, 0, OPTAB_WIDEN);
+					GEN_INT (ifalse), target, if_info->x, 0,
+					OPTAB_WIDEN);
 	}
 
       /* if (test) x = 8; else x = 0;
@@ -1192,8 +1171,8 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
       else if (itrue == -1)
 	{
 	  target = expand_simple_binop (mode, IOR,
-					target, gen_int_mode (ifalse, mode),
-					if_info->x, 0, OPTAB_WIDEN);
+					target, GEN_INT (ifalse), if_info->x, 0,
+					OPTAB_WIDEN);
 	}
 
       /* if (test) x = a; else x = b;
@@ -1201,11 +1180,11 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
       else
 	{
 	  target = expand_simple_binop (mode, AND,
-					target, gen_int_mode (diff, mode),
-					if_info->x, 0, OPTAB_WIDEN);
+					target, GEN_INT (diff), if_info->x, 0,
+					OPTAB_WIDEN);
 	  if (target)
 	    target = expand_simple_binop (mode, PLUS,
-					  target, gen_int_mode (ifalse, mode),
+					  target, GEN_INT (ifalse),
 					  if_info->x, 0, OPTAB_WIDEN);
 	}
 
@@ -3160,20 +3139,6 @@ merge_if_block (struct ce_if_block * ce_info)
 
   if (then_bb)
     {
-      /* If THEN_BB has no successors, then there's a BARRIER after it.
-	 If COMBO_BB has more than one successor (THEN_BB), then that BARRIER
-	 is no longer needed, and in fact it is incorrect to leave it in
-	 the insn stream.  */
-      if (EDGE_COUNT (then_bb->succs) == 0
-	  && EDGE_COUNT (combo_bb->succs) > 1)
-	{
-	  rtx end = NEXT_INSN (BB_END (then_bb));
-	  while (end && NOTE_P (end) && !NOTE_INSN_BASIC_BLOCK_P (end))
-	    end = NEXT_INSN (end);
-
-	  if (end && BARRIER_P (end))
-	    delete_insn (end);
-	}
       merge_blocks (combo_bb, then_bb);
       num_true_changes++;
     }
@@ -3183,20 +3148,6 @@ merge_if_block (struct ce_if_block * ce_info)
      get their addresses taken.  */
   if (else_bb)
     {
-      /* If ELSE_BB has no successors, then there's a BARRIER after it.
-	 If COMBO_BB has more than one successor (ELSE_BB), then that BARRIER
-	 is no longer needed, and in fact it is incorrect to leave it in
-	 the insn stream.  */
-      if (EDGE_COUNT (else_bb->succs) == 0
-	  && EDGE_COUNT (combo_bb->succs) > 1)
-	{
-	  rtx end = NEXT_INSN (BB_END (else_bb));
-	  while (end && NOTE_P (end) && !NOTE_INSN_BASIC_BLOCK_P (end))
-	    end = NEXT_INSN (end);
-
-	  if (end && BARRIER_P (end))
-	    delete_insn (end);
-	}
       merge_blocks (combo_bb, else_bb);
       num_true_changes++;
     }
@@ -3221,8 +3172,7 @@ merge_if_block (struct ce_if_block * ce_info)
       /* There should still be something at the end of the THEN or ELSE
          blocks taking us to our final destination.  */
 	gcc_assert (JUMP_P (last)
-		    || (EDGE_SUCC (combo_bb, 0)->dest
-			== EXIT_BLOCK_PTR_FOR_FN (cfun)
+		    || (EDGE_SUCC (combo_bb, 0)->dest == EXIT_BLOCK_PTR
 			&& CALL_P (last)
 			&& SIBLING_CALL_P (last))
 		    || ((EDGE_SUCC (combo_bb, 0)->flags & EDGE_EH)
@@ -3236,7 +3186,7 @@ merge_if_block (struct ce_if_block * ce_info)
      may be zero incoming edges if the THEN block didn't actually join
      back up (as with a call to a non-return function).  */
   else if (EDGE_COUNT (join_bb->preds) < 2
-	   && join_bb != EXIT_BLOCK_PTR_FOR_FN (cfun))
+	   && join_bb != EXIT_BLOCK_PTR)
     {
       /* We can merge the JOIN cleanly and update the dataflow try
 	 again on this pass.*/
@@ -3253,7 +3203,7 @@ merge_if_block (struct ce_if_block * ce_info)
 		  && single_succ (combo_bb) == join_bb);
 
       /* Remove the jump and cruft from the end of the COMBO block.  */
-      if (join_bb != EXIT_BLOCK_PTR_FOR_FN (cfun))
+      if (join_bb != EXIT_BLOCK_PTR)
 	tidy_fallthru_edge (single_succ_edge (combo_bb));
     }
 
@@ -3268,7 +3218,7 @@ merge_if_block (struct ce_if_block * ce_info)
 static basic_block
 find_if_header (basic_block test_bb, int pass)
 {
-  ce_if_block ce_info;
+  ce_if_block_t ce_info;
   edge then_edge;
   edge else_edge;
 
@@ -3532,7 +3482,7 @@ cond_exec_find_if_block (struct ce_if_block * ce_info)
      code processing.  ??? we should fix this in the future.  */
   if (EDGE_COUNT (then_bb->succs) == 0)
     {
-      if (single_pred_p (else_bb) && else_bb != EXIT_BLOCK_PTR_FOR_FN (cfun))
+      if (single_pred_p (else_bb) && else_bb != EXIT_BLOCK_PTR)
 	{
 	  rtx last_insn = BB_END (then_bb);
 
@@ -3623,8 +3573,7 @@ cond_exec_find_if_block (struct ce_if_block * ce_info)
   next = then_bb;
   if (else_bb && (next = next->next_bb) != else_bb)
     return FALSE;
-  if ((next = next->next_bb) != join_bb
-      && join_bb != EXIT_BLOCK_PTR_FOR_FN (cfun))
+  if ((next = next->next_bb) != join_bb && join_bb != EXIT_BLOCK_PTR)
     {
       if (else_bb)
 	join_bb = NULL;
@@ -3732,7 +3681,7 @@ find_cond_trap (basic_block test_bb, edge then_edge, edge else_edge)
   /* Wire together the blocks again.  */
   if (current_ir_type () == IR_RTL_CFGLAYOUT)
     single_succ_edge (test_bb)->flags |= EDGE_FALLTHRU;
-  else if (trap_bb == then_bb)
+  else
     {
       rtx lab, newjump;
 
@@ -3763,7 +3712,7 @@ block_has_only_trap (basic_block bb)
   rtx trap;
 
   /* We're not the exit block.  */
-  if (bb == EXIT_BLOCK_PTR_FOR_FN (cfun))
+  if (bb == EXIT_BLOCK_PTR)
     return NULL_RTX;
 
   /* The block must have no successors.  */
@@ -3919,7 +3868,7 @@ find_if_case_1 (basic_block test_bb, edge then_edge, edge else_edge)
 				    predictable_edge_p (then_edge)))))
     return FALSE;
 
-  if (else_bb == EXIT_BLOCK_PTR_FOR_FN (cfun))
+  if (else_bb == EXIT_BLOCK_PTR)
     {
       rtx jump = BB_END (else_edge->src);
       gcc_assert (JUMP_P (jump));
@@ -3940,12 +3889,12 @@ find_if_case_1 (basic_block test_bb, edge then_edge, edge else_edge)
 
   if (then_bb->next_bb == else_bb
       && then_bb->prev_bb == test_bb
-      && else_bb != EXIT_BLOCK_PTR_FOR_FN (cfun))
+      && else_bb != EXIT_BLOCK_PTR)
     {
       redirect_edge_succ (FALLTHRU_EDGE (test_bb), else_bb);
       new_bb = 0;
     }
-  else if (else_bb == EXIT_BLOCK_PTR_FOR_FN (cfun))
+  else if (else_bb == EXIT_BLOCK_PTR)
     new_bb = force_nonfallthru_and_redirect (FALLTHRU_EDGE (test_bb),
 					     else_bb, else_target);
   else
@@ -3963,9 +3912,10 @@ find_if_case_1 (basic_block test_bb, edge then_edge, edge else_edge)
   if (new_bb)
     {
       df_bb_replace (then_bb_index, new_bb);
-      /* This should have been done above via force_nonfallthru_and_redirect
-         (possibly called from redirect_edge_and_branch_force).  */
-      gcc_checking_assert (BB_PARTITION (new_bb) == BB_PARTITION (test_bb));
+      /* Since the fallthru edge was redirected from test_bb to new_bb,
+         we need to ensure that new_bb is in the same partition as
+         test bb (you can not fall through across section boundaries).  */
+      BB_COPY_PARTITION (new_bb, test_bb);
     }
 
   num_true_changes++;
@@ -4155,14 +4105,15 @@ dead_or_predicable (basic_block test_bb, basic_block merge_bb,
 	 All that's left is making sure the insns involved can actually
 	 be predicated.  */
 
-      rtx cond;
+      rtx cond, prob_val;
 
       cond = cond_exec_get_condition (jump);
       if (! cond)
 	return FALSE;
 
-      rtx note = find_reg_note (jump, REG_BR_PROB, NULL_RTX);
-      int prob_val = (note ? XINT (note, 0) : -1);
+      prob_val = find_reg_note (jump, REG_BR_PROB, NULL_RTX);
+      if (prob_val)
+	prob_val = XEXP (prob_val, 0);
 
       if (reversep)
 	{
@@ -4171,8 +4122,8 @@ dead_or_predicable (basic_block test_bb, basic_block merge_bb,
 	    return FALSE;
 	  cond = gen_rtx_fmt_ee (rev, GET_MODE (cond), XEXP (cond, 0),
 			         XEXP (cond, 1));
-	  if (prob_val >= 0)
-	    prob_val = REG_BR_PROB_BASE - prob_val;
+	  if (prob_val)
+	    prob_val = GEN_INT (REG_BR_PROB_BASE - INTVAL (prob_val));
 	}
 
       if (cond_exec_process_insns (NULL, head, end, cond, prob_val, 0)
@@ -4234,9 +4185,9 @@ dead_or_predicable (basic_block test_bb, basic_block merge_bb,
 	 saved in caller-saved regs.  A caller-saved reg requires the
 	 prologue, killing a shrink-wrap opportunity.  */
       if ((flag_shrink_wrap && HAVE_simple_return && !epilogue_completed)
-	  && ENTRY_BLOCK_PTR_FOR_FN (cfun)->next_bb == test_bb
+	  && ENTRY_BLOCK_PTR->next_bb == test_bb
 	  && single_succ_p (new_dest)
-	  && single_succ (new_dest) == EXIT_BLOCK_PTR_FOR_FN (cfun)
+	  && single_succ (new_dest) == EXIT_BLOCK_PTR
 	  && bitmap_intersect_p (df_get_live_in (new_dest), merge_set))
 	{
 	  regset return_regs;
@@ -4251,10 +4202,8 @@ dead_or_predicable (basic_block test_bb, basic_block merge_bb,
 		&& targetm.calls.function_value_regno_p (i))
 	      bitmap_set_bit (return_regs, INCOMING_REGNO (i));
 
-	  bitmap_and_into (return_regs,
-			   df_get_live_out (ENTRY_BLOCK_PTR_FOR_FN (cfun)));
-	  bitmap_and_into (return_regs,
-			   df_get_live_in (EXIT_BLOCK_PTR_FOR_FN (cfun)));
+	  bitmap_and_into (return_regs, df_get_live_out (ENTRY_BLOCK_PTR));
+	  bitmap_and_into (return_regs, df_get_live_in (EXIT_BLOCK_PTR));
 	  if (!bitmap_empty_p (return_regs))
 	    {
 	      FOR_BB_INSNS_REVERSE (new_dest, insn)
@@ -4299,7 +4248,7 @@ dead_or_predicable (basic_block test_bb, basic_block merge_bb,
     {
       if (JUMP_P (BB_END (dest_edge->src)))
 	new_dest_label = JUMP_LABEL (BB_END (dest_edge->src));
-      else if (new_dest == EXIT_BLOCK_PTR_FOR_FN (cfun))
+      else if (new_dest == EXIT_BLOCK_PTR)
 	new_dest_label = ret_rtx;
       else
 	new_dest_label = block_label (new_dest);
@@ -4396,11 +4345,10 @@ dead_or_predicable (basic_block test_bb, basic_block merge_bb,
   return FALSE;
 }
 
-/* Main entry point for all if-conversion.  AFTER_COMBINE is true if
-   we are after combine pass.  */
+/* Main entry point for all if-conversion.  */
 
 static void
-if_convert (bool after_combine)
+if_convert (void)
 {
   basic_block bb;
   int pass;
@@ -4411,8 +4359,6 @@ if_convert (bool after_combine)
       df_live_set_all_dirty ();
     }
 
-  /* Record whether we are after combine pass.  */
-  ifcvt_after_combine = after_combine;
   num_possible_if_blocks = 0;
   num_updated_if_blocks = 0;
   num_true_changes = 0;
@@ -4444,7 +4390,7 @@ if_convert (bool after_combine)
 	fprintf (dump_file, "\n\n========== Pass %d ==========\n", pass);
 #endif
 
-      FOR_EACH_BB_FN (bb, cfun)
+      FOR_EACH_BB (bb)
 	{
           basic_block new_bb;
           while (!df_get_bb_dirty (bb)
@@ -4516,50 +4462,33 @@ rest_of_handle_if_conversion (void)
 	  dump_flow_info (dump_file, dump_flags);
 	}
       cleanup_cfg (CLEANUP_EXPENSIVE);
-      if_convert (false);
+      if_convert ();
     }
 
   cleanup_cfg (0);
   return 0;
 }
 
-namespace {
-
-const pass_data pass_data_rtl_ifcvt =
+struct rtl_opt_pass pass_rtl_ifcvt =
 {
-  RTL_PASS, /* type */
-  "ce1", /* name */
-  OPTGROUP_NONE, /* optinfo_flags */
-  true, /* has_gate */
-  true, /* has_execute */
-  TV_IFCVT, /* tv_id */
-  0, /* properties_required */
-  0, /* properties_provided */
-  0, /* properties_destroyed */
-  0, /* todo_flags_start */
-  ( TODO_df_finish | TODO_verify_rtl_sharing | 0 ), /* todo_flags_finish */
+ {
+  RTL_PASS,
+  "ce1",                                /* name */
+  OPTGROUP_NONE,                        /* optinfo_flags */
+  gate_handle_if_conversion,            /* gate */
+  rest_of_handle_if_conversion,         /* execute */
+  NULL,                                 /* sub */
+  NULL,                                 /* next */
+  0,                                    /* static_pass_number */
+  TV_IFCVT,                             /* tv_id */
+  0,                                    /* properties_required */
+  0,                                    /* properties_provided */
+  0,                                    /* properties_destroyed */
+  0,                                    /* todo_flags_start */
+  TODO_df_finish | TODO_verify_rtl_sharing |
+  0                                     /* todo_flags_finish */
+ }
 };
-
-class pass_rtl_ifcvt : public rtl_opt_pass
-{
-public:
-  pass_rtl_ifcvt (gcc::context *ctxt)
-    : rtl_opt_pass (pass_data_rtl_ifcvt, ctxt)
-  {}
-
-  /* opt_pass methods: */
-  bool gate () { return gate_handle_if_conversion (); }
-  unsigned int execute () { return rest_of_handle_if_conversion (); }
-
-}; // class pass_rtl_ifcvt
-
-} // anon namespace
-
-rtl_opt_pass *
-make_pass_rtl_ifcvt (gcc::context *ctxt)
-{
-  return new pass_rtl_ifcvt (ctxt);
-}
 
 static bool
 gate_handle_if_after_combine (void)
@@ -4574,47 +4503,30 @@ gate_handle_if_after_combine (void)
 static unsigned int
 rest_of_handle_if_after_combine (void)
 {
-  if_convert (true);
+  if_convert ();
   return 0;
 }
 
-namespace {
-
-const pass_data pass_data_if_after_combine =
+struct rtl_opt_pass pass_if_after_combine =
 {
-  RTL_PASS, /* type */
-  "ce2", /* name */
-  OPTGROUP_NONE, /* optinfo_flags */
-  true, /* has_gate */
-  true, /* has_execute */
-  TV_IFCVT, /* tv_id */
-  0, /* properties_required */
-  0, /* properties_provided */
-  0, /* properties_destroyed */
-  0, /* todo_flags_start */
-  ( TODO_df_finish | TODO_verify_rtl_sharing ), /* todo_flags_finish */
+ {
+  RTL_PASS,
+  "ce2",                                /* name */
+  OPTGROUP_NONE,                        /* optinfo_flags */
+  gate_handle_if_after_combine,         /* gate */
+  rest_of_handle_if_after_combine,      /* execute */
+  NULL,                                 /* sub */
+  NULL,                                 /* next */
+  0,                                    /* static_pass_number */
+  TV_IFCVT,                             /* tv_id */
+  0,                                    /* properties_required */
+  0,                                    /* properties_provided */
+  0,                                    /* properties_destroyed */
+  0,                                    /* todo_flags_start */
+  TODO_df_finish | TODO_verify_rtl_sharing |
+  TODO_ggc_collect                      /* todo_flags_finish */
+ }
 };
-
-class pass_if_after_combine : public rtl_opt_pass
-{
-public:
-  pass_if_after_combine (gcc::context *ctxt)
-    : rtl_opt_pass (pass_data_if_after_combine, ctxt)
-  {}
-
-  /* opt_pass methods: */
-  bool gate () { return gate_handle_if_after_combine (); }
-  unsigned int execute () { return rest_of_handle_if_after_combine (); }
-
-}; // class pass_if_after_combine
-
-} // anon namespace
-
-rtl_opt_pass *
-make_pass_if_after_combine (gcc::context *ctxt)
-{
-  return new pass_if_after_combine (ctxt);
-}
 
 
 static bool
@@ -4627,45 +4539,28 @@ gate_handle_if_after_reload (void)
 static unsigned int
 rest_of_handle_if_after_reload (void)
 {
-  if_convert (true);
+  if_convert ();
   return 0;
 }
 
 
-namespace {
-
-const pass_data pass_data_if_after_reload =
+struct rtl_opt_pass pass_if_after_reload =
 {
-  RTL_PASS, /* type */
-  "ce3", /* name */
-  OPTGROUP_NONE, /* optinfo_flags */
-  true, /* has_gate */
-  true, /* has_execute */
-  TV_IFCVT2, /* tv_id */
-  0, /* properties_required */
-  0, /* properties_provided */
-  0, /* properties_destroyed */
-  0, /* todo_flags_start */
-  ( TODO_df_finish | TODO_verify_rtl_sharing ), /* todo_flags_finish */
+ {
+  RTL_PASS,
+  "ce3",                                /* name */
+  OPTGROUP_NONE,                        /* optinfo_flags */
+  gate_handle_if_after_reload,          /* gate */
+  rest_of_handle_if_after_reload,       /* execute */
+  NULL,                                 /* sub */
+  NULL,                                 /* next */
+  0,                                    /* static_pass_number */
+  TV_IFCVT2,                            /* tv_id */
+  0,                                    /* properties_required */
+  0,                                    /* properties_provided */
+  0,                                    /* properties_destroyed */
+  0,                                    /* todo_flags_start */
+  TODO_df_finish | TODO_verify_rtl_sharing |
+  TODO_ggc_collect                      /* todo_flags_finish */
+ }
 };
-
-class pass_if_after_reload : public rtl_opt_pass
-{
-public:
-  pass_if_after_reload (gcc::context *ctxt)
-    : rtl_opt_pass (pass_data_if_after_reload, ctxt)
-  {}
-
-  /* opt_pass methods: */
-  bool gate () { return gate_handle_if_after_reload (); }
-  unsigned int execute () { return rest_of_handle_if_after_reload (); }
-
-}; // class pass_if_after_reload
-
-} // anon namespace
-
-rtl_opt_pass *
-make_pass_if_after_reload (gcc::context *ctxt)
-{
-  return new pass_if_after_reload (ctxt);
-}

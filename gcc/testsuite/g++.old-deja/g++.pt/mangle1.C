@@ -1,5 +1,4 @@
 // { dg-do assemble  }
-// { dg-options "" }
 // Origin: Mark Mitchell <mark@codesourcery.com>
 
 typedef enum {} i;

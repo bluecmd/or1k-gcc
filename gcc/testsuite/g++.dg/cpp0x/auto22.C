@@ -1,5 +1,5 @@
 // PR c++/47999
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 int& identity(int& i)
 {

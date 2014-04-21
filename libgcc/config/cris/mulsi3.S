@@ -1,4 +1,4 @@
-;; Copyright (C) 2001-2014 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2013 Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
 ;;
@@ -113,22 +113,16 @@ ___Mul:
 	ret
 	nop
 #else
-;; See if we can avoid multiplying some of the parts, knowing
-;; they're zero.
-
+	move.d $r10,$r12
 	move.d $r11,$r9
-	bound.d $r10,$r9
+	bound.d $r12,$r9
 	cmpu.w 65535,$r9
 	bls L(L3)
-	move.d $r10,$r12
+	move.d $r12,$r13
 
-;; Nope, have to do all the parts of a 32-bit multiplication.
-;; See head comment in optabs.c:expand_doubleword_mult.
-
-	move.d $r10,$r13
-	movu.w $r11,$r9 ; ab*cd = (a*d + b*c)<<16 + b*d
+	movu.w $r11,$r9
 	lslq 16,$r13
-	mstep $r9,$r13	; d*b
+	mstep $r9,$r13
 	mstep $r9,$r13
 	mstep $r9,$r13
 	mstep $r9,$r13
@@ -146,7 +140,7 @@ ___Mul:
 	mstep $r9,$r13
 	clear.w $r10
 	test.d $r10
-	mstep $r9,$r10	; d*a
+	mstep $r9,$r10
 	mstep $r9,$r10
 	mstep $r9,$r10
 	mstep $r9,$r10
@@ -163,9 +157,10 @@ ___Mul:
 	mstep $r9,$r10
 	mstep $r9,$r10
 	movu.w $r12,$r12
-	clear.w $r11
-	move.d $r11,$r9 ; Doubles as a "test.d" preparing for the mstep.
-	mstep $r12,$r9	; b*c
+	move.d $r11,$r9
+	clear.w $r9
+	test.d $r9
+	mstep $r12,$r9
 	mstep $r12,$r9
 	mstep $r12,$r9
 	mstep $r12,$r9
@@ -187,24 +182,17 @@ ___Mul:
 	add.d $r13,$r10
 
 L(L3):
-;; Form the maximum in $r10, by knowing the minimum, $r9.
-;; (We don't know which one of $r10 or $r11 it is.)
-;; Check if the largest operand is still just 16 bits.
-
-	xor $r9,$r10
+	move.d $r9,$r10
 	xor $r11,$r10
+	xor $r12,$r10
 	cmpu.w 65535,$r10
 	bls L(L5)
 	movu.w $r9,$r13
 
-;; We have ab*cd = (a*c)<<32 + (a*d + b*c)<<16 + b*d, but c==0
-;; so we only need (a*d)<<16 + b*d with d = $r13, ab = $r10.
-;; We drop the upper part of (a*d)<<16 as we're only doing a
-;; 32-bit-result multiplication.
-
+	movu.w $r13,$r13
 	move.d $r10,$r9
 	lslq 16,$r9
-	mstep $r13,$r9	; b*d
+	mstep $r13,$r9
 	mstep $r13,$r9
 	mstep $r13,$r9
 	mstep $r13,$r9
@@ -222,7 +210,7 @@ L(L3):
 	mstep $r13,$r9
 	clear.w $r10
 	test.d $r10
-	mstep $r13,$r10	; a*d
+	mstep $r13,$r10
 	mstep $r13,$r10
 	mstep $r13,$r10
 	mstep $r13,$r10
@@ -243,27 +231,25 @@ L(L3):
 	add.d $r9,$r10
 
 L(L5):
-;; We have ab*cd = (a*c)<<32 + (a*d + b*c)<<16 + b*d, but a and c==0
-;; so b*d (with b=$r13, a=$r10) it is.
-
+	movu.w $r9,$r9
 	lslq 16,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
-	mstep $r13,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
+	mstep $r9,$r10
 	ret
-	mstep $r13,$r10
+	mstep $r9,$r10
 #endif
 L(Lfe1):
 	.size	___Mul,L(Lfe1)-___Mul

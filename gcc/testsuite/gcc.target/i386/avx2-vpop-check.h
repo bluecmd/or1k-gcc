@@ -47,9 +47,7 @@ avx2_test (void)
       gen_pop ();
       check_pop ();
 
-      /* We need to cast away volatility from c_ref here in order to eliminate
-	 warning if libc version of memcpy is used here.  */
-      if (memcmp (c, (void *) c_ref, SIZE * sizeof (TYPE)))
+      if (memcmp (c, c_ref, SIZE * sizeof (TYPE)))
 	abort();
     }
 }

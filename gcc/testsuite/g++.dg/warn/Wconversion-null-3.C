@@ -1,5 +1,5 @@
 // PR c++/48420
-// { dg-do compile { target { ! c++11 } } }
+// { dg-do compile { target c++98 } }
 
 void foo(int* p);
 

@@ -1,5 +1,6 @@
 // PR c++/49598
-// { dg-do run { target c++11 } }
+// { dg-options -std=c++0x }
+// { dg-do run }
 
 int
 main()

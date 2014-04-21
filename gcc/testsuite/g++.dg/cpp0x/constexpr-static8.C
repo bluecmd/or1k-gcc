@@ -1,6 +1,5 @@
 // PR c++/50258
-// { dg-do compile { target c++11 } }
-// { dg-options "-fpermissive" }
+// { dg-options "-std=c++0x -fpermissive" }
 
 struct Foo {
   static const double d = 3.14; // { dg-warning "constexpr" }

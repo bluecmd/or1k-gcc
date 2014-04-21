@@ -1,5 +1,6 @@
 // PR c++/37234
-// { dg-do link { target c++11 } }
+// { dg-do link }
+// { dg-options "-std=c++0x" }
 
 template <typename T>
 class foo {

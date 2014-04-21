@@ -119,15 +119,20 @@ class TestResult(object):
 
   def __init__(self, summary_line, ordinal=-1):
     try:
-      (self.attrs, summary_line) = SplitAttributesFromSummaryLine(summary_line)
+      self.attrs = ''
+      if '|' in summary_line:
+        (self.attrs, summary_line) = summary_line.split('|', 1)
       try:
         (self.state,
          self.name,
-         self.description) = re.match(r'([A-Z]+):\s*(\S+)\s*(.*)',
+         self.description) = re.match(r' *([A-Z]+):\s*(\S+)\s+(.*)',
                                       summary_line).groups()
       except:
         print 'Failed to parse summary line: "%s"' % summary_line
         raise
+      self.attrs = self.attrs.strip()
+      self.state = self.state.strip()
+      self.description = self.description.strip()
       self.ordinal = ordinal
     except ValueError:
       Error('Cannot parse summary line "%s"' % summary_line)
@@ -191,9 +196,11 @@ def GetMakefileValue(makefile_name, value_name):
   return None
 
 
-def ValidBuildDirectory(builddir):
+def ValidBuildDirectory(builddir, target):
   if (not os.path.exists(builddir) or
-      not os.path.exists('%s/Makefile' % builddir)):
+      not os.path.exists('%s/Makefile' % builddir) or
+      (not os.path.exists('%s/build-%s' % (builddir, target)) and
+       not os.path.exists('%s/%s' % (builddir, target)))):
     return False
   return True
 
@@ -203,20 +210,11 @@ def IsComment(line):
   return line.startswith('#')
 
 
-def SplitAttributesFromSummaryLine(line):
-  """Splits off attributes from a summary line, if present."""
-  if '|' in line and not _VALID_TEST_RESULTS_REX.match(line):
-    (attrs, line) = line.split('|', 1)
-    attrs = attrs.strip()
-  else:
-    attrs = ''
-  line = line.strip()
-  return (attrs, line)
-
-
 def IsInterestingResult(line):
   """Return True if line is one of the summary lines we care about."""
-  (_, line) = SplitAttributesFromSummaryLine(line)
+  if '|' in line:
+    (_, line) = line.split('|', 1)
+    line = line.strip()
   return bool(_VALID_TEST_RESULTS_REX.match(line))
 
 
@@ -364,17 +362,14 @@ def GetManifestPath(srcdir, target, user_provided_must_exist):
       Error('Manifest does not exist: %s' % manifest_path)
     return manifest_path
   else:
-    if not srcdir:
-      Error('Could not determine the location of GCC\'s source tree. '
-            'The Makefile does not contain a definition for "srcdir".')
-    if not target:
-      Error('Could not determine the target triplet for this build. '
-            'The Makefile does not contain a definition for "target_alias".')
+    assert srcdir and target
     return _MANIFEST_PATH_PATTERN % (srcdir, _MANIFEST_SUBDIR, target)
 
 
 def GetBuildData():
-  if not ValidBuildDirectory(_OPTIONS.build_dir):
+  srcdir = GetMakefileValue('%s/Makefile' % _OPTIONS.build_dir, 'srcdir =')
+  target = GetMakefileValue('%s/Makefile' % _OPTIONS.build_dir, 'target_alias=')
+  if not ValidBuildDirectory(_OPTIONS.build_dir, target):
     # If we have been given a set of results to use, we may
     # not be inside a valid GCC build directory.  In that case,
     # the user must provide both a manifest file and a set
@@ -385,8 +380,6 @@ def GetBuildData():
             _OPTIONS.build_dir)
     else:
       return None, None
-  srcdir = GetMakefileValue('%s/Makefile' % _OPTIONS.build_dir, 'srcdir =')
-  target = GetMakefileValue('%s/Makefile' % _OPTIONS.build_dir, 'target_alias=')
   print 'Source directory: %s' % srcdir
   print 'Build target:     %s' % target
   return srcdir, target
@@ -420,9 +413,8 @@ def PerformComparison(expected, actual, ignore_missing_failures):
   if not ignore_missing_failures and len(expected_vs_actual) > 0:
     PrintSummary('Expected results not present in this build (fixed tests)'
                  '\n\nNOTE: This is not a failure.  It just means that these '
-                 'tests were expected\nto fail, but either they worked in '
-                 'this configuration or they were not\npresent at all.\n',
-                 expected_vs_actual)
+                 'tests were expected\nto fail, but they worked in this '
+                 'configuration.\n', expected_vs_actual)
 
   if tests_ok:
     print '\nSUCCESS: No unexpected failures.'

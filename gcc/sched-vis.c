@@ -1,5 +1,5 @@
 /* Printing of RTL in "slim", mnemonic like form.
-   Copyright (C) 1992-2014 Free Software Foundation, Inc.
+   Copyright (C) 1992-2013 Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com) Enhanced by,
    and currently maintained by, Jim Wilson (wilson@cygnus.com)
 
@@ -47,8 +47,9 @@ along with GCC; see the file COPYING3.  If not see
    It is also possible to obtain a string for a single pattern as a string
    pointer, via str_pattern_slim, but this usage is discouraged.  */
 
-/* For insns we print patterns, and for some patterns we print insns...  */
-static void print_insn_with_notes (pretty_printer *, const_rtx);
+/* A pretty-printer for slim rtl printing.  */
+static bool rtl_slim_pp_initialized = false;
+static pretty_printer rtl_slim_pp;
 
 /* This recognizes rtx'en classified as expressions.  These are always
    represent some action on values or results of other expression, that
@@ -343,11 +344,11 @@ print_exp (pretty_printer *pp, const_rtx x, int verbose)
 	pp_string (pp, "unspec");
 	if (GET_CODE (x) == UNSPEC_VOLATILE)
 	  pp_string (pp, "/v");
-	pp_left_bracket (pp);
+	pp_character (pp, '[');
 	for (i = 0; i < XVECLEN (x, 0); i++)
 	  {
 	    if (i != 0)
-	      pp_comma (pp);
+	      pp_character (pp, ',');
 	    print_pattern (pp, XVECEXP (x, 0, i), verbose);
 	  }
 	pp_string (pp, "] ");
@@ -389,7 +390,7 @@ print_exp (pretty_printer *pp, const_rtx x, int verbose)
   if (fun)
     {
       pp_string (pp, fun);
-      pp_left_paren (pp);
+      pp_character (pp, '(');
     }
 
   for (i = 0; i < 4; i++)
@@ -400,13 +401,13 @@ print_exp (pretty_printer *pp, const_rtx x, int verbose)
       if (op[i])
 	{
 	  if (fun && i != 0)
-	    pp_comma (pp);
+	    pp_character (pp, ',');
 	  print_value (pp, op[i], verbose);
 	}
     }
 
   if (fun)
-    pp_right_paren (pp);
+    pp_character (pp, ')');
 }		/* print_exp */
 
 /* Prints rtxes, I customarily classified as values.  They're constants,
@@ -458,13 +459,13 @@ print_value (pretty_printer *pp, const_rtx x, int verbose)
     case STRICT_LOW_PART:
       pp_printf (pp, "%s(", GET_RTX_NAME (GET_CODE (x)));
       print_value (pp, XEXP (x, 0), verbose);
-      pp_right_paren (pp);
+      pp_character (pp, ')');
       break;
     case REG:
       if (REGNO (x) < FIRST_PSEUDO_REGISTER)
 	{
 	  if (ISDIGIT (reg_names[REGNO (x)][0]))
-	    pp_modulo (pp);
+	    pp_character (pp, '%');
 	  pp_string (pp, reg_names[REGNO (x)]);
 	}
       else
@@ -482,9 +483,9 @@ print_value (pretty_printer *pp, const_rtx x, int verbose)
       pp_string (pp, GET_RTX_NAME (GET_CODE (x)));
       break;
     case MEM:
-      pp_left_bracket (pp);
+      pp_character (pp, '[');
       print_value (pp, XEXP (x, 0), verbose);
-      pp_right_bracket (pp);
+      pp_character (pp, ']');
       break;
     case DEBUG_EXPR:
       pp_printf (pp, "D#%i", DEBUG_TEMP_UID (DEBUG_EXPR_TREE_DECL (x)));
@@ -510,7 +511,7 @@ print_pattern (pretty_printer *pp, const_rtx x, int verbose)
     {
     case SET:
       print_value (pp, SET_DEST (x), verbose);
-      pp_equal (pp);
+      pp_character (pp, '=');
       print_value (pp, SET_SRC (x), verbose);
       break;
     case RETURN:
@@ -531,14 +532,14 @@ print_pattern (pretty_printer *pp, const_rtx x, int verbose)
       print_value (pp, PAT_VAR_LOCATION_LOC (x), verbose);
       break;
     case COND_EXEC:
-      pp_left_paren (pp);
+      pp_character (pp, '(');
       if (GET_CODE (COND_EXEC_TEST (x)) == NE
 	  && XEXP (COND_EXEC_TEST (x), 1) == const0_rtx)
 	print_value (pp, XEXP (COND_EXEC_TEST (x), 0), verbose);
       else if (GET_CODE (COND_EXEC_TEST (x)) == EQ
 	       && XEXP (COND_EXEC_TEST (x), 1) == const0_rtx)
 	{
-	  pp_exclamation (pp);
+	  pp_character (pp, '!');
 	  print_value (pp, XEXP (COND_EXEC_TEST (x), 0), verbose);
 	}
       else
@@ -550,44 +551,26 @@ print_pattern (pretty_printer *pp, const_rtx x, int verbose)
       {
 	int i;
 
-	pp_left_brace (pp);
+	pp_character (pp, '{');
 	for (i = 0; i < XVECLEN (x, 0); i++)
 	  {
 	    print_pattern (pp, XVECEXP (x, 0, i), verbose);
-	    pp_semicolon (pp);
+	    pp_character (pp, ';');
 	  }
-	pp_right_brace (pp);
+	pp_character (pp, '}');
       }
       break;
     case SEQUENCE:
       {
-	pp_string (pp, "sequence{");
-	if (INSN_P (XVECEXP (x, 0, 0)))
-	  {
-	    /* Print the sequence insns indented.  */
-	    const char * save_print_rtx_head = print_rtx_head;
-	    char indented_print_rtx_head[32];
+	int i;
 
-	    pp_newline (pp);
-	    gcc_assert (strlen (print_rtx_head) < sizeof (indented_print_rtx_head) - 4);
-	    snprintf (indented_print_rtx_head,
-		      sizeof (indented_print_rtx_head),
-		      "%s     ", print_rtx_head);
-	    print_rtx_head = indented_print_rtx_head;
-	    for (int i = 0; i < XVECLEN (x, 0); i++)
-	      print_insn_with_notes (pp, XVECEXP (x, 0, i));
-	    pp_printf (pp, "%s      ", save_print_rtx_head);
-	    print_rtx_head = save_print_rtx_head;
-	  }
-	else
+	pp_string (pp, "sequence{");
+	for (i = 0; i < XVECLEN (x, 0); i++)
 	  {
-	    for (int i = 0; i < XVECLEN (x, 0); i++)
-	      {
-		print_pattern (pp, XVECEXP (x, 0, i), verbose);
-		pp_semicolon (pp);
-	      }
+	    print_pattern (pp, XVECEXP (x, 0, i), verbose);
+	    pp_character (pp, ';');
 	  }
-	pp_right_brace (pp);
+	pp_character (pp, '}');
       }
       break;
     case ASM_INPUT:
@@ -683,11 +666,6 @@ print_insn (pretty_printer *pp, const_rtx x, int verbose)
     case CODE_LABEL:
       pp_printf (pp, "L%d:", INSN_UID (x));
       break;
-    case JUMP_TABLE_DATA:
-      pp_string (pp, "jump_table_data{\n");
-      print_pattern (pp, PATTERN (x), verbose);
-      pp_right_brace (pp);
-      break;
     case BARRIER:
       pp_string (pp, "barrier");
       break;
@@ -722,9 +700,9 @@ print_insn (pretty_printer *pp, const_rtx x, int verbose)
 
 	  case NOTE_INSN_VAR_LOCATION:
 	  case NOTE_INSN_CALL_ARG_LOCATION:
-	    pp_left_brace (pp);
+	    pp_character (pp, '{');
 	    print_pattern (pp, NOTE_VAR_LOCATION (x), verbose);
-	    pp_right_brace (pp);
+	    pp_character (pp, '}');
 	    break;
 
 	  default:
@@ -751,12 +729,27 @@ print_insn_with_notes (pretty_printer *pp, const_rtx x)
       {
 	pp_printf (pp, "%s      %s ", print_rtx_head,
 		   GET_REG_NOTE_NAME (REG_NOTE_KIND (note)));
-	if (GET_CODE (note) == INT_LIST)
-	  pp_printf (pp, "%d", XINT (note, 0));
-	else
-	  print_pattern (pp, XEXP (note, 0), 1);
+	print_pattern (pp, XEXP (note, 0), 1);
 	pp_newline (pp);
       }
+}
+
+/* Return a pretty-print buffer set up to print to file F.  */
+
+static pretty_printer *
+init_rtl_slim_pretty_print (FILE *f)
+{
+  if (! rtl_slim_pp_initialized)
+    {
+      pp_construct (&rtl_slim_pp, /*prefix=*/NULL, /*linewidth=*/0);
+      rtl_slim_pp_initialized = true;
+    }
+  else
+    /* Clean out any data that str_insn_slim may have left here.  */
+    pp_clear_output_area (&rtl_slim_pp);
+
+  rtl_slim_pp.buffer->stream = f;
+  return &rtl_slim_pp;
 }
 
 /* Print X, an RTL value node, to file F in slim format.  Include
@@ -768,10 +761,9 @@ print_insn_with_notes (pretty_printer *pp, const_rtx x)
 void
 dump_value_slim (FILE *f, const_rtx x, int verbose)
 {
-  pretty_printer rtl_slim_pp;
-  rtl_slim_pp.buffer->stream = f;
-  print_value (&rtl_slim_pp, x, verbose);
-  pp_flush (&rtl_slim_pp);
+  pretty_printer *pp = init_rtl_slim_pretty_print (f);
+  print_value (pp, x, verbose);
+  pp_flush (pp);
 }
 
 /* Emit a slim dump of X (an insn) to the file F, including any register
@@ -779,10 +771,9 @@ dump_value_slim (FILE *f, const_rtx x, int verbose)
 void
 dump_insn_slim (FILE *f, const_rtx x)
 {
-  pretty_printer rtl_slim_pp;
-  rtl_slim_pp.buffer->stream = f;
-  print_insn_with_notes (&rtl_slim_pp, x);
-  pp_flush (&rtl_slim_pp);
+  pretty_printer *pp = init_rtl_slim_pretty_print (f);
+  print_insn_with_notes (pp, x);
+  pp_flush (pp);
 }
 
 /* Same as above, but stop at LAST or when COUNT == 0.
@@ -793,20 +784,19 @@ dump_rtl_slim (FILE *f, const_rtx first, const_rtx last,
 	       int count, int flags ATTRIBUTE_UNUSED)
 {
   const_rtx insn, tail;
-  pretty_printer rtl_slim_pp;
-  rtl_slim_pp.buffer->stream = f;
+  pretty_printer *pp = init_rtl_slim_pretty_print (f);
 
   tail = last ? NEXT_INSN (last) : NULL_RTX;
   for (insn = first;
        (insn != NULL) && (insn != tail) && (count != 0);
        insn = NEXT_INSN (insn))
     {
-      print_insn_with_notes (&rtl_slim_pp, insn);
+      print_insn_with_notes (pp, insn);
       if (count > 0)
         count--;
     }
 
-  pp_flush (&rtl_slim_pp);
+  pp_flush (pp);
 }
 
 /* Dumps basic block BB to pretty-printer PP in slim form and without and
@@ -823,7 +813,7 @@ rtl_dump_bb_for_graph (pretty_printer *pp, basic_block bb)
     {
       if (! first)
 	{
-	  pp_bar (pp);
+	  pp_character (pp, '|');
 	  pp_write_text_to_stream (pp);
 	}
       first = false;
@@ -841,9 +831,9 @@ rtl_dump_bb_for_graph (pretty_printer *pp, basic_block bb)
 const char *
 str_pattern_slim (const_rtx x)
 {
-  pretty_printer rtl_slim_pp;
-  print_pattern (&rtl_slim_pp, x, 0);
-  return ggc_strdup (pp_formatted_text (&rtl_slim_pp));
+  pretty_printer *pp = init_rtl_slim_pretty_print (NULL);
+  print_pattern (pp, x, 0);
+  return pp_base_formatted_text (pp);
 }
 
 /* Emit a slim dump of X (an insn) to stderr.  */
@@ -873,7 +863,7 @@ extern void debug_bb_n_slim (int);
 DEBUG_FUNCTION void
 debug_bb_n_slim (int n)
 {
-  basic_block bb = BASIC_BLOCK_FOR_FN (cfun, n);
+  basic_block bb = BASIC_BLOCK (n);
   debug_bb_slim (bb);
 }
 

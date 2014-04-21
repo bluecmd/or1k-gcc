@@ -1,5 +1,5 @@
 // { dg-do compile }
-// { dg-options "-g -dA -fno-merge-debug-strings -fno-debug-types-section" }
+// { dg-options "-g -dA -fno-merge-debug-strings" }
 
 struct A
 {

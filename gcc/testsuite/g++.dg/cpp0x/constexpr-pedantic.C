@@ -1,7 +1,6 @@
 // The FCD doesn't allow typedefs and static_assert in constexpr functions,
 // but it should.
-// { dg-do compile { target c++11 } }
-// { dg-options "-pedantic" }
+// { dg-options "-std=c++0x -pedantic" }
 
 template <class T>
 constexpr T f(T t)

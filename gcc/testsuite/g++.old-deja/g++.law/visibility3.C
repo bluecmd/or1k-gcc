@@ -11,7 +11,7 @@ int x;
 int main(void)
 {
   static int s;
-  int x; // { dg-message "" } declared
+  int x; // { dg-error "" } declared
   extern int g();
 
   struct local {

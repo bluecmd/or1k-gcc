@@ -1,6 +1,6 @@
 // Core issue 1351
 // { dg-do run { xfail *-*-* } }
-// { dg-require-effective-target c++11 }
+// { dg-options -std=c++0x }
 
 bool fail;
 struct A

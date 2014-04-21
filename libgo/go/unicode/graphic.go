@@ -39,7 +39,7 @@ func IsGraphic(r rune) bool {
 	if uint32(r) <= MaxLatin1 {
 		return properties[uint8(r)]&pg != 0
 	}
-	return In(r, GraphicRanges...)
+	return IsOneOf(GraphicRanges, r)
 }
 
 // IsPrint reports whether the rune is defined as printable by Go. Such
@@ -51,23 +51,12 @@ func IsPrint(r rune) bool {
 	if uint32(r) <= MaxLatin1 {
 		return properties[uint8(r)]&pp != 0
 	}
-	return In(r, PrintRanges...)
+	return IsOneOf(PrintRanges, r)
 }
 
 // IsOneOf reports whether the rune is a member of one of the ranges.
-// The function "In" provides a nicer signature and should be used in preference to IsOneOf.
-func IsOneOf(ranges []*RangeTable, r rune) bool {
-	for _, inside := range ranges {
-		if Is(inside, r) {
-			return true
-		}
-	}
-	return false
-}
-
-// In reports whether the rune is a member of one of the ranges.
-func In(r rune, ranges ...*RangeTable) bool {
-	for _, inside := range ranges {
+func IsOneOf(set []*RangeTable, r rune) bool {
+	for _, inside := range set {
 		if Is(inside, r) {
 			return true
 		}

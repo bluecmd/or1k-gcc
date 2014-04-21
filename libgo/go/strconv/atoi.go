@@ -33,8 +33,7 @@ func rangeError(fn, str string) *NumError {
 
 const intSize = 32 << uint(^uint(0)>>63)
 
-// IntSize is the size in bits of an int or uint value.
-const IntSize = intSize
+const IntSize = intSize // number of bits in int, uint (32 or 64)
 
 // Return the first number n such that n*base >= 1<<64.
 func cutoff64(base int) uint64 {
@@ -142,9 +141,9 @@ Error:
 //
 // The errors that ParseInt returns have concrete type *NumError
 // and include err.Num = s.  If s is empty or contains invalid
-// digits, err.Err = ErrSyntax; if the value corresponding
+// digits, err.Error = ErrSyntax; if the value corresponding
 // to s cannot be represented by a signed integer of the
-// given size, err.Err = ErrRange.
+// given size, err.Error = ErrRange.
 func ParseInt(s string, base int, bitSize int) (i int64, err error) {
 	const fnParseInt = "ParseInt"
 

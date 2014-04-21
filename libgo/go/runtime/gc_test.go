@@ -138,9 +138,7 @@ func TestGcRescan(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		p := &Y{}
 		p.c = make(chan error)
-		if head != nil {
-			p.nextx = &head.X
-		}
+		p.nextx = &head.X
 		p.nexty = head
 		p.p = new(int)
 		*p.p = 42

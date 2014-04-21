@@ -5,7 +5,7 @@
 namespace A{
   void f(int);
   void f(int,int);
-  int i;              // { dg-message "" } .*
+  int i;              // { dg-error "" } .*
 }
 
 void A::f(){}         // { dg-error "" } should have been declared before

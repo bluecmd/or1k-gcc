@@ -1,6 +1,6 @@
 /* Verify that final methods are devirtualized */
-/* { dg-do compile { target c++11 } } */
-/* { dg-options "-fdump-tree-original"  } */
+/* { dg-do compile } */
+/* { dg-options "-fdump-tree-original -std=c++0x"  } */
 
 struct A final
 {

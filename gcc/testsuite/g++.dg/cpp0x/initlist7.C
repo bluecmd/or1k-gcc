@@ -1,5 +1,5 @@
 // PR c++/37932
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x -pedantic-errors" }
 
 typedef enum { AA=1, BB=2 } my_enum;
 

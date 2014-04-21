@@ -1,6 +1,7 @@
 // Test for conversion from stateless lambda to function pointer.
 
-// { dg-do run { target c++11 } }
+// { dg-options -std=c++0x }
+// { dg-do run }
 
 typedef int (*pfn)(int);
 

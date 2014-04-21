@@ -1,7 +1,7 @@
 /* Configuration common to all targets running the GNU system.  */
 
 /*
-Copyright (C) 1994-2014 Free Software Foundation, Inc.
+Copyright (C) 1994-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -38,4 +38,12 @@ along with GCC.  If not, see <http://www.gnu.org/licenses/>.
 	builtin_assert ("system=mach");		\
 	builtin_assert ("system=unix");		\
 	builtin_assert ("system=posix");	\
+    } while (0)
+
+#undef TARGET_OS_D_BUILTINS
+#define TARGET_OS_D_BUILTINS()					\
+    do {							\
+								\
+	builtin_define ("Hurd");				\
+	builtin_define ("Posix");				\
     } while (0)

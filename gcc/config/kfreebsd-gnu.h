@@ -1,5 +1,5 @@
 /* Definitions for kFreeBSD-based GNU systems with ELF format
-   Copyright (C) 2004-2014 Free Software Foundation, Inc.
+   Copyright (C) 2004-2013 Free Software Foundation, Inc.
    Contributed by Robert Millan.
 
 This file is part of GCC.
@@ -28,6 +28,14 @@ along with GCC; see the file COPYING3.  If not see
 	builtin_assert ("system=posix");	\
     }						\
   while (0)
+
+#undef TARGET_OS_D_BUILTINS
+#define TARGET_OS_D_BUILTINS()					\
+    do {							\
+	builtin_define ("FreeBSD");				\
+	builtin_define ("Posix");				\
+	builtin_define ("GNU_GLibc");				\
+    } while (0)
 
 #define GNU_USER_DYNAMIC_LINKER        GLIBC_DYNAMIC_LINKER
 #define GNU_USER_DYNAMIC_LINKER32      GLIBC_DYNAMIC_LINKER32

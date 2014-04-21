@@ -1,5 +1,6 @@
 // PR libstdc++/48760
-// { dg-do run { target c++11 } }
+// { dg-options -std=c++0x }
+// { dg-do run }
 
 constexpr _Complex int i{1,2};
 constexpr _Complex int j{3};

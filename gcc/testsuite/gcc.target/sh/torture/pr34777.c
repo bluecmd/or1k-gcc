@@ -1,4 +1,4 @@
-/* { dg-do compile }  */
+/* { dg-do compile { target "sh*-*-*" } } */
 /* { dg-additional-options "-fschedule-insns -fPIC -mprefergot" }  */
 /* { dg-skip-if "" { "sh*-*-*" } { "-m5*" } { "" } }  */
 

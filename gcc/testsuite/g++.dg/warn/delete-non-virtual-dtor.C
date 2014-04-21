@@ -1,5 +1,5 @@
-// { dg-options "-Wdelete-non-virtual-dtor" }
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x -Wdelete-non-virtual-dtor" }
+// { dg-do compile }
 
 struct polyBase { virtual void f(); };
 

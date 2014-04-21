@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # Copyright 2009 The Go Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
@@ -31,7 +31,7 @@ if(@ARGV < 1) {
 
 # Grab SOURCEFILES
 foreach(reverse 0 .. @ARGV-1) {
-	unless($ARGV[$_] =~ /\.(go|s)$/) {
+	unless($ARGV[$_] =~ /\.go$/) {
 		@file = @ARGV[$_+1 .. @ARGV-1];
 		last;
 	}

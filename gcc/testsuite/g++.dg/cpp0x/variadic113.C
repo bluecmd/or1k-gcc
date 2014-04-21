@@ -1,6 +1,5 @@
 // PR c++/49251
-// { dg-do compile { target c++11 } }
-// { dg-options "-Wunused-parameter" }
+// { dg-options "-std=c++0x -Wunused-parameter" }
 
 struct A {};
 template <int> int f(A);

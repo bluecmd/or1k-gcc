@@ -5,7 +5,6 @@
 
 if { [istarget i?86-*-darwin*]
      || [istarget i?86-*-linux*]
-     || [istarget i?86-*-gnu*]
      || [istarget i?86-*-kfreebsd*-gnu]
      || [istarget i?86-*-knetbsd*-gnu]
      || [istarget i?86-*-solaris2*]

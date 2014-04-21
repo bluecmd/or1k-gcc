@@ -1,6 +1,5 @@
 // PR c++/52043
-// { dg-do compile { target c++11 } }
-// { dg-options "-Wreturn-type" }
+// { dg-options "-std=c++11 -Wreturn-type" }
 
 template < class T > struct Container
 {

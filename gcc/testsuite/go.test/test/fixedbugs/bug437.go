@@ -1,4 +1,7 @@
-// rundir
+// $G $D/$F.dir/one.go && $G $D/$F.dir/two.go && $G $D/$F.go && $L $F.$A && ./$A.out
+
+// NOTE: This test is not run by 'run.go' and so not run by all.bash.
+// To run this test you must use the ./run shell script.
 
 // Copyright 2012 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -8,4 +11,20 @@
 // interface defined in a third package, where the interface has a
 // hidden method.  This used to cause a link error with gccgo.
 
-package ignored
+package main
+
+import (
+	"./one"
+	"./two"
+)
+
+func F(i1 one.I1) {
+	switch v := i1.(type) {
+	case two.S2:
+		one.F1(v)
+	}
+}
+
+func main() {
+	F(nil)
+}

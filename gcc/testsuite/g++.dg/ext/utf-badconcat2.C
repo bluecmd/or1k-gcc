@@ -1,5 +1,6 @@
 // Test unsupported concatenation of UTF-8 string literals.
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 const void *s0	= u8"a"   "b";
 const void *s1	=   "a" u8"b";

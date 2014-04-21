@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd netbsd openbsd
+// +build darwin
 
 #include "runtime.h"
-#include "defs.h"
-#include "malloc.h"
+#include "defs_GOOS_GOARCH.h"
 
 // Integrated network poller (kqueue-based implementation).
 
@@ -28,7 +27,7 @@ runtime_netpollinit(void)
 }
 
 int32
-runtime_netpollopen(uintptr fd, PollDesc *pd)
+runtime_netpollopen(int32 fd, PollDesc *pd)
 {
 	Kevent ev[2];
 	int32 n;
@@ -36,22 +35,30 @@ runtime_netpollopen(uintptr fd, PollDesc *pd)
 	// Arm both EVFILT_READ and EVFILT_WRITE in edge-triggered mode (EV_CLEAR)
 	// for the whole fd lifetime.  The notifications are automatically unregistered
 	// when fd is closed.
-	ev[0].ident = (uint32)fd;
+	ev[0].ident = fd;
 	ev[0].filter = EVFILT_READ;
-	ev[0].flags = EV_ADD|EV_CLEAR;
+	ev[0].flags = EV_ADD|EV_RECEIPT|EV_CLEAR;
 	ev[0].fflags = 0;
 	ev[0].data = 0;
-	ev[0].udata = (kevent_udata)pd;
+	ev[0].udata = (byte*)pd;
 	ev[1] = ev[0];
 	ev[1].filter = EVFILT_WRITE;
-	n = runtime_kevent(kq, ev, 2, nil, 0, nil);
+	n = runtime_kevent(kq, ev, 2, ev, 2, nil);
 	if(n < 0)
 		return -n;
+	if(n != 2 ||
+		(ev[0].flags&EV_ERROR) == 0 || ev[0].ident != fd || ev[0].filter != EVFILT_READ ||
+		(ev[1].flags&EV_ERROR) == 0 || ev[1].ident != fd || ev[1].filter != EVFILT_WRITE)
+		return EFAULT;  // just to mark out from other errors
+	if(ev[0].data != 0)
+		return ev[0].data;
+	if(ev[1].data != 0)
+		return ev[1].data;
 	return 0;
 }
 
 int32
-runtime_netpollclose(uintptr fd)
+runtime_netpollclose(int32 fd)
 {
 	// Don't need to unregister because calling close()
 	// on fd will remove any kevents that reference the descriptor.
@@ -67,7 +74,7 @@ runtime_netpoll(bool block)
 	static int32 lasterr;
 	Kevent events[64], *ev;
 	Timespec ts, *tp;
-	int32 n, i, mode;
+	int32 n, i;
 	G *gp;
 
 	if(kq == -1)
@@ -90,21 +97,12 @@ retry:
 	}
 	for(i = 0; i < n; i++) {
 		ev = &events[i];
-		mode = 0;
 		if(ev->filter == EVFILT_READ)
-			mode += 'r';
+			runtime_netpollready(&gp, (PollDesc*)ev->udata, 'r');
 		if(ev->filter == EVFILT_WRITE)
-			mode += 'w';
-		if(mode)
-			runtime_netpollready(&gp, (PollDesc*)ev->udata, mode);
+			runtime_netpollready(&gp, (PollDesc*)ev->udata, 'w');
 	}
 	if(block && gp == nil)
 		goto retry;
 	return gp;
-}
-
-void
-runtime_netpoll_scan(void (*addroot)(Obj))
-{
-	USED(addroot);
 }

@@ -1,6 +1,5 @@
 // Make sure C99 complex works with constexpr
-// { dg-do compile { target c++11 } }
-// { dg-options "" }
+// { dg-options -std=gnu++0x }
 
 struct complex
 {

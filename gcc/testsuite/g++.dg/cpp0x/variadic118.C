@@ -1,5 +1,5 @@
 // This should fail deduction, before it produces a candidate.
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template <class... T>
 void f(T... ts);		// { dg-message "deduction" }

@@ -7,7 +7,7 @@
 // declarative region (7.3.2, clause 14). ]"
 
 namespace N
-{ // { dg-message "previous declaration" }
+{ // { dg-error "previous declaration" }
 }
 
 class N; // { dg-error "redeclared" }

@@ -34,7 +34,7 @@ func randFloat32(rand *rand.Rand) float32 {
 
 // randFloat64 generates a random float taking the full range of a float64.
 func randFloat64(rand *rand.Rand) float64 {
-	f := rand.Float64() * math.MaxFloat64
+	f := rand.Float64()
 	if rand.Int()&1 == 1 {
 		f = -f
 	}
@@ -56,88 +56,90 @@ func Value(t reflect.Type, rand *rand.Rand) (value reflect.Value, ok bool) {
 		return m.Generate(rand, complexSize), true
 	}
 
-	v := reflect.New(t).Elem()
 	switch concrete := t; concrete.Kind() {
 	case reflect.Bool:
-		v.SetBool(rand.Int()&1 == 0)
+		return reflect.ValueOf(rand.Int()&1 == 0), true
 	case reflect.Float32:
-		v.SetFloat(float64(randFloat32(rand)))
+		return reflect.ValueOf(randFloat32(rand)), true
 	case reflect.Float64:
-		v.SetFloat(randFloat64(rand))
+		return reflect.ValueOf(randFloat64(rand)), true
 	case reflect.Complex64:
-		v.SetComplex(complex(float64(randFloat32(rand)), float64(randFloat32(rand))))
+		return reflect.ValueOf(complex(randFloat32(rand), randFloat32(rand))), true
 	case reflect.Complex128:
-		v.SetComplex(complex(randFloat64(rand), randFloat64(rand)))
+		return reflect.ValueOf(complex(randFloat64(rand), randFloat64(rand))), true
 	case reflect.Int16:
-		v.SetInt(randInt64(rand))
+		return reflect.ValueOf(int16(randInt64(rand))), true
 	case reflect.Int32:
-		v.SetInt(randInt64(rand))
+		return reflect.ValueOf(int32(randInt64(rand))), true
 	case reflect.Int64:
-		v.SetInt(randInt64(rand))
+		return reflect.ValueOf(randInt64(rand)), true
 	case reflect.Int8:
-		v.SetInt(randInt64(rand))
+		return reflect.ValueOf(int8(randInt64(rand))), true
 	case reflect.Int:
-		v.SetInt(randInt64(rand))
+		return reflect.ValueOf(int(randInt64(rand))), true
 	case reflect.Uint16:
-		v.SetUint(uint64(randInt64(rand)))
+		return reflect.ValueOf(uint16(randInt64(rand))), true
 	case reflect.Uint32:
-		v.SetUint(uint64(randInt64(rand)))
+		return reflect.ValueOf(uint32(randInt64(rand))), true
 	case reflect.Uint64:
-		v.SetUint(uint64(randInt64(rand)))
+		return reflect.ValueOf(uint64(randInt64(rand))), true
 	case reflect.Uint8:
-		v.SetUint(uint64(randInt64(rand)))
+		return reflect.ValueOf(uint8(randInt64(rand))), true
 	case reflect.Uint:
-		v.SetUint(uint64(randInt64(rand)))
+		return reflect.ValueOf(uint(randInt64(rand))), true
 	case reflect.Uintptr:
-		v.SetUint(uint64(randInt64(rand)))
+		return reflect.ValueOf(uintptr(randInt64(rand))), true
 	case reflect.Map:
 		numElems := rand.Intn(complexSize)
-		v.Set(reflect.MakeMap(concrete))
+		m := reflect.MakeMap(concrete)
 		for i := 0; i < numElems; i++ {
 			key, ok1 := Value(concrete.Key(), rand)
 			value, ok2 := Value(concrete.Elem(), rand)
 			if !ok1 || !ok2 {
 				return reflect.Value{}, false
 			}
-			v.SetMapIndex(key, value)
+			m.SetMapIndex(key, value)
 		}
+		return m, true
 	case reflect.Ptr:
-		elem, ok := Value(concrete.Elem(), rand)
+		v, ok := Value(concrete.Elem(), rand)
 		if !ok {
 			return reflect.Value{}, false
 		}
-		v.Set(reflect.New(concrete.Elem()))
-		v.Elem().Set(elem)
+		p := reflect.New(concrete.Elem())
+		p.Elem().Set(v)
+		return p, true
 	case reflect.Slice:
 		numElems := rand.Intn(complexSize)
-		v.Set(reflect.MakeSlice(concrete, numElems, numElems))
+		s := reflect.MakeSlice(concrete, numElems, numElems)
 		for i := 0; i < numElems; i++ {
-			elem, ok := Value(concrete.Elem(), rand)
+			v, ok := Value(concrete.Elem(), rand)
 			if !ok {
 				return reflect.Value{}, false
 			}
-			v.Index(i).Set(elem)
+			s.Index(i).Set(v)
 		}
+		return s, true
 	case reflect.String:
 		numChars := rand.Intn(complexSize)
 		codePoints := make([]rune, numChars)
 		for i := 0; i < numChars; i++ {
 			codePoints[i] = rune(rand.Intn(0x10ffff))
 		}
-		v.SetString(string(codePoints))
+		return reflect.ValueOf(string(codePoints)), true
 	case reflect.Struct:
-		for i := 0; i < v.NumField(); i++ {
-			elem, ok := Value(concrete.Field(i).Type, rand)
+		s := reflect.New(t).Elem()
+		for i := 0; i < s.NumField(); i++ {
+			v, ok := Value(concrete.Field(i).Type, rand)
 			if !ok {
 				return reflect.Value{}, false
 			}
-			v.Field(i).Set(elem)
+			s.Field(i).Set(v)
 		}
+		return s, true
 	default:
 		return reflect.Value{}, false
 	}
-
-	return v, true
 }
 
 // A Config structure contains options for running a test.

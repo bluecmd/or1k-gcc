@@ -297,8 +297,6 @@ type (
 		Lbrack token.Pos // position of "["
 		Low    Expr      // begin of slice range; or nil
 		High   Expr      // end of slice range; or nil
-		Max    Expr      // maximum capacity of slice; or nil
-		Slice3 bool      // true if 3-index slice (2 colons present)
 		Rbrack token.Pos // position of "]"
 	}
 
@@ -306,10 +304,8 @@ type (
 	// type assertion.
 	//
 	TypeAssertExpr struct {
-		X      Expr      // expression
-		Lparen token.Pos // position of "("
-		Type   Expr      // asserted type; nil means type switch X.(type)
-		Rparen token.Pos // position of ")"
+		X    Expr // expression
+		Type Expr // asserted type; nil means type switch X.(type)
 	}
 
 	// A CallExpr node represents an expression followed by an argument list.
@@ -389,8 +385,8 @@ type (
 
 	// A FuncType node represents a function type.
 	FuncType struct {
-		Func    token.Pos  // position of "func" keyword (token.NoPos if there is no "func")
-		Params  *FieldList // (incoming) parameters; non-nil
+		Func    token.Pos  // position of "func" keyword
+		Params  *FieldList // (incoming) parameters; or nil
 		Results *FieldList // (outgoing) results; or nil
 	}
 
@@ -411,7 +407,7 @@ type (
 	// A ChanType node represents a channel type.
 	ChanType struct {
 		Begin token.Pos // position of "chan" keyword or "<-" (whichever comes first)
-		Arrow token.Pos // position of "<-" (token.NoPos if there is no "<-")
+		Arrow token.Pos // position of "<-" (noPos if there is no "<-")
 		Dir   ChanDir   // channel direction
 		Value Expr      // value type
 	}
@@ -442,15 +438,10 @@ func (x *BinaryExpr) Pos() token.Pos     { return x.X.Pos() }
 func (x *KeyValueExpr) Pos() token.Pos   { return x.Key.Pos() }
 func (x *ArrayType) Pos() token.Pos      { return x.Lbrack }
 func (x *StructType) Pos() token.Pos     { return x.Struct }
-func (x *FuncType) Pos() token.Pos {
-	if x.Func.IsValid() || x.Params == nil { // see issue 3870
-		return x.Func
-	}
-	return x.Params.Pos() // interface method declarations have no "func" keyword
-}
-func (x *InterfaceType) Pos() token.Pos { return x.Interface }
-func (x *MapType) Pos() token.Pos       { return x.Map }
-func (x *ChanType) Pos() token.Pos      { return x.Begin }
+func (x *FuncType) Pos() token.Pos       { return x.Func }
+func (x *InterfaceType) Pos() token.Pos  { return x.Interface }
+func (x *MapType) Pos() token.Pos        { return x.Map }
+func (x *ChanType) Pos() token.Pos       { return x.Begin }
 
 func (x *BadExpr) End() token.Pos { return x.To }
 func (x *Ident) End() token.Pos   { return token.Pos(int(x.NamePos) + len(x.Name)) }
@@ -460,21 +451,26 @@ func (x *Ellipsis) End() token.Pos {
 	}
 	return x.Ellipsis + 3 // len("...")
 }
-func (x *BasicLit) End() token.Pos       { return token.Pos(int(x.ValuePos) + len(x.Value)) }
-func (x *FuncLit) End() token.Pos        { return x.Body.End() }
-func (x *CompositeLit) End() token.Pos   { return x.Rbrace + 1 }
-func (x *ParenExpr) End() token.Pos      { return x.Rparen + 1 }
-func (x *SelectorExpr) End() token.Pos   { return x.Sel.End() }
-func (x *IndexExpr) End() token.Pos      { return x.Rbrack + 1 }
-func (x *SliceExpr) End() token.Pos      { return x.Rbrack + 1 }
-func (x *TypeAssertExpr) End() token.Pos { return x.Rparen + 1 }
-func (x *CallExpr) End() token.Pos       { return x.Rparen + 1 }
-func (x *StarExpr) End() token.Pos       { return x.X.End() }
-func (x *UnaryExpr) End() token.Pos      { return x.X.End() }
-func (x *BinaryExpr) End() token.Pos     { return x.Y.End() }
-func (x *KeyValueExpr) End() token.Pos   { return x.Value.End() }
-func (x *ArrayType) End() token.Pos      { return x.Elt.End() }
-func (x *StructType) End() token.Pos     { return x.Fields.End() }
+func (x *BasicLit) End() token.Pos     { return token.Pos(int(x.ValuePos) + len(x.Value)) }
+func (x *FuncLit) End() token.Pos      { return x.Body.End() }
+func (x *CompositeLit) End() token.Pos { return x.Rbrace + 1 }
+func (x *ParenExpr) End() token.Pos    { return x.Rparen + 1 }
+func (x *SelectorExpr) End() token.Pos { return x.Sel.End() }
+func (x *IndexExpr) End() token.Pos    { return x.Rbrack + 1 }
+func (x *SliceExpr) End() token.Pos    { return x.Rbrack + 1 }
+func (x *TypeAssertExpr) End() token.Pos {
+	if x.Type != nil {
+		return x.Type.End()
+	}
+	return x.X.End()
+}
+func (x *CallExpr) End() token.Pos     { return x.Rparen + 1 }
+func (x *StarExpr) End() token.Pos     { return x.X.End() }
+func (x *UnaryExpr) End() token.Pos    { return x.X.End() }
+func (x *BinaryExpr) End() token.Pos   { return x.Y.End() }
+func (x *KeyValueExpr) End() token.Pos { return x.Value.End() }
+func (x *ArrayType) End() token.Pos    { return x.Elt.End() }
+func (x *StructType) End() token.Pos   { return x.Fields.End() }
 func (x *FuncType) End() token.Pos {
 	if x.Results != nil {
 		return x.Results.End()
@@ -515,21 +511,23 @@ func (*ChanType) exprNode()      {}
 // ----------------------------------------------------------------------------
 // Convenience functions for Idents
 
+var noPos token.Pos
+
 // NewIdent creates a new Ident without position.
 // Useful for ASTs generated by code other than the Go parser.
 //
-func NewIdent(name string) *Ident { return &Ident{token.NoPos, name, nil} }
+func NewIdent(name string) *Ident { return &Ident{noPos, name, nil} }
 
-// IsExported reports whether name is an exported Go symbol
-// (that is, whether it begins with an upper-case letter).
+// IsExported returns whether name is an exported Go symbol
+// (i.e., whether it begins with an uppercase letter).
 //
 func IsExported(name string) bool {
 	ch, _ := utf8.DecodeRuneInString(name)
 	return unicode.IsUpper(ch)
 }
 
-// IsExported reports whether id is an exported Go symbol
-// (that is, whether it begins with an uppercase letter).
+// IsExported returns whether id is an exported Go symbol
+// (i.e., whether it begins with an uppercase letter).
 //
 func (id *Ident) IsExported() bool { return IsExported(id.Name) }
 
@@ -921,7 +919,7 @@ type (
 		Doc  *CommentGroup // associated documentation; or nil
 		Recv *FieldList    // receiver (methods); or nil (functions)
 		Name *Ident        // function/method name
-		Type *FuncType     // function signature: parameters, results, and position of "func" keyword
+		Type *FuncType     // position of Func keyword, parameters and results
 		Body *BlockStmt    // function body; or nil (forward declaration)
 	}
 )

@@ -1,5 +1,5 @@
 // PR c++/51526
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 const int j = 42;
 

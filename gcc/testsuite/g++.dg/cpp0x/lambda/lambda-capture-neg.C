@@ -1,5 +1,5 @@
 // PR c++/50736
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x -pedantic-errors" }
 
 int i;
 void f();

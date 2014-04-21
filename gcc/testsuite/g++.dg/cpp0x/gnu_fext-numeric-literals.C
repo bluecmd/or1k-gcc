@@ -1,5 +1,5 @@
-// { dg-do compile { target c++11 } }
-// { dg-options "" }
+// { dg-do compile }
+// { dg-options "-std=gnu++11" }
 
 //  Integer imaginary...
 

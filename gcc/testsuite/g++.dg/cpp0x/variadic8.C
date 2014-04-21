@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x" }
 template<typename... Args>
 struct tuple_base {
   static const int value = 0;

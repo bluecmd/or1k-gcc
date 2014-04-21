@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! { dg-options "-std=gnu" }
+! { dg-options "-std=legacy" }
 !
 ! PR 32938
 subroutine r (*)

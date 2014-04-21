@@ -22,10 +22,8 @@ void foo()
     bar ();
   #pragma omp parallel sections
     {
-      {
-	bar ();
-	bar ();
-      }
+      bar ();
+      bar ();
     #pragma omp section
       bar ();
     }

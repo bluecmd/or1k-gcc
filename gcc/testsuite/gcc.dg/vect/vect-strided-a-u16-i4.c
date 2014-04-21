@@ -12,8 +12,6 @@ typedef struct {
    unsigned short d;
 } s;
 
-volatile int y = 0;
-
 __attribute__ ((noinline)) int
 main1 ()
 {
@@ -29,8 +27,8 @@ main1 ()
       arr[i].b = i * 2;
       arr[i].c = 17;
       arr[i].d = i+34;
-      if (y) /* Avoid vectorization.  */
-        abort ();
+      if (arr[i].a == 178)
+         abort();
     }
 
   for (i = 0; i < N; i++)

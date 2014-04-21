@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O0 -gdwarf -dA" } */
+/* { dg-options "-O0 -gdwarf-2 -dA" } */
 
 #define True  1
 #define False 0

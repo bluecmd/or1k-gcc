@@ -1,5 +1,4 @@
 // { dg-do compile }
-// { dg-options "-fno-short-enums" }
 
 typedef union tree_node *tree;
 typedef union gimple_statement_d *gimple;

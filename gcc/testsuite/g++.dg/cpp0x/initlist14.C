@@ -1,6 +1,6 @@
 // Bug: We weren't doing the normal replacement of array with pointer
 // for deduction in the context of a call because of the initializer list.
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 #include <initializer_list>
 

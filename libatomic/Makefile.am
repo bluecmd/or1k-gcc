@@ -1,4 +1,4 @@
-##  Copyright (C) 2012-2014 Free Software Foundation, Inc.
+##  Copyright (C) 2012-2013 Free Software Foundation, Inc.
 ##  Contributed by Richard Henderson <rth@redhat.com>.
 ##
 ##  This file is part of the GNU Atomic Library (libatomic).
@@ -67,8 +67,7 @@ endif
 libatomic_version_info = -version-info $(libtool_VERSION)
 
 libatomic_la_LDFLAGS = $(libatomic_version_info) $(libatomic_version_script)
-libatomic_la_SOURCES = gload.c gstore.c gcas.c gexch.c glfree.c lock.c init.c \
-	fenv.c
+libatomic_la_SOURCES = gload.c gstore.c gcas.c gexch.c glfree.c lock.c init.c
 
 SIZEOBJS = load store cas exch fadd fsub fand fior fxor fnand tas
 SIZES = @SIZES@

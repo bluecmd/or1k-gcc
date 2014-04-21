@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 // These also represent tests for printing alias declarations and
 // their instantiations.

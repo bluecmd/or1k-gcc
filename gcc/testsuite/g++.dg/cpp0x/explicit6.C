@@ -1,6 +1,5 @@
 // PR c++/47080
-// { dg-options "" }
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 struct A {
   explicit operator int();	// { dg-message "qualification conversion" }

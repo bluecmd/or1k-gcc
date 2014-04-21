@@ -18,18 +18,10 @@ func (a *TCPAddr) String() string {
 	if a == nil {
 		return "<nil>"
 	}
-	ip := ipEmptyString(a.IP)
 	if a.Zone != "" {
-		return JoinHostPort(ip+"%"+a.Zone, itoa(a.Port))
+		return JoinHostPort(a.IP.String()+"%"+a.Zone, itoa(a.Port))
 	}
-	return JoinHostPort(ip, itoa(a.Port))
-}
-
-func (a *TCPAddr) toAddr() Addr {
-	if a == nil {
-		return nil
-	}
-	return a
+	return JoinHostPort(a.IP.String(), itoa(a.Port))
 }
 
 // ResolveTCPAddr parses addr as a TCP address of the form "host:port"
@@ -50,5 +42,5 @@ func ResolveTCPAddr(net, addr string) (*TCPAddr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return a.toAddr().(*TCPAddr), nil
+	return a.(*TCPAddr), nil
 }

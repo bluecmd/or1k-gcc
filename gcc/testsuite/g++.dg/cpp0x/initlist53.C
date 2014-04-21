@@ -1,5 +1,6 @@
 // PR c++/49216
-// { dg-do run { target c++11 } }
+// { dg-options -std=c++0x }
+// { dg-do run }
 
 #include <initializer_list>
 extern "C" void abort();

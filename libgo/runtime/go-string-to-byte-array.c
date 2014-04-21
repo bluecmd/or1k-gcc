@@ -15,8 +15,7 @@ __go_string_to_byte_array (String str)
   unsigned char *data;
   struct __go_open_array ret;
 
-  data = (unsigned char *) runtime_mallocgc (str.len, 0,
-					     FlagNoScan | FlagNoZero);
+  data = (unsigned char *) runtime_mallocgc (str.len, FlagNoPointers, 1, 0);
   __builtin_memcpy (data, str.str, str.len);
   ret.__values = (void *) data;
   ret.__count = str.len;

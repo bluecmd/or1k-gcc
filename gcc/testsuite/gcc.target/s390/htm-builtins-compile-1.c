@@ -2,6 +2,7 @@
    for transactional execution.  */
 
 /* { dg-do compile } */
+/* { dg-require-effective-target htm } */
 /* { dg-options "-O3 -march=zEC12 -mzarch" } */
 
 #include <stdint.h>

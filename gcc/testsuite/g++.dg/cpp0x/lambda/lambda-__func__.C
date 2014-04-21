@@ -1,5 +1,6 @@
 // PR c++/44160
-// { dg-do link { target c++11 } }
+// { dg-options -std=c++0x }
+// { dg-do link }
 
 int main()
 {

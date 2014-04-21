@@ -37,12 +37,6 @@
 package System.Linux is
    pragma Preelaborate;
 
-   ------------
-   -- time_t --
-   ------------
-
-   type time_t is new Long_Integer;
-
    -----------
    -- Errno --
    -----------

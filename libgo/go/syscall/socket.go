@@ -272,10 +272,6 @@ func SetsockoptTimeval(fd, level, opt int, tv *Timeval) (err error) {
 	return setsockopt(fd, level, opt, (*byte)(unsafe.Pointer(tv)), Socklen_t(unsafe.Sizeof(*tv)))
 }
 
-func SetsockoptICMPv6Filter(fd, level, opt int, filter *ICMPv6Filter) error {
-	return setsockopt(fd, level, opt, (*byte)(unsafe.Pointer(filter)), SizeofICMPv6Filter)
-}
-
 type Linger struct {
 	Onoff  int32
 	Linger int32

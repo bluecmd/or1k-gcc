@@ -67,6 +67,8 @@ AC_ARG_ENABLE(browser-plugin,
      esac],
     [browser_plugin_enabled=no]
 )
+# FIXME: don't build the plugin, this option collides with GCC plugin support
+plugin_enabled=no
 
 AC_ARG_ENABLE(gconf-peer,
   AS_HELP_STRING([--enable-gconf-peer],
@@ -1525,6 +1527,9 @@ AC_CHECK_SIZEOF(void *)
 
 AC_C_BIGENDIAN
 
+MULTIARCH_DIR=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || true)
+AC_SUBST(MULTIARCH_DIR)
+
 ZLIBS=
 SYS_ZLIBS=
 ZINCS=
@@ -1580,6 +1585,10 @@ case ${version_specific_libs} in
       .) toolexeclibdir=$toolexecmainlibdir ;; # Avoid trailing /.
       *) toolexeclibdir=$toolexecmainlibdir/$multi_os_directory ;;
     esac
+    multiarch=`$CC -print-multiarch`
+    if test -n "$multiarch"; then
+        toolexeclibdir=$toolexecmainlibdir/$multiarch
+    fi
     ;;
 esac
 AC_SUBST(toolexecdir)
@@ -1596,7 +1605,19 @@ AC_DEFINE_UNQUOTED(GCJVERSION, "$GCJVERSION", [Short GCJ version ID])
 # Determine where the standard .db file and GNU Classpath JNI
 # libraries are found.
 gcjsubdir=gcj-$gcjversion-$libgcj_soversion
-dbexecdir='$(toolexeclibdir)/'$gcjsubdir
+multi_os_directory=`$CC -print-multi-os-directory`
+case $multi_os_directory in
+  .)
+   dbexecdir='$(libdir)/'$gcjsubdir # Avoid /.
+   ;;
+  *)
+   dbexecdir='$(libdir)/'$multi_os_directory/$gcjsubdir
+   ;;
+esac
+multiarch=`$CC -print-multiarch`
+if test -n "$multiarch"; then
+    dbexecdir='$(libdir)/'$multiarch/$gcjsubdir
+fi
 AC_SUBST(dbexecdir)
 AC_SUBST(gcjsubdir)
 

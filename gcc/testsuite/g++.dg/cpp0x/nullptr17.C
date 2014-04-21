@@ -1,4 +1,5 @@
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 // Test that bool is a better overload match than int
 

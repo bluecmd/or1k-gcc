@@ -1,5 +1,5 @@
 // Test for "contextually converted to bool"
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 struct A
 {
@@ -42,9 +42,10 @@ int main()
   // These do not.
   switch (a); 			// { dg-error "" }
   bool b = a;			// { dg-error "" }
+  // { dg-message "candidate" "candidate note" { target *-*-* } 44 }
   f(a);				// { dg-error "" }
   B b2 = { a };			// { dg-error "" }
-  a + true;			// { dg-error "5:no match" }
-  b ? a : true;			// { dg-error "5:no match" }
-  a ? a : true;			// { dg-error "5:no match" }
+  a + true;			// { dg-message "" }
+  b ? a : true;			// { dg-message "" }
+  a ? a : true;			// { dg-message "" }
 }

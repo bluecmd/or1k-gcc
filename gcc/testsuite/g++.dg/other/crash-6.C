@@ -1,6 +1,6 @@
 // Origin: PR c++/42634
-// { dg-options "-g" }
-// { dg-do compile { target c++11 } }
+// { dg-options "-g -std=c++0x" }
+// { dg-do compile }
 
 template<typename T> T declval();
 

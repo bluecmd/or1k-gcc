@@ -1,5 +1,5 @@
 /* Some code common to C and ObjC front ends.
-   Copyright (C) 2001-2014 Free Software Foundation, Inc.
+   Copyright (C) 2001-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -29,8 +29,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-pretty-print.h"
 #include "langhooks.h"
 #include "c-objc-common.h"
-
-#include <new>                          // For placement new.
 
 static bool c_tree_printer (pretty_printer *, text_info *, const char *,
 			    int, bool, bool, bool);
@@ -92,7 +90,6 @@ c_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
 {
   tree t = NULL_TREE;
   tree name;
-  // FIXME: the next cast should be a dynamic_cast, when it is permitted.
   c_pretty_printer *cpp = (c_pretty_printer *) pp;
   pp->padding = pp_none;
 
@@ -115,12 +112,12 @@ c_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
   switch (*spec)
     {
     case 'D':
-      if (TREE_CODE (t) == VAR_DECL && DECL_HAS_DEBUG_EXPR_P (t))
+      if (DECL_DEBUG_EXPR_IS_FROM (t) && DECL_DEBUG_EXPR (t))
 	{
 	  t = DECL_DEBUG_EXPR (t);
 	  if (!DECL_P (t))
 	    {
-	      cpp->expression (t);
+	      pp_c_expression (cpp, t);
 	      return true;
 	    }
 	}
@@ -143,12 +140,12 @@ c_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
 	  if (DECL_NAME (name))
 	    pp_identifier (cpp, lang_hooks.decl_printable_name (name, 2));
 	  else
-	    cpp->type_id (t);
+	    pp_type_id (cpp, t);
 	  return true;
 	}
       else
 	{
-	  cpp->type_id (t);
+	  pp_type_id (cpp, t);
 	  return true;
 	}
       break;
@@ -157,7 +154,7 @@ c_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
       if (TREE_CODE (t) == IDENTIFIER_NODE)
 	pp_identifier (cpp, IDENTIFIER_POINTER (t));
       else
-	cpp->expression (t);
+	pp_expression (cpp, t);
       return true;
 
     case 'V':
@@ -186,14 +183,18 @@ has_c_linkage (const_tree decl ATTRIBUTE_UNUSED)
 void
 c_initialize_diagnostics (diagnostic_context *context)
 {
+  pretty_printer *base;
+  c_pretty_printer *pp;
+
   c_common_initialize_diagnostics (context);
 
-  pretty_printer *base = context->printer;
-  c_pretty_printer *pp = XNEW (c_pretty_printer);
-  context->printer = new (pp) c_pretty_printer ();
+  base = context->printer;
+  pp = XNEW (c_pretty_printer);
+  memcpy (pp_base (pp), base, sizeof (pretty_printer));
+  pp_c_pretty_printer_init (pp);
+  context->printer = (pretty_printer *) pp;
 
   /* It is safe to free this object because it was previously XNEW()'d.  */
-  base->~pretty_printer ();
   XDELETE (base);
 }
 

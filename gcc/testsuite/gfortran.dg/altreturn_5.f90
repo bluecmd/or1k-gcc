@@ -1,5 +1,5 @@
 ! { dg-do run }
-! { dg-options "-std=gnu" }
+! { dg-options "-std=legacy" }
 !
 ! Tests the fix for PR31483, in which dummy argument procedures
 ! produced an ICE if they had an alternate return.
@@ -30,3 +30,4 @@
       CALL PHLOAD (R, 2, res)
       if (res .ne. "two") call abort ()
       END
+

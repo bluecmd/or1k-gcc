@@ -1,5 +1,6 @@
 // Positive test for auto
-// { dg-do run { target c++11 } }
+// { dg-do run }
+// { dg-options "-std=c++0x" }
 
 #include <typeinfo>
 extern "C" void abort();

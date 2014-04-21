@@ -1,5 +1,5 @@
 /* Out-of-line libgcc versions of __sync_* builtins.  */
-/* Copyright (C) 2008-2014 Free Software Foundation, Inc.
+/* Copyright (C) 2008-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -67,26 +67,27 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #if defined FN
 
-/* Define functions called __sync_<NAME>_<UNITS>, with one macro per
-   signature.  TYPE is a type that has UNITS bytes.  */
+/* Define macros for each __sync_* function type.  Each macro defines a
+   local function called <NAME>_<UNITS> that acts like __<NAME>_<UNITS>.
+   TYPE is a type that has UNITS bytes.  */
 
 #define DEFINE_V_PV(NAME, UNITS, TYPE)					\
-  TYPE									\
-  __##NAME##_##UNITS (TYPE *ptr, TYPE value)				\
+  static TYPE								\
+  NAME##_##UNITS (TYPE *ptr, TYPE value)				\
   {									\
     return __##NAME (ptr, value);					\
   }
 
-#define DEFINE_V_PVV(NAME, UNITS, TYPE)					\
-  TYPE									\
-  __##NAME##_##UNITS (TYPE *ptr, TYPE value1, TYPE value2)		\
+#define DEFINE_V_PVV(NAME, UNITS, TYPE)				\
+  static TYPE								\
+  NAME##_##UNITS (TYPE *ptr, TYPE value1, TYPE value2)			\
   {									\
     return __##NAME (ptr, value1, value2);				\
   }
 
 #define DEFINE_BOOL_PVV(NAME, UNITS, TYPE)				\
-  _Bool									\
-  __##NAME##_##UNITS (TYPE *ptr, TYPE value1, TYPE value2)		\
+  static _Bool								\
+  NAME##_##UNITS (TYPE *ptr, TYPE value1, TYPE value2)			\
   {									\
     return __##NAME (ptr, value1, value2);				\
   }
@@ -117,7 +118,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define DEFINE1(NAME, UNITS, TYPE) \
   static int unused[sizeof (TYPE) == UNITS ? 1 : -1]	\
     __attribute__((unused));				\
-  local_##NAME (NAME, UNITS, TYPE);
+  local_##NAME (NAME, UNITS, TYPE);			\
+  typeof (NAME##_##UNITS) __##NAME##_##UNITS		\
+    __attribute__((alias (#NAME "_" #UNITS)));
 
 /* As above, but performing macro expansion on the arguments.  */
 #define DEFINE(NAME, UNITS, TYPE) DEFINE1 (NAME, UNITS, TYPE)
@@ -164,11 +167,13 @@ DEFINE (FN, 8, UOItype)
 
 #if defined Lsync_synchronize
 
-void
-__sync_synchronize (void)
+static void
+sync_synchronize (void)
 {
   __sync_synchronize ();
 }
+typeof (sync_synchronize) __sync_synchronize \
+  __attribute__((alias ("sync_synchronize")));
 
 #endif
 

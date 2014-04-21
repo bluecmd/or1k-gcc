@@ -1,5 +1,5 @@
 // PR c++/50391
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 #include <type_traits>
 
@@ -9,11 +9,11 @@ template<class Tp>
     Tp elem;  // { dg-error "incomplete type" }
 
     constexpr single(const Tp& e)
-    : elem(e) { }
+    : elem(e) { }   // { dg-error "invalid field" }
 
     single(single&& s)
     noexcept(std::is_nothrow_move_constructible<Tp>::value) 
-    : elem(s.elem) { }
+    : elem(s.elem) { } // { dg-error "invalid field|no member" }
   };
 
 template<class Tp>

@@ -1,4 +1,5 @@
-// { dg-do run { target c++11 } }
+// { dg-options -std=c++0x }
+// { dg-do run }
 
 void f(int &);
 void f(int &&ir) { ir = 42; }

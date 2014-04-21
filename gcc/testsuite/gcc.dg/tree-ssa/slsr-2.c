@@ -11,8 +11,6 @@ f (int *p, int n)
   foo (*(p + 16 + n * 4));
 }
 
-/* { dg-final { scan-tree-dump-times "\\+ 144|\\, 144>" 1 "optimized" { target { int32 } } } } */
-/* { dg-final { scan-tree-dump-times "\\+ 72|\\, 72>" 1 "optimized" { target { int16 } } } } */
-/* { dg-final { scan-tree-dump-times "\\+ 96|\\, 96>" 1 "optimized" { target { int32 } } } } */
-/* { dg-final { scan-tree-dump-times "\\+ 48|\\, 48>" 1 "optimized" { target { int16 } } } } */
+/* { dg-final { scan-tree-dump-times "\\+ 144|\\, 144>" 1 "optimized" } } */
+/* { dg-final { scan-tree-dump-times "\\+ 96|\\, 96>" 1 "optimized" } } */
 /* { dg-final { cleanup-tree-dump "optimized" } } */

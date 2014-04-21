@@ -56,26 +56,23 @@ const (
 // Passing r2 == -1 indicates that the position is
 // at the end of the text.
 func EmptyOpContext(r1, r2 rune) EmptyOp {
-	var op EmptyOp = EmptyNoWordBoundary
-	var boundary byte
-	switch {
-	case IsWordChar(r1):
-		boundary = 1
-	case r1 == '\n':
-		op |= EmptyBeginLine
-	case r1 < 0:
+	var op EmptyOp
+	if r1 < 0 {
 		op |= EmptyBeginText | EmptyBeginLine
 	}
-	switch {
-	case IsWordChar(r2):
-		boundary ^= 1
-	case r2 == '\n':
-		op |= EmptyEndLine
-	case r2 < 0:
+	if r1 == '\n' {
+		op |= EmptyBeginLine
+	}
+	if r2 < 0 {
 		op |= EmptyEndText | EmptyEndLine
 	}
-	if boundary != 0 { // IsWordChar(r1) != IsWordChar(r2)
-		op ^= (EmptyWordBoundary | EmptyNoWordBoundary)
+	if r2 == '\n' {
+		op |= EmptyEndLine
+	}
+	if IsWordChar(r1) != IsWordChar(r2) {
+		op |= EmptyWordBoundary
+	} else {
+		op |= EmptyNoWordBoundary
 	}
 	return op
 }

@@ -2,7 +2,7 @@
 // declared in the closure type" -- test that there isn't a member of the
 // closure with the same name as the captured variable.
 
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template <class T>
 struct A: public T

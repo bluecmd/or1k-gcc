@@ -9,7 +9,6 @@ extern void abort(void);
 
 long long v, count;
 
-int
 main ()
 {
   v = 0;

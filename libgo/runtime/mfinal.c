@@ -5,7 +5,6 @@
 #include "runtime.h"
 #include "arch.h"
 #include "malloc.h"
-#include "go-type.h"
 
 enum { debug = 0 };
 
@@ -14,7 +13,6 @@ struct Fin
 {
 	FuncVal *fn;
 	const struct __go_func_type *ft;
-	const struct __go_ptr_type *ot;
 };
 
 // Finalizer hash table.  Direct hash, linear scan, at most 3/4 full.
@@ -44,7 +42,7 @@ static struct {
 } fintab[TABSZ];
 
 static void
-addfintab(Fintab *t, void *k, FuncVal *fn, const struct __go_func_type *ft, const struct __go_ptr_type *ot)
+addfintab(Fintab *t, void *k, FuncVal *fn, const struct __go_func_type *ft)
 {
 	int32 i, j;
 
@@ -69,7 +67,6 @@ ret:
 	t->fkey[i] = k;
 	t->val[i].fn = fn;
 	t->val[i].ft = ft;
-	t->val[i].ot = ot;
 }
 
 static bool
@@ -90,7 +87,6 @@ lookfintab(Fintab *t, void *k, bool del, Fin *f)
 				t->fkey[i] = (void*)-1;
 				t->val[i].fn = nil;
 				t->val[i].ft = nil;
-				t->val[i].ot = nil;
 				t->ndead++;
 			}
 			return true;
@@ -121,13 +117,13 @@ resizefintab(Fintab *tab)
 		newtab.max *= 3;
 	}
 	
-	newtab.fkey = runtime_mallocgc(newtab.max*sizeof newtab.fkey[0], 0, FlagNoInvokeGC|FlagNoScan);
-	newtab.val = runtime_mallocgc(newtab.max*sizeof newtab.val[0], 0, FlagNoInvokeGC);
+	newtab.fkey = runtime_mallocgc(newtab.max*sizeof newtab.fkey[0], FlagNoPointers, 0, 1);
+	newtab.val = runtime_mallocgc(newtab.max*sizeof newtab.val[0], 0, 0, 1);
 	
 	for(i=0; i<tab->max; i++) {
 		k = tab->fkey[i];
 		if(k != nil && k != (void*)-1)
-			addfintab(&newtab, k, tab->val[i].fn, tab->val[i].ft, tab->val[i].ot);
+			addfintab(&newtab, k, tab->val[i].fn, tab->val[i].ft);
 	}
 	
 	runtime_free(tab->fkey);
@@ -141,7 +137,7 @@ resizefintab(Fintab *tab)
 }
 
 bool
-runtime_addfinalizer(void *p, FuncVal *f, const struct __go_func_type *ft, const struct __go_ptr_type *ot)
+runtime_addfinalizer(void *p, FuncVal *f, const struct __go_func_type *ft)
 {
 	Fintab *tab;
 	byte *base;
@@ -170,7 +166,7 @@ runtime_addfinalizer(void *p, FuncVal *f, const struct __go_func_type *ft, const
 		resizefintab(tab);
 	}
 
-	addfintab(tab, p, f, ft, ot);
+	addfintab(tab, p, f, ft);
 	runtime_setblockspecial(p, true);
 	runtime_unlock(tab);
 	return true;
@@ -179,7 +175,7 @@ runtime_addfinalizer(void *p, FuncVal *f, const struct __go_func_type *ft, const
 // get finalizer; if del, delete finalizer.
 // caller is responsible for updating RefHasFinalizer (special) bit.
 bool
-runtime_getfinalizer(void *p, bool del, FuncVal **fn, const struct __go_func_type **ft, const struct __go_ptr_type **ot)
+runtime_getfinalizer(void *p, bool del, FuncVal **fn, const struct __go_func_type **ft)
 {
 	Fintab *tab;
 	bool res;
@@ -193,7 +189,6 @@ runtime_getfinalizer(void *p, bool del, FuncVal **fn, const struct __go_func_typ
 		return false;
 	*fn = f.fn;
 	*ft = f.ft;
-	*ot = f.ot;
 	return true;
 }
 

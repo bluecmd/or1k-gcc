@@ -1,4 +1,4 @@
-/* Copyright (C) 2005-2014 Free Software Foundation, Inc.
+/* Copyright (C) 2005-2013 Free Software Foundation, Inc.
    Contributed by Jakub Jelinek <jakub@redhat.com>.
 
    This file is part of the GNU OpenMP Library (libgomp).
@@ -30,7 +30,6 @@
 #endif
 #include "libgomp.h"
 #include "proc.h"
-#include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
 #ifdef HAVE_GETLOADAVG
@@ -40,28 +39,19 @@
 #endif
 
 #ifdef HAVE_PTHREAD_AFFINITY_NP
-unsigned long gomp_cpuset_size;
-static unsigned long gomp_get_cpuset_size;
-cpu_set_t *gomp_cpusetp;
-
 unsigned long
-gomp_cpuset_popcount (unsigned long cpusetsize, cpu_set_t *cpusetp)
+gomp_cpuset_popcount (cpu_set_t *cpusetp)
 {
-#ifdef CPU_COUNT_S
-  /* glibc 2.7 and above provide a macro for this.  */
-  return CPU_COUNT_S (cpusetsize, cpusetp);
-#else
 #ifdef CPU_COUNT
-  if (cpusetsize == sizeof (cpu_set_t))
-    /* glibc 2.6 and above provide a macro for this.  */
-    return CPU_COUNT (cpusetp);
-#endif
+  /* glibc 2.6 and above provide a macro for this.  */
+  return CPU_COUNT (cpusetp);
+#else
   size_t i;
   unsigned long ret = 0;
-  extern int check[sizeof (cpusetp->__bits[0]) == sizeof (unsigned long int)
-		   ? 1 : -1] __attribute__((unused));
+  extern int check[sizeof (cpusetp->__bits[0]) == sizeof (unsigned long int)];
 
-  for (i = 0; i < cpusetsize / sizeof (cpusetp->__bits[0]); i++)
+  (void) check;
+  for (i = 0; i < sizeof (*cpusetp) / sizeof (cpusetp->__bits[0]); i++)
     {
       unsigned long int mask = cpusetp->__bits[i];
       if (mask == 0)
@@ -80,63 +70,16 @@ void
 gomp_init_num_threads (void)
 {
 #ifdef HAVE_PTHREAD_AFFINITY_NP
-#if defined (_SC_NPROCESSORS_CONF) && defined (CPU_ALLOC_SIZE)
-  gomp_cpuset_size = sysconf (_SC_NPROCESSORS_CONF);
-  gomp_cpuset_size = CPU_ALLOC_SIZE (gomp_cpuset_size);
-#else
-  gomp_cpuset_size = sizeof (cpu_set_t);
-#endif
+  cpu_set_t cpuset;
 
-  gomp_cpusetp = (cpu_set_t *) gomp_malloc (gomp_cpuset_size);
-  do
+  if (pthread_getaffinity_np (pthread_self (), sizeof (cpuset), &cpuset) == 0)
     {
-      int ret = pthread_getaffinity_np (pthread_self (), gomp_cpuset_size,
-					gomp_cpusetp);
-      if (ret == 0)
-	{
-	  /* Count only the CPUs this process can use.  */
-	  gomp_global_icv.nthreads_var
-	    = gomp_cpuset_popcount (gomp_cpuset_size, gomp_cpusetp);
-	  if (gomp_global_icv.nthreads_var == 0)
-	    break;
-	  gomp_get_cpuset_size = gomp_cpuset_size;
-#ifdef CPU_ALLOC_SIZE
-	  unsigned long i;
-	  for (i = gomp_cpuset_size * 8; i; i--)
-	    if (CPU_ISSET_S (i - 1, gomp_cpuset_size, gomp_cpusetp))
-	      break;
-	  gomp_cpuset_size = CPU_ALLOC_SIZE (i);
-#endif
-	  return;
-	}
-      if (ret != EINVAL)
-	break;
-#ifdef CPU_ALLOC_SIZE
-      if (gomp_cpuset_size < sizeof (cpu_set_t))
-	gomp_cpuset_size = sizeof (cpu_set_t);
-      else
-	gomp_cpuset_size = gomp_cpuset_size * 2;
-      if (gomp_cpuset_size < 8 * sizeof (cpu_set_t))
-	gomp_cpusetp
-	  = (cpu_set_t *) gomp_realloc (gomp_cpusetp, gomp_cpuset_size);
-      else
-	{
-	  /* Avoid gomp_fatal if too large memory allocation would be
-	     requested, e.g. kernel returning EINVAL all the time.  */
-	  void *p = realloc (gomp_cpusetp, gomp_cpuset_size);
-	  if (p == NULL)
-	    break;
-	  gomp_cpusetp = (cpu_set_t *) p;
-	}
-#else
-      break;
-#endif
+      /* Count only the CPUs this process can use.  */
+      gomp_global_icv.nthreads_var = gomp_cpuset_popcount (&cpuset);
+      if (gomp_global_icv.nthreads_var == 0)
+	gomp_global_icv.nthreads_var = 1;
+      return;
     }
-  while (1);
-  gomp_cpuset_size = 0;
-  gomp_global_icv.nthreads_var = 1;
-  free (gomp_cpusetp);
-  gomp_cpusetp = NULL;
 #endif
 #ifdef _SC_NPROCESSORS_ONLN
   gomp_global_icv.nthreads_var = sysconf (_SC_NPROCESSORS_ONLN);
@@ -147,14 +90,15 @@ static int
 get_num_procs (void)
 {
 #ifdef HAVE_PTHREAD_AFFINITY_NP
-  if (gomp_places_list == NULL)
+  cpu_set_t cpuset;
+
+  if (gomp_cpu_affinity == NULL)
     {
       /* Count only the CPUs this process can use.  */
-      if (gomp_cpusetp
-	  && pthread_getaffinity_np (pthread_self (), gomp_get_cpuset_size,
-				     gomp_cpusetp) == 0)
+      if (pthread_getaffinity_np (pthread_self (), sizeof (cpuset),
+				  &cpuset) == 0)
 	{
-	  int ret = gomp_cpuset_popcount (gomp_get_cpuset_size, gomp_cpusetp);
+	  int ret = gomp_cpuset_popcount (&cpuset);
 	  return ret != 0 ? ret : 1;
 	}
     }

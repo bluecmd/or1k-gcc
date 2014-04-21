@@ -1,4 +1,4 @@
-// { dg-do compile { target c++1y } }
+// { dg-options -std=c++1y }
 
 bool b;
 auto f()

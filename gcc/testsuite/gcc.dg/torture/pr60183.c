@@ -1,5 +1,4 @@
 /* { dg-do run } */
-/* { dg-require-effective-target size32plus } */
 
 /* Large so an out-of-bound read will crash.  */
 unsigned char c[0x30001] = { 1 };

@@ -1,5 +1,5 @@
-// { dg-do compile { target c++11 } }
-// { dg-options "" }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 template<typename T> struct S1
 {

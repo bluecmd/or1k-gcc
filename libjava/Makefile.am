@@ -6,7 +6,6 @@ ACLOCAL_AMFLAGS = -I . -I .. -I ../config -I libltdl
 
 # May be used by various substitution variables.
 gcc_version := $(shell cat $(top_srcdir)/../gcc/BASE-VER)
-export gcc_version
 
 SUBDIRS = $(DIRLTDL) gcj include classpath
 if TESTSUBDIR
@@ -213,8 +212,7 @@ LIBJAVA_CORE_EXTRA =
 endif
 
 if USE_LIBGCJ_BC
-toolexeclib_LTLIBRARIES += install/libgcj_bc.la
-noinst_LTLIBRARIES = libgcj_bc.la
+toolexeclib_LTLIBRARIES += libgcj_bc.la
 endif
 
 if XLIB_AWT
@@ -223,7 +221,7 @@ endif
 
 dbexec_LTLIBRARIES = libjvm.la
 
-pkgconfigdir = $(toolexeclibdir)/pkgconfig
+pkgconfigdir = $(libdir)/pkgconfig
 
 jardir = $(datadir)/java
 jar_DATA = libgcj-$(gcc_version).jar libgcj-tools-$(gcc_version).jar
@@ -364,6 +362,7 @@ AM_CXXFLAGS = \
 	$(WARNINGS) \
 	-D_GNU_SOURCE \
 	-DPREFIX="\"$(prefix)\"" \
+	-DMULTIARCH_DIR="\"$(MULTIARCH_DIR)\"" \
 	-DTOOLEXECLIBDIR="\"$(toolexeclibdir)\"" \
         -DJAVA_HOME="\"$(JAVA_HOME_DIR)\"" \
         -DBOOT_CLASS_PATH="\"$(BOOT_CLASS_PATH_DIR)\"" \
@@ -372,7 +371,7 @@ AM_CXXFLAGS = \
 	-DGCJ_VERSIONED_LIBDIR="\"$(dbexecdir)\"" \
 	-DPATH_SEPARATOR="\"$(CLASSPATH_SEPARATOR)\"" \
 	-DECJ_JAR_FILE="\"$(ECJ_JAR)\"" \
-	-DLIBGCJ_DEFAULT_DATABASE="\"$(dbexecdir)/$(db_name)\"" \
+	-DLIBGCJ_DEFAULT_DATABASE="\"/var/lib/$(MULTIARCH_DIR)/gcj-4.8/$(db_name)\"" \
 	-DLIBGCJ_DEFAULT_DATABASE_PATH_TAIL="\"$(db_pathtail)\""
 
 AM_GCJFLAGS = \
@@ -608,7 +607,6 @@ lib_gnu_awt_xlib_la_LINK = $(LIBLINK) $(lib_gnu_awt_xlib_la_LDFLAGS) \
 ## This lets us have one soname in BC objects and another in C++ ABI objects.
 ## This library is not linked against libgcj.
 libgcj_bc_la_SOURCES = libgcj_bc.c
-install_libgcj_bc_la_SOURCES = $(libgcj_bc_la_SOURCES)
 libgcj_bc_la_LDFLAGS = -rpath $(toolexeclibdir) -no-static -version-info 1:0:0 \
 	$(LIBGCJ_LD_SYMBOLIC_FUNCTIONS) $(LIBJAVA_LDFLAGS_NOUNDEF)
 libgcj_bc_la_DEPENDENCIES = libgcj.la $(libgcj_bc_la_version_dep)
@@ -630,11 +628,6 @@ libgcj_bc.la: $(libgcj_bc_la_OBJECTS) $(libgcj_bc_la_DEPENDENCIES)
 	-o .libs/libgcj_bc.so.1.0.0 -lgcj || exit; \
 	rm .libs/libgcj_bc.so.1; \
 	$(LN_S) libgcj_bc.so.1.0.0 .libs/libgcj_bc.so.1
-
-## This rule creates the libgcj_bc library that is actually installed.
-install/libgcj_bc.la: $(libgcj_bc_la_OBJECTS) $(libgcj_bc_la_DEPENDENCIES) install/$(am__dirstamp)
-	$(libgcj_bc_la_LINK) $(am_libgcj_bc_la_rpath) $(libgcj_bc_la_LDFLAGS) \
-	$(libgcj_bc_la_OBJECTS) $(libgcj_bc_la_LIBADD) $(LIBS)
 
 ## Note that property_files is defined in sources.am.
 propertyo_files = $(patsubst classpath/resource/%,%,$(addsuffix .lo,$(property_files)))
@@ -779,7 +772,7 @@ install_data_local_split = 50
 install-data-local:
 	$(PRE_INSTALL)
 ## Install the .pc file.
-	@pc_version=`echo $(GCJVERSION) | sed -e 's/[.][^.]*$$//'`; \
+	@pc_version=$(GCJVERSION); \
 	file="libgcj-$${pc_version}.pc"; \
 	$(mkinstalldirs) $(DESTDIR)$(pkgconfigdir); \
 	echo "  $(INSTALL_DATA) libgcj.pc $(DESTDIR)$(pkgconfigdir)/$$file"; \
@@ -835,7 +828,7 @@ if CREATE_JAVA_HOME
 	$(mkinstalldirs) $(DESTDIR)$(SDK_INCLUDE_DIR)/$(OS)
 	relative() { \
 	  $(PERL) -e 'use File::Spec; \
-	    print File::Spec->abs2rel($$ARGV[0], $$ARGV[1])' $$1 $$2; \
+	    print File::Spec->abs2rel($$ARGV[0], $$ARGV[1])' $$1 $$2 | sed -r 's,(bin|lib)[^/]*/\.\./,,'; \
 	}; \
 	RELATIVE=$$(relative $(DESTDIR)$(bindir) $(DESTDIR)$(SDK_BIN_DIR)); \
 	ln -sf $$RELATIVE/`echo gij | sed 's,^.*/,,;$(transform);s/$$/$(EXEEXT)/'` \

@@ -1,5 +1,4 @@
 // { dg-do run { xfail { { ! cxa_atexit } && { ! *-*-solaris2* } } } }
-// { dg-require-effective-target cxa_atexit }
 #include <stdlib.h>
 
 #define assert(x) do { if (! (x)) abort(); } while (0)

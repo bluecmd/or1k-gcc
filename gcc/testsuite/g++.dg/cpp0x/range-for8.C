@@ -1,7 +1,8 @@
 // Test for range-based for loop when the declarator declares
 // a new type
 
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 #include <initializer_list>
 

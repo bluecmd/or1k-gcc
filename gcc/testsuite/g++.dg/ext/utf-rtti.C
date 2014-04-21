@@ -1,6 +1,7 @@
 /* Contributed by Kris Van Hees <kris.van.hees@oracle.com> */
 /* Ensure that typeinfo data is generated for char16_t/char32_t. */
-/* { dg-do link { target c++11 } } */
+/* { dg-do link } */
+/* { dg-options "-std=c++0x" } */
 
 #include <typeinfo>
 

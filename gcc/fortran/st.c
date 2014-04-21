@@ -1,5 +1,5 @@
 /* Build executable statement trees.
-   Copyright (C) 2000-2014 Free Software Foundation, Inc.
+   Copyright (C) 2000-2013 Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
 This file is part of GCC.
@@ -41,16 +41,14 @@ gfc_clear_new_st (void)
 }
 
 
-/* Get a gfc_code structure, initialized with the current locus
-   and a statement code 'op'.  */
+/* Get a gfc_code structure.  */
 
 gfc_code *
-gfc_get_code (gfc_exec_op op)
+gfc_get_code (void)
 {
   gfc_code *c;
 
   c = XCNEW (gfc_code);
-  c->op = op;
   c->loc = gfc_current_locus;
   return c;
 }

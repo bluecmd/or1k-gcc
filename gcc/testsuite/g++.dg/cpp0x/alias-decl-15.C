@@ -1,5 +1,5 @@
 // Origin PR c++/51194
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template<class U, class V> //#1
 struct foo {};

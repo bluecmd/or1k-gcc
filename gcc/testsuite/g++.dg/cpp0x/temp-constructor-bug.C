@@ -1,5 +1,4 @@
-// { dg-do compile { target c++11 } }
-// { dg-options "" }
+// { dg-options "--std=c++0x" }
 
 struct S { };
 

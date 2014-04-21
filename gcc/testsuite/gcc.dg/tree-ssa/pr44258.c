@@ -15,7 +15,7 @@ struct str
 struct val
 {
   char y;
-  struct blah b2 __attribute__((packed)); /* { dg-warning "attribute ignored" "" { target { ! or1k*-*-* } } } */
+  struct blah b2 __attribute__((packed)); /* { dg-warning "attribute ignored" "" { target { ! or1k-*-* } } } */
 };
 
 union U
@@ -39,7 +39,5 @@ int foo (int b)
   *e_u = u;
 }
 
-/* Epiphany has struct alignment/padding that avoids the overlap of
-   str.b1 and val.b2.  */
-/* { dg-final { scan-tree-dump-times "Created a replacement" 0 "esra" { target { ! "epiphany-*-*" } } } } */
+/* { dg-final { scan-tree-dump-times "Created a replacement" 0 "esra"} } */
 /* { dg-final { cleanup-tree-dump "esra" } } */

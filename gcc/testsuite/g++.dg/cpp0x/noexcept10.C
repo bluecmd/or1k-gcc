@@ -1,5 +1,5 @@
 // PR c++/49082
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 namespace std { template <class T> T&& declval() noexcept; }
 

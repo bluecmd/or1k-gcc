@@ -1,5 +1,6 @@
 // PR c++/49988
-// { dg-do run { target c++11 } }
+// { dg-options -std=c++0x }
+// { dg-do run }
 
 template<int ... I> struct X { };
 

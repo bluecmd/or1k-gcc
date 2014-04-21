@@ -1,5 +1,5 @@
 // PR c++/59255
-// { dg-options "-std=c++11 -O2" }
+// { dg-options "-O2 -std=c++11" }
 
 struct S
 {

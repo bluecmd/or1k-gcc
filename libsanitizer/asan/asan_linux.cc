@@ -9,13 +9,12 @@
 //
 // Linux-specific details.
 //===----------------------------------------------------------------------===//
-
-#include "sanitizer_common/sanitizer_platform.h"
-#if SANITIZER_LINUX
+#ifdef __linux__
 
 #include "asan_interceptors.h"
 #include "asan_internal.h"
 #include "asan_thread.h"
+#include "asan_thread_registry.h"
 #include "sanitizer_common/sanitizer_libc.h"
 #include "sanitizer_common/sanitizer_procmaps.h"
 
@@ -30,7 +29,7 @@
 #include <unistd.h>
 #include <unwind.h>
 
-#if !SANITIZER_ANDROID
+#if !ASAN_ANDROID
 // FIXME: where to get ucontext on Android?
 #include <sys/ucontext.h>
 #endif
@@ -49,19 +48,13 @@ void *AsanDoesNotSupportStaticLinkage() {
 }
 
 void GetPcSpBp(void *context, uptr *pc, uptr *sp, uptr *bp) {
-#if SANITIZER_ANDROID
+#if ASAN_ANDROID
   *pc = *sp = *bp = 0;
 #elif defined(__arm__)
   ucontext_t *ucontext = (ucontext_t*)context;
   *pc = ucontext->uc_mcontext.arm_pc;
   *bp = ucontext->uc_mcontext.arm_fp;
   *sp = ucontext->uc_mcontext.arm_sp;
-# elif defined(__hppa__)
-  ucontext_t *ucontext = (ucontext_t*)context;
-  *pc = ucontext->uc_mcontext.sc_iaoq[0];
-  /* GCC uses %r3 whenever a frame pointer is needed.  */
-  *bp = ucontext->uc_mcontext.sc_gr[3];
-  *sp = ucontext->uc_mcontext.sc_gr[30];
 # elif defined(__x86_64__)
   ucontext_t *ucontext = (ucontext_t*)context;
   *pc = ucontext->uc_mcontext.gregs[REG_RIP];
@@ -93,11 +86,6 @@ void GetPcSpBp(void *context, uptr *pc, uptr *sp, uptr *bp) {
   stk_ptr = (uptr *) *sp;
   *bp = stk_ptr[15];
 # endif
-# elif defined(__mips__)
-  ucontext_t *ucontext = (ucontext_t*)context;
-  *pc = ucontext->uc_mcontext.gregs[31];
-  *bp = ucontext->uc_mcontext.gregs[30];
-  *sp = ucontext->uc_mcontext.gregs[29];
 #else
 # error "Unsupported arch"
 #endif
@@ -111,7 +99,25 @@ void AsanPlatformThreadInit() {
   // Nothing here for now.
 }
 
-#if !SANITIZER_ANDROID
+void GetStackTrace(StackTrace *stack, uptr max_s, uptr pc, uptr bp, bool fast) {
+#if defined(__arm__) || \
+    defined(__powerpc__) || defined(__powerpc64__) || \
+    defined(__sparc__)
+  fast = false;
+#endif
+  if (!fast)
+    return stack->SlowUnwindStack(pc, max_s);
+  stack->size = 0;
+  stack->trace[0] = pc;
+  if (max_s > 1) {
+    stack->max_size = max_s;
+    if (!asan_inited) return;
+    if (AsanThread *t = asanThreadRegistry().GetCurrent())
+      stack->FastUnwindStack(pc, bp, t->stack_top(), t->stack_bottom());
+  }
+}
+
+#if !ASAN_ANDROID
 void ReadContextStack(void *context, uptr *stack, uptr *ssize) {
   ucontext_t *ucp = (ucontext_t*)context;
   *stack = (uptr)ucp->uc_stack.ss_sp;
@@ -125,4 +131,4 @@ void ReadContextStack(void *context, uptr *stack, uptr *ssize) {
 
 }  // namespace __asan
 
-#endif  // SANITIZER_LINUX
+#endif  // __linux__

@@ -65,11 +65,6 @@ func (c *TCPConn) SetKeepAlive(keepalive bool) error {
 	return syscall.EPLAN9
 }
 
-// SetKeepAlivePeriod sets period between keep alives.
-func (c *TCPConn) SetKeepAlivePeriod(d time.Duration) error {
-	return syscall.EPLAN9
-}
-
 // SetNoDelay controls whether the operating system should delay
 // packet transmission in hopes of sending fewer packets (Nagle's
 // algorithm).  The default is true (no delay), meaning that data is
@@ -111,7 +106,7 @@ type TCPListener struct {
 }
 
 // AcceptTCP accepts the next incoming call and returns the new
-// connection.
+// connection and the remote address.
 func (l *TCPListener) AcceptTCP() (*TCPConn, error) {
 	if l == nil || l.fd == nil || l.fd.ctl == nil {
 		return nil, syscall.EINVAL
@@ -158,7 +153,7 @@ func (l *TCPListener) SetDeadline(t time.Time) error {
 	if l == nil || l.fd == nil || l.fd.ctl == nil {
 		return syscall.EINVAL
 	}
-	return l.fd.setDeadline(t)
+	return setDeadline(l.fd, t)
 }
 
 // File returns a copy of the underlying os.File, set to blocking

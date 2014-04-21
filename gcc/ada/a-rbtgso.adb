@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -84,16 +84,8 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
    ----------------
 
    procedure Difference (Target : in out Tree_Type; Source : Tree_Type) is
-      BT : Natural renames Target.Busy;
-      LT : Natural renames Target.Lock;
-
-      BS : Natural renames Source'Unrestricted_Access.Busy;
-      LS : Natural renames Source'Unrestricted_Access.Lock;
-
-      Tgt : Node_Access;
-      Src : Node_Access;
-
-      Compare : Integer;
+      Tgt : Node_Access := Target.First;
+      Src : Node_Access := Source.First;
 
    begin
       if Target'Address = Source'Address then
@@ -115,56 +107,19 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
            "attempt to tamper with cursors (container is busy)";
       end if;
 
-      Tgt := Target.First;
-      Src := Source.First;
       loop
          if Tgt = null then
-            exit;
+            return;
          end if;
 
          if Src = null then
-            exit;
+            return;
          end if;
 
-         --  Per AI05-0022, the container implementation is required to detect
-         --  element tampering by a generic actual subprogram.
-
-         begin
-            BT := BT + 1;
-            LT := LT + 1;
-
-            BS := BS + 1;
-            LS := LS + 1;
-
-            if Is_Less (Tgt, Src) then
-               Compare := -1;
-            elsif Is_Less (Src, Tgt) then
-               Compare := 1;
-            else
-               Compare := 0;
-            end if;
-
-            BT := BT - 1;
-            LT := LT - 1;
-
-            BS := BS - 1;
-            LS := LS - 1;
-
-         exception
-            when others =>
-               BT := BT - 1;
-               LT := LT - 1;
-
-               BS := BS - 1;
-               LS := LS - 1;
-
-               raise;
-         end;
-
-         if Compare < 0 then
+         if Is_Less (Tgt, Src) then
             Tgt := Tree_Operations.Next (Tgt);
 
-         elsif Compare > 0 then
+         elsif Is_Less (Src, Tgt) then
             Src := Tree_Operations.Next (Src);
 
          else
@@ -182,66 +137,34 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
    end Difference;
 
    function Difference (Left, Right : Tree_Type) return Tree_Type is
+      Tree : Tree_Type;
+
+      L_Node : Node_Access := Left.First;
+      R_Node : Node_Access := Right.First;
+
+      Dst_Node : Node_Access;
+      pragma Warnings (Off, Dst_Node);
+
    begin
       if Left'Address = Right'Address then
-         return Tree_Type'(others => <>);  -- Empty set
+         return Tree;  -- Empty set
       end if;
 
       if Left.Length = 0 then
-         return Tree_Type'(others => <>);  -- Empty set
+         return Tree;  -- Empty set
       end if;
 
       if Right.Length = 0 then
          return Copy (Left);
       end if;
 
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
+      loop
+         if L_Node = null then
+            return Tree;
+         end if;
 
-      declare
-         BL : Natural renames Left'Unrestricted_Access.Busy;
-         LL : Natural renames Left'Unrestricted_Access.Lock;
-
-         BR : Natural renames Right'Unrestricted_Access.Busy;
-         LR : Natural renames Right'Unrestricted_Access.Lock;
-
-         Tree : Tree_Type;
-
-         L_Node : Node_Access;
-         R_Node : Node_Access;
-
-         Dst_Node : Node_Access;
-         pragma Warnings (Off, Dst_Node);
-
-      begin
-         BL := BL + 1;
-         LL := LL + 1;
-
-         BR := BR + 1;
-         LR := LR + 1;
-
-         L_Node := Left.First;
-         R_Node := Right.First;
-         loop
-            if L_Node = null then
-               exit;
-            end if;
-
-            if R_Node = null then
-               while L_Node /= null loop
-                  Insert_With_Hint
-                    (Dst_Tree => Tree,
-                     Dst_Hint => null,
-                     Src_Node => L_Node,
-                     Dst_Node => Dst_Node);
-
-                  L_Node := Tree_Operations.Next (L_Node);
-               end loop;
-
-               exit;
-            end if;
-
-            if Is_Less (L_Node, R_Node) then
+         if R_Node = null then
+            while L_Node /= null loop
                Insert_With_Hint
                  (Dst_Tree => Tree,
                   Dst_Hint => null,
@@ -250,34 +173,33 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
 
                L_Node := Tree_Operations.Next (L_Node);
 
-            elsif Is_Less (R_Node, L_Node) then
-               R_Node := Tree_Operations.Next (R_Node);
+            end loop;
 
-            else
-               L_Node := Tree_Operations.Next (L_Node);
-               R_Node := Tree_Operations.Next (R_Node);
-            end if;
-         end loop;
+            return Tree;
+         end if;
 
-         BL := BL - 1;
-         LL := LL - 1;
+         if Is_Less (L_Node, R_Node) then
+            Insert_With_Hint
+              (Dst_Tree => Tree,
+               Dst_Hint => null,
+               Src_Node => L_Node,
+               Dst_Node => Dst_Node);
 
-         BR := BR - 1;
-         LR := LR - 1;
+            L_Node := Tree_Operations.Next (L_Node);
 
-         return Tree;
+         elsif Is_Less (R_Node, L_Node) then
+            R_Node := Tree_Operations.Next (R_Node);
 
-      exception
-         when others =>
-            BL := BL - 1;
-            LL := LL - 1;
+         else
+            L_Node := Tree_Operations.Next (L_Node);
+            R_Node := Tree_Operations.Next (R_Node);
+         end if;
+      end loop;
 
-            BR := BR - 1;
-            LR := LR - 1;
-
-            Delete_Tree (Tree.Root);
-            raise;
-      end;
+   exception
+      when others =>
+         Delete_Tree (Tree.Root);
+         raise;
    end Difference;
 
    ------------------
@@ -288,16 +210,8 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
      (Target : in out Tree_Type;
       Source : Tree_Type)
    is
-      BT : Natural renames Target.Busy;
-      LT : Natural renames Target.Lock;
-
-      BS : Natural renames Source'Unrestricted_Access.Busy;
-      LS : Natural renames Source'Unrestricted_Access.Lock;
-
-      Tgt : Node_Access;
-      Src : Node_Access;
-
-      Compare : Integer;
+      Tgt : Node_Access := Target.First;
+      Src : Node_Access := Source.First;
 
    begin
       if Target'Address = Source'Address then
@@ -314,47 +228,10 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
          return;
       end if;
 
-      Tgt := Target.First;
-      Src := Source.First;
       while Tgt /= null
         and then Src /= null
       loop
-         --  Per AI05-0022, the container implementation is required to detect
-         --  element tampering by a generic actual subprogram.
-
-         begin
-            BT := BT + 1;
-            LT := LT + 1;
-
-            BS := BS + 1;
-            LS := LS + 1;
-
-            if Is_Less (Tgt, Src) then
-               Compare := -1;
-            elsif Is_Less (Src, Tgt) then
-               Compare := 1;
-            else
-               Compare := 0;
-            end if;
-
-            BT := BT - 1;
-            LT := LT - 1;
-
-            BS := BS - 1;
-            LS := LS - 1;
-
-         exception
-            when others =>
-               BT := BT - 1;
-               LT := LT - 1;
-
-               BS := BS - 1;
-               LS := LS - 1;
-
-               raise;
-         end;
-
-         if Compare < 0 then
+         if Is_Less (Tgt, Src) then
             declare
                X : Node_Access := Tgt;
             begin
@@ -363,7 +240,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
                Free (X);
             end;
 
-         elsif Compare > 0 then
+         elsif Is_Less (Src, Tgt) then
             Src := Tree_Operations.Next (Src);
 
          else
@@ -384,84 +261,50 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
    end Intersection;
 
    function Intersection (Left, Right : Tree_Type) return Tree_Type is
+      Tree : Tree_Type;
+
+      L_Node : Node_Access := Left.First;
+      R_Node : Node_Access := Right.First;
+
+      Dst_Node : Node_Access;
+      pragma Warnings (Off, Dst_Node);
+
    begin
       if Left'Address = Right'Address then
          return Copy (Left);
       end if;
 
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
+      loop
+         if L_Node = null then
+            return Tree;
+         end if;
 
-      declare
-         BL : Natural renames Left'Unrestricted_Access.Busy;
-         LL : Natural renames Left'Unrestricted_Access.Lock;
+         if R_Node = null then
+            return Tree;
+         end if;
 
-         BR : Natural renames Right'Unrestricted_Access.Busy;
-         LR : Natural renames Right'Unrestricted_Access.Lock;
+         if Is_Less (L_Node, R_Node) then
+            L_Node := Tree_Operations.Next (L_Node);
 
-         Tree : Tree_Type;
+         elsif Is_Less (R_Node, L_Node) then
+            R_Node := Tree_Operations.Next (R_Node);
 
-         L_Node : Node_Access;
-         R_Node : Node_Access;
+         else
+            Insert_With_Hint
+              (Dst_Tree => Tree,
+               Dst_Hint => null,
+               Src_Node => L_Node,
+               Dst_Node => Dst_Node);
 
-         Dst_Node : Node_Access;
-         pragma Warnings (Off, Dst_Node);
+            L_Node := Tree_Operations.Next (L_Node);
+            R_Node := Tree_Operations.Next (R_Node);
+         end if;
+      end loop;
 
-      begin
-         BL := BL + 1;
-         LL := LL + 1;
-
-         BR := BR + 1;
-         LR := LR + 1;
-
-         L_Node := Left.First;
-         R_Node := Right.First;
-         loop
-            if L_Node = null then
-               exit;
-            end if;
-
-            if R_Node = null then
-               exit;
-            end if;
-
-            if Is_Less (L_Node, R_Node) then
-               L_Node := Tree_Operations.Next (L_Node);
-
-            elsif Is_Less (R_Node, L_Node) then
-               R_Node := Tree_Operations.Next (R_Node);
-
-            else
-               Insert_With_Hint
-                 (Dst_Tree => Tree,
-                  Dst_Hint => null,
-                  Src_Node => L_Node,
-                  Dst_Node => Dst_Node);
-
-               L_Node := Tree_Operations.Next (L_Node);
-               R_Node := Tree_Operations.Next (R_Node);
-            end if;
-         end loop;
-
-         BL := BL - 1;
-         LL := LL - 1;
-
-         BR := BR - 1;
-         LR := LR - 1;
-
-         return Tree;
-
-      exception
-         when others =>
-            BL := BL - 1;
-            LL := LL - 1;
-
-            BR := BR - 1;
-            LR := LR - 1;
-
-            Delete_Tree (Tree.Root);
-            raise;
-      end;
+   exception
+      when others =>
+         Delete_Tree (Tree.Root);
+         raise;
    end Intersection;
 
    ---------------
@@ -481,44 +324,22 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
          return False;
       end if;
 
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
-
       declare
-         BL : Natural renames Subset'Unrestricted_Access.Busy;
-         LL : Natural renames Subset'Unrestricted_Access.Lock;
-
-         BR : Natural renames Of_Set'Unrestricted_Access.Busy;
-         LR : Natural renames Of_Set'Unrestricted_Access.Lock;
-
-         Subset_Node : Node_Access;
-         Set_Node    : Node_Access;
-
-         Result : Boolean;
+         Subset_Node : Node_Access := Subset.First;
+         Set_Node    : Node_Access := Of_Set.First;
 
       begin
-         BL := BL + 1;
-         LL := LL + 1;
-
-         BR := BR + 1;
-         LR := LR + 1;
-
-         Subset_Node := Subset.First;
-         Set_Node    := Of_Set.First;
          loop
             if Set_Node = null then
-               Result := Subset_Node = null;
-               exit;
+               return Subset_Node = null;
             end if;
 
             if Subset_Node = null then
-               Result := True;
-               exit;
+               return True;
             end if;
 
             if Is_Less (Subset_Node, Set_Node) then
-               Result := False;
-               exit;
+               return False;
             end if;
 
             if Is_Less (Set_Node, Subset_Node) then
@@ -528,24 +349,6 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
                Subset_Node := Tree_Operations.Next (Subset_Node);
             end if;
          end loop;
-
-         BL := BL - 1;
-         LL := LL - 1;
-
-         BR := BR - 1;
-         LR := LR - 1;
-
-         return Result;
-
-      exception
-         when others =>
-            BL := BL - 1;
-            LL := LL - 1;
-
-            BR := BR - 1;
-            LR := LR - 1;
-
-            raise;
       end;
    end Is_Subset;
 
@@ -554,73 +357,31 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
    -------------
 
    function Overlap (Left, Right : Tree_Type) return Boolean is
+      L_Node : Node_Access := Left.First;
+      R_Node : Node_Access := Right.First;
+
    begin
       if Left'Address = Right'Address then
          return Left.Length /= 0;
       end if;
 
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
+      loop
+         if L_Node = null
+           or else R_Node = null
+         then
+            return False;
+         end if;
 
-      declare
-         BL : Natural renames Left'Unrestricted_Access.Busy;
-         LL : Natural renames Left'Unrestricted_Access.Lock;
+         if Is_Less (L_Node, R_Node) then
+            L_Node := Tree_Operations.Next (L_Node);
 
-         BR : Natural renames Right'Unrestricted_Access.Busy;
-         LR : Natural renames Right'Unrestricted_Access.Lock;
+         elsif Is_Less (R_Node, L_Node) then
+            R_Node := Tree_Operations.Next (R_Node);
 
-         L_Node : Node_Access;
-         R_Node : Node_Access;
-
-         Result : Boolean;
-
-      begin
-         BL := BL + 1;
-         LL := LL + 1;
-
-         BR := BR + 1;
-         LR := LR + 1;
-
-         L_Node := Left.First;
-         R_Node := Right.First;
-         loop
-            if L_Node = null
-              or else R_Node = null
-            then
-               Result := False;
-               exit;
-            end if;
-
-            if Is_Less (L_Node, R_Node) then
-               L_Node := Tree_Operations.Next (L_Node);
-
-            elsif Is_Less (R_Node, L_Node) then
-               R_Node := Tree_Operations.Next (R_Node);
-
-            else
-               Result := True;
-               exit;
-            end if;
-         end loop;
-
-         BL := BL - 1;
-         LL := LL - 1;
-
-         BR := BR - 1;
-         LR := LR - 1;
-
-         return Result;
-
-      exception
-         when others =>
-            BL := BL - 1;
-            LL := LL - 1;
-
-            BR := BR - 1;
-            LR := LR - 1;
-
-            raise;
-      end;
+         else
+            return True;
+         end if;
+      end loop;
    end Overlap;
 
    --------------------------
@@ -631,28 +392,23 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
      (Target : in out Tree_Type;
       Source : Tree_Type)
    is
-      BT : Natural renames Target.Busy;
-      LT : Natural renames Target.Lock;
-
-      BS : Natural renames Source'Unrestricted_Access.Busy;
-      LS : Natural renames Source'Unrestricted_Access.Lock;
-
-      Tgt : Node_Access;
-      Src : Node_Access;
+      Tgt : Node_Access := Target.First;
+      Src : Node_Access := Source.First;
 
       New_Tgt_Node : Node_Access;
       pragma Warnings (Off, New_Tgt_Node);
 
-      Compare : Integer;
-
    begin
+      if Target.Busy > 0 then
+         raise Program_Error with
+           "attempt to tamper with cursors (container is busy)";
+      end if;
+
       if Target'Address = Source'Address then
          Clear (Target);
          return;
       end if;
 
-      Tgt := Target.First;
-      Src := Source.First;
       loop
          if Tgt = null then
             while Src /= null loop
@@ -672,45 +428,10 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
             return;
          end if;
 
-         --  Per AI05-0022, the container implementation is required to detect
-         --  element tampering by a generic actual subprogram.
-
-         begin
-            BT := BT + 1;
-            LT := LT + 1;
-
-            BS := BS + 1;
-            LS := LS + 1;
-
-            if Is_Less (Tgt, Src) then
-               Compare := -1;
-            elsif Is_Less (Src, Tgt) then
-               Compare := 1;
-            else
-               Compare := 0;
-            end if;
-
-            BT := BT - 1;
-            LT := LT - 1;
-
-            BS := BS - 1;
-            LS := LS - 1;
-
-         exception
-            when others =>
-               BT := BT - 1;
-               LT := LT - 1;
-
-               BS := BS - 1;
-               LS := LS - 1;
-
-               raise;
-         end;
-
-         if Compare < 0 then
+         if Is_Less (Tgt, Src) then
             Tgt := Tree_Operations.Next (Tgt);
 
-         elsif Compare > 0 then
+         elsif Is_Less (Src, Tgt) then
             Insert_With_Hint
               (Dst_Tree => Target,
                Dst_Hint => Tgt,
@@ -734,9 +455,17 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
    end Symmetric_Difference;
 
    function Symmetric_Difference (Left, Right : Tree_Type) return Tree_Type is
+      Tree : Tree_Type;
+
+      L_Node : Node_Access := Left.First;
+      R_Node : Node_Access := Right.First;
+
+      Dst_Node : Node_Access;
+      pragma Warnings (Off, Dst_Node);
+
    begin
       if Left'Address = Right'Address then
-         return Tree_Type'(others => <>);  -- Empty set
+         return Tree;  -- Empty set
       end if;
 
       if Right.Length = 0 then
@@ -747,62 +476,22 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
          return Copy (Right);
       end if;
 
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
+      loop
+         if L_Node = null then
+            while R_Node /= null loop
+               Insert_With_Hint
+                 (Dst_Tree => Tree,
+                  Dst_Hint => null,
+                  Src_Node => R_Node,
+                  Dst_Node => Dst_Node);
+               R_Node := Tree_Operations.Next (R_Node);
+            end loop;
 
-      declare
-         BL : Natural renames Left'Unrestricted_Access.Busy;
-         LL : Natural renames Left'Unrestricted_Access.Lock;
+            return Tree;
+         end if;
 
-         BR : Natural renames Right'Unrestricted_Access.Busy;
-         LR : Natural renames Right'Unrestricted_Access.Lock;
-
-         Tree : Tree_Type;
-
-         L_Node : Node_Access;
-         R_Node : Node_Access;
-
-         Dst_Node : Node_Access;
-         pragma Warnings (Off, Dst_Node);
-
-      begin
-         BL := BL + 1;
-         LL := LL + 1;
-
-         BR := BR + 1;
-         LR := LR + 1;
-
-         L_Node := Left.First;
-         R_Node := Right.First;
-         loop
-            if L_Node = null then
-               while R_Node /= null loop
-                  Insert_With_Hint
-                    (Dst_Tree => Tree,
-                     Dst_Hint => null,
-                     Src_Node => R_Node,
-                     Dst_Node => Dst_Node);
-                  R_Node := Tree_Operations.Next (R_Node);
-               end loop;
-
-               exit;
-            end if;
-
-            if R_Node = null then
-               while L_Node /= null loop
-                  Insert_With_Hint
-                    (Dst_Tree => Tree,
-                     Dst_Hint => null,
-                     Src_Node => L_Node,
-                     Dst_Node => Dst_Node);
-
-                  L_Node := Tree_Operations.Next (L_Node);
-               end loop;
-
-               exit;
-            end if;
-
-            if Is_Less (L_Node, R_Node) then
+         if R_Node = null then
+            while L_Node /= null loop
                Insert_With_Hint
                  (Dst_Tree => Tree,
                   Dst_Hint => null,
@@ -810,48 +499,47 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
                   Dst_Node => Dst_Node);
 
                L_Node := Tree_Operations.Next (L_Node);
+            end loop;
 
-            elsif Is_Less (R_Node, L_Node) then
-               Insert_With_Hint
-                 (Dst_Tree => Tree,
-                  Dst_Hint => null,
-                  Src_Node => R_Node,
-                  Dst_Node => Dst_Node);
+            return Tree;
+         end if;
 
-               R_Node := Tree_Operations.Next (R_Node);
+         if Is_Less (L_Node, R_Node) then
+            Insert_With_Hint
+              (Dst_Tree => Tree,
+               Dst_Hint => null,
+               Src_Node => L_Node,
+               Dst_Node => Dst_Node);
 
-            else
-               L_Node := Tree_Operations.Next (L_Node);
-               R_Node := Tree_Operations.Next (R_Node);
-            end if;
-         end loop;
+            L_Node := Tree_Operations.Next (L_Node);
 
-         BL := BL - 1;
-         LL := LL - 1;
+         elsif Is_Less (R_Node, L_Node) then
+            Insert_With_Hint
+              (Dst_Tree => Tree,
+               Dst_Hint => null,
+               Src_Node => R_Node,
+               Dst_Node => Dst_Node);
 
-         BR := BR - 1;
-         LR := LR - 1;
+            R_Node := Tree_Operations.Next (R_Node);
 
-         return Tree;
+         else
+            L_Node := Tree_Operations.Next (L_Node);
+            R_Node := Tree_Operations.Next (R_Node);
+         end if;
+      end loop;
 
-      exception
-         when others =>
-            BL := BL - 1;
-            LL := LL - 1;
-
-            BR := BR - 1;
-            LR := LR - 1;
-
-            Delete_Tree (Tree.Root);
-            raise;
-      end;
+   exception
+      when others =>
+         Delete_Tree (Tree.Root);
+         raise;
    end Symmetric_Difference;
 
    -----------
    -- Union --
    -----------
 
-   procedure Union (Target : in out Tree_Type; Source : Tree_Type) is
+   procedure Union (Target : in out Tree_Type; Source : Tree_Type)
+   is
       Hint : Node_Access;
 
       procedure Process (Node : Node_Access);
@@ -867,7 +555,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
       begin
          Insert_With_Hint
            (Dst_Tree => Target,
-            Dst_Hint => Hint,  -- use node most recently inserted as hint
+            Dst_Hint => Hint,
             Src_Node => Node,
             Dst_Node => Hint);
       end Process;
@@ -879,29 +567,12 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
          return;
       end if;
 
-      --  Per AI05-0022, the container implementation is required to detect
-      --  element tampering by a generic actual subprogram.
+      if Target.Busy > 0 then
+         raise Program_Error with
+           "attempt to tamper with cursors (container is busy)";
+      end if;
 
-      declare
-         BS : Natural renames Source'Unrestricted_Access.Busy;
-         LS : Natural renames Source'Unrestricted_Access.Lock;
-
-      begin
-         BS := BS + 1;
-         LS := LS + 1;
-
-         Iterate (Source);
-
-         BS := BS - 1;
-         LS := LS - 1;
-
-      exception
-         when others =>
-            BS := BS - 1;
-            LS := LS - 1;
-
-            raise;
-      end;
+      Iterate (Source);
    end Union;
 
    function Union (Left, Right : Tree_Type) return Tree_Type is
@@ -919,12 +590,6 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
       end if;
 
       declare
-         BL : Natural renames Left'Unrestricted_Access.Busy;
-         LL : Natural renames Left'Unrestricted_Access.Lock;
-
-         BR : Natural renames Right'Unrestricted_Access.Busy;
-         LR : Natural renames Right'Unrestricted_Access.Lock;
-
          Tree : Tree_Type := Copy (Left);
 
          Hint : Node_Access;
@@ -943,7 +608,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
          begin
             Insert_With_Hint
               (Dst_Tree => Tree,
-               Dst_Hint => Hint,  -- use node most recently inserted as hint
+               Dst_Hint => Hint,
                Src_Node => Node,
                Dst_Node => Hint);
          end Process;
@@ -951,33 +616,15 @@ package body Ada.Containers.Red_Black_Trees.Generic_Set_Operations is
       --  Start of processing for Union
 
       begin
-         BL := BL + 1;
-         LL := LL + 1;
-
-         BR := BR + 1;
-         LR := LR + 1;
-
          Iterate (Right);
-
-         BL := BL - 1;
-         LL := LL - 1;
-
-         BR := BR - 1;
-         LR := LR - 1;
-
          return Tree;
 
       exception
          when others =>
-            BL := BL - 1;
-            LL := LL - 1;
-
-            BR := BR - 1;
-            LR := LR - 1;
-
             Delete_Tree (Tree.Root);
             raise;
       end;
+
    end Union;
 
 end Ada.Containers.Red_Black_Trees.Generic_Set_Operations;

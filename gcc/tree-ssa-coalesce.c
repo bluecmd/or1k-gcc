@@ -1,5 +1,5 @@
 /* Coalesce SSA_NAMES together for the out-of-ssa pass.
-   Copyright (C) 2004-2014 Free Software Foundation, Inc.
+   Copyright (C) 2004-2013 Free Software Foundation, Inc.
    Contributed by Andrew MacLeod <amacleod@redhat.com>
 
 This file is part of GCC.
@@ -27,21 +27,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-pretty-print.h"
 #include "bitmap.h"
 #include "dumpfile.h"
+#include "tree-flow.h"
 #include "hash-table.h"
-#include "basic-block.h"
-#include "tree-ssa-alias.h"
-#include "internal-fn.h"
-#include "gimple-expr.h"
-#include "is-a.h"
-#include "gimple.h"
-#include "gimple-iterator.h"
-#include "gimple-ssa.h"
-#include "tree-phinodes.h"
-#include "ssa-iterators.h"
-#include "stringpool.h"
-#include "tree-ssanames.h"
 #include "tree-ssa-live.h"
-#include "tree-ssa-coalesce.h"
 #include "diagnostic-core.h"
 
 
@@ -61,41 +49,6 @@ typedef struct coalesce_pair
 } * coalesce_pair_p;
 typedef const struct coalesce_pair *const_coalesce_pair_p;
 
-/* Coalesce pair hashtable helpers.  */
-
-struct coalesce_pair_hasher : typed_noop_remove <coalesce_pair>
-{
-  typedef coalesce_pair value_type;
-  typedef coalesce_pair compare_type;
-  static inline hashval_t hash (const value_type *);
-  static inline bool equal (const value_type *, const compare_type *);
-};
-
-/* Hash function for coalesce list.  Calculate hash for PAIR.   */
-
-inline hashval_t
-coalesce_pair_hasher::hash (const value_type *pair)
-{
-  hashval_t a = (hashval_t)(pair->first_element);
-  hashval_t b = (hashval_t)(pair->second_element);
-
-  return b * (b - 1) / 2 + a;
-}
-
-/* Equality function for coalesce list hash table.  Compare PAIR1 and PAIR2,
-   returning TRUE if the two pairs are equivalent.  */
-
-inline bool
-coalesce_pair_hasher::equal (const value_type *p1, const compare_type *p2)
-{
-  return (p1->first_element == p2->first_element
-	  && p1->second_element == p2->second_element);
-}
-
-typedef hash_table <coalesce_pair_hasher> coalesce_table_type;
-typedef coalesce_table_type::iterator coalesce_iterator_type;
-
-
 typedef struct cost_one_pair_d
 {
   int first_element;
@@ -107,7 +60,7 @@ typedef struct cost_one_pair_d
 
 typedef struct coalesce_list_d
 {
-  coalesce_table_type list;	/* Hash table.  */
+  htab_t list;			/* Hash table.  */
   coalesce_pair_p *sorted;	/* List when sorted.  */
   int num_sorted;		/* Number in the sorted list.  */
   cost_one_pair_p cost_one_list;/* Single use coalesces with cost 1.  */
@@ -232,6 +185,34 @@ pop_best_coalesce (coalesce_list_p cl, int *p1, int *p2)
 }
 
 
+#define COALESCE_HASH_FN(R1, R2) ((R2) * ((R2) - 1) / 2 + (R1))
+
+/* Hash function for coalesce list.  Calculate hash for PAIR.   */
+
+static unsigned int
+coalesce_pair_map_hash (const void *pair)
+{
+  hashval_t a = (hashval_t)(((const_coalesce_pair_p)pair)->first_element);
+  hashval_t b = (hashval_t)(((const_coalesce_pair_p)pair)->second_element);
+
+  return COALESCE_HASH_FN (a,b);
+}
+
+
+/* Equality function for coalesce list hash table.  Compare PAIR1 and PAIR2,
+   returning TRUE if the two pairs are equivalent.  */
+
+static int
+coalesce_pair_map_eq (const void *pair1, const void *pair2)
+{
+  const_coalesce_pair_p const p1 = (const_coalesce_pair_p) pair1;
+  const_coalesce_pair_p const p2 = (const_coalesce_pair_p) pair2;
+
+  return (p1->first_element == p2->first_element
+	  && p1->second_element == p2->second_element);
+}
+
+
 /* Create a new empty coalesce list object and return it.  */
 
 static inline coalesce_list_p
@@ -244,7 +225,8 @@ create_coalesce_list (void)
     size = 40;
 
   list = (coalesce_list_p) xmalloc (sizeof (struct coalesce_list_d));
-  list->list.create (size);
+  list->list = htab_create (size, coalesce_pair_map_hash,
+  			    coalesce_pair_map_eq, NULL);
   list->sorted = NULL;
   list->num_sorted = 0;
   list->cost_one_list = NULL;
@@ -258,7 +240,7 @@ static inline void
 delete_coalesce_list (coalesce_list_p cl)
 {
   gcc_assert (cl->cost_one_list == NULL);
-  cl->list.dispose ();
+  htab_delete (cl->list);
   free (cl->sorted);
   gcc_assert (cl->num_sorted == 0);
   free (cl);
@@ -273,7 +255,7 @@ static coalesce_pair_p
 find_coalesce_pair (coalesce_list_p cl, int p1, int p2, bool create)
 {
   struct coalesce_pair p;
-  coalesce_pair **slot;
+  void **slot;
   unsigned int hash;
 
   /* Normalize so that p1 is the smaller value.  */
@@ -288,8 +270,9 @@ find_coalesce_pair (coalesce_list_p cl, int p1, int p2, bool create)
       p.second_element = p2;
     }
 
-  hash = coalesce_pair_hasher::hash (&p);
-  slot = cl->list.find_slot_with_hash (&p, hash, create ? INSERT : NO_INSERT);
+  hash = coalesce_pair_map_hash (&p);
+  slot = htab_find_slot_with_hash (cl->list, &p, hash,
+				   create ? INSERT : NO_INSERT);
   if (!slot)
     return NULL;
 
@@ -300,7 +283,7 @@ find_coalesce_pair (coalesce_list_p cl, int p1, int p2, bool create)
       pair->first_element = p.first_element;
       pair->second_element = p.second_element;
       pair->cost = 0;
-      *slot = pair;
+      *slot = (void *)pair;
     }
 
   return (struct coalesce_pair *) *slot;
@@ -372,14 +355,56 @@ compare_pairs (const void *p1, const void *p2)
 static inline int
 num_coalesce_pairs (coalesce_list_p cl)
 {
-  return cl->list.elements ();
+  return htab_elements (cl->list);
+}
+
+
+/* Iterator over hash table pairs.  */
+typedef struct
+{
+  htab_iterator hti;
+} coalesce_pair_iterator;
+
+
+/* Return first partition pair from list CL, initializing iterator ITER.  */
+
+static inline coalesce_pair_p
+first_coalesce_pair (coalesce_list_p cl, coalesce_pair_iterator *iter)
+{
+  coalesce_pair_p pair;
+
+  pair = (coalesce_pair_p) first_htab_element (&(iter->hti), cl->list);
+  return pair;
+}
+
+
+/* Return TRUE if there are no more partitions in for ITER to process.  */
+
+static inline bool
+end_coalesce_pair_p (coalesce_pair_iterator *iter)
+{
+  return end_htab_p (&(iter->hti));
+}
+
+
+/* Return the next partition pair to be visited by ITER.  */
+
+static inline coalesce_pair_p
+next_coalesce_pair (coalesce_pair_iterator *iter)
+{
+  coalesce_pair_p pair;
+
+  pair = (coalesce_pair_p) next_htab_element (&(iter->hti));
+  return pair;
 }
 
 
 /* Iterate over CL using ITER, returning values in PAIR.  */
 
 #define FOR_EACH_PARTITION_PAIR(PAIR, ITER, CL)		\
-  FOR_EACH_HASH_TABLE_ELEMENT ((CL)->list, (PAIR), coalesce_pair_p, (ITER))
+  for ((PAIR) = first_coalesce_pair ((CL), &(ITER));	\
+       !end_coalesce_pair_p (&(ITER));			\
+       (PAIR) = next_coalesce_pair (&(ITER)))
 
 
 /* Prepare CL for removal of preferred pairs.  When finished they are sorted
@@ -390,7 +415,7 @@ sort_coalesce_list (coalesce_list_p cl)
 {
   unsigned x, num;
   coalesce_pair_p p;
-  coalesce_iterator_type ppi;
+  coalesce_pair_iterator ppi;
 
   gcc_assert (cl->sorted == NULL);
 
@@ -436,8 +461,7 @@ static void
 dump_coalesce_list (FILE *f, coalesce_list_p cl)
 {
   coalesce_pair_p node;
-  coalesce_iterator_type ppi;
-
+  coalesce_pair_iterator ppi;
   int x;
   tree var;
 
@@ -647,7 +671,7 @@ new_live_track (var_map map)
   ptr->map = map;
   lim = num_basevars (map);
   bitmap_obstack_initialize (&ptr->obstack);
-  ptr->live_base_partitions = (bitmap *) xmalloc (sizeof (bitmap *) * lim);
+  ptr->live_base_partitions = (bitmap *) xmalloc(sizeof (bitmap *) * lim);
   ptr->live_base_var = BITMAP_ALLOC (&ptr->obstack);
   for (x = 0; x < lim; x++)
     ptr->live_base_partitions[x] = BITMAP_ALLOC (&ptr->obstack);
@@ -821,7 +845,7 @@ build_ssa_conflict_graph (tree_live_info_p liveinfo)
 
   live = new_live_track (map);
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     {
       gimple_stmt_iterator gsi;
 
@@ -929,7 +953,7 @@ create_outofssa_var_map (coalesce_list_p cl, bitmap used_in_copy)
 
   map = init_var_map (num_ssa_names);
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     {
       tree arg;
 
@@ -955,7 +979,8 @@ create_outofssa_var_map (coalesce_list_p cl, bitmap used_in_copy)
 		continue;
 
 	      register_ssa_partition (map, arg);
-	      if (gimple_can_coalesce_p (arg, res)
+	      if ((SSA_NAME_VAR (arg) == SSA_NAME_VAR (res)
+		   && TREE_TYPE (arg) == TREE_TYPE (res))
 		  || (e->flags & EDGE_ABNORMAL))
 		{
 		  saw_copy = true;
@@ -992,8 +1017,12 @@ create_outofssa_var_map (coalesce_list_p cl, bitmap used_in_copy)
 	      {
 		tree lhs = gimple_assign_lhs (stmt);
 		tree rhs1 = gimple_assign_rhs1 (stmt);
-		if (gimple_assign_ssa_name_copy_p (stmt)
-		    && gimple_can_coalesce_p (lhs, rhs1))
+
+		if (gimple_assign_copy_p (stmt)
+                    && TREE_CODE (lhs) == SSA_NAME
+		    && TREE_CODE (rhs1) == SSA_NAME
+		    && SSA_NAME_VAR (lhs) == SSA_NAME_VAR (rhs1)
+		    && TREE_TYPE (lhs) == TREE_TYPE (rhs1))
 		  {
 		    v1 = SSA_NAME_VERSION (lhs);
 		    v2 = SSA_NAME_VERSION (rhs1);
@@ -1044,7 +1073,8 @@ create_outofssa_var_map (coalesce_list_p cl, bitmap used_in_copy)
 		    v1 = SSA_NAME_VERSION (outputs[match]);
 		    v2 = SSA_NAME_VERSION (input);
 
-		    if (gimple_can_coalesce_p (outputs[match], input))
+		    if (SSA_NAME_VAR (outputs[match]) == SSA_NAME_VAR (input)
+			&& TREE_TYPE (outputs[match]) == TREE_TYPE (input))
 		      {
 			cost = coalesce_cost (REG_BR_PROB_BASE,
 					      optimize_bb_for_size_p (bb));
@@ -1078,12 +1108,13 @@ create_outofssa_var_map (coalesce_list_p cl, bitmap used_in_copy)
 		first = var;
 	      else
 		{
-		  gcc_assert (gimple_can_coalesce_p (var, first));
+		  gcc_assert (SSA_NAME_VAR (var) == SSA_NAME_VAR (first)
+			      && TREE_TYPE (var) == TREE_TYPE (first));
 		  v1 = SSA_NAME_VERSION (first);
 		  v2 = SSA_NAME_VERSION (var);
 		  bitmap_set_bit (used_in_copy, v1);
 		  bitmap_set_bit (used_in_copy, v2);
-		  cost = coalesce_cost_bb (EXIT_BLOCK_PTR_FOR_FN (cfun));
+		  cost = coalesce_cost_bb (EXIT_BLOCK_PTR);
 		  add_coalesce (cl, v1, v2, cost);
 		}
 	    }
@@ -1183,7 +1214,7 @@ coalesce_partitions (var_map map, ssa_conflicts_p graph, coalesce_list_p cl,
      in the coalesce list because they do not need to be sorted, and simply
      consume extra memory/compilation time in large programs.  */
 
-  FOR_EACH_BB_FN (bb, cfun)
+  FOR_EACH_BB (bb)
     {
       FOR_EACH_EDGE (e, ei, bb->preds)
 	if (e->flags & EDGE_ABNORMAL)
@@ -1215,7 +1246,8 @@ coalesce_partitions (var_map map, ssa_conflicts_p graph, coalesce_list_p cl,
       var2 = ssa_name (y);
 
       /* Assert the coalesces have the same base variable.  */
-      gcc_assert (gimple_can_coalesce_p (var1, var2));
+      gcc_assert (SSA_NAME_VAR (var1) == SSA_NAME_VAR (var2)
+		  && TREE_TYPE (var1) == TREE_TYPE (var2));
 
       if (debug)
 	fprintf (debug, "Coalesce list: ");
@@ -1263,8 +1295,8 @@ coalesce_ssa_name (void)
   cl = create_coalesce_list ();
   map = create_outofssa_var_map (cl, used_in_copies);
 
-  /* If optimization is disabled, we need to coalesce all the names originating
-     from the same SSA_NAME_VAR so debug info remains undisturbed.  */
+  /* We need to coalesce all names originating same SSA_NAME_VAR
+     so debug info remains undisturbed.  */
   if (!optimize)
     {
       hash_table <ssa_name_var_hash> ssa_name_hash;
@@ -1285,19 +1317,8 @@ coalesce_ssa_name (void)
 		*slot = a;
 	      else
 		{
-		  /* If the variable is a PARM_DECL or a RESULT_DECL, we
-		     _require_ that all the names originating from it be
-		     coalesced, because there must be a single partition
-		     containing all the names so that it can be assigned
-		     the canonical RTL location of the DECL safely.
-		     If in_lto_p, a function could have been compiled
-		     originally with optimizations and only the link
-		     performed at -O0, so we can't actually require it.  */
-		  const int cost
-		    = (TREE_CODE (SSA_NAME_VAR (a)) == VAR_DECL || in_lto_p)
-		      ? MUST_COALESCE_COST - 1 : MUST_COALESCE_COST;
-		  add_coalesce (cl, SSA_NAME_VERSION (a),
-				SSA_NAME_VERSION (*slot), cost);
+		  add_coalesce (cl, SSA_NAME_VERSION (a), SSA_NAME_VERSION (*slot),
+				MUST_COALESCE_COST - 1);
 		  bitmap_set_bit (used_in_copies, SSA_NAME_VERSION (a));
 		  bitmap_set_bit (used_in_copies, SSA_NAME_VERSION (*slot));
 		}

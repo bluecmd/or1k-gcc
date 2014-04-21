@@ -1,5 +1,5 @@
 // PR c++/38798, DR 770
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 struct A {};
 auto foo() -> struct A {}

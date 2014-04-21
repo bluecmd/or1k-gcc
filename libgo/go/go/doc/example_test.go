@@ -159,8 +159,8 @@ func main() {
 `
 
 func TestExamples(t *testing.T) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "test.go", strings.NewReader(exampleTestFile), parser.ParseComments)
+	fs := token.NewFileSet()
+	file, err := parser.ParseFile(fs, "test.go", strings.NewReader(exampleTestFile), parser.ParseComments)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,11 +174,11 @@ func TestExamples(t *testing.T) {
 			if e.Play == nil {
 				g = "<nil>"
 			} else {
-				var buf bytes.Buffer
-				if err := format.Node(&buf, fset, e.Play); err != nil {
+				b := new(bytes.Buffer)
+				if err := format.Node(b, fs, e.Play); err != nil {
 					t.Fatal(err)
 				}
-				g = buf.String()
+				g = b.String()
 			}
 			if g != w {
 				t.Errorf("%s: got Play == %q, want %q", c.Name, g, w)

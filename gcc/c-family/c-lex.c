@@ -1,5 +1,5 @@
 /* Mainly the interface between cpplib and the C front ends.
-   Copyright (C) 1987-2014 Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -23,8 +23,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 
 #include "tree.h"
-#include "stringpool.h"
-#include "stor-layout.h"
 #include "input.h"
 #include "c-common.h"
 #include "flags.h"
@@ -147,7 +145,7 @@ dump_one_header (splay_tree_node n, void * ARG_UNUSED (dummy))
 void
 dump_time_statistics (void)
 {
-  struct c_fileinfo *file = get_fileinfo (LOCATION_FILE (input_location));
+  struct c_fileinfo *file = get_fileinfo (input_filename);
   int this_time = get_run_time ();
   file->time += this_time - body_time;
 
@@ -243,7 +241,7 @@ cb_def_pragma (cpp_reader *pfile, source_location loc)
   /* Issue a warning message if we have been asked to do so.  Ignore
      unknown pragmas in system headers unless an explicit
      -Wunknown-pragmas has been given.  */
-  if (warn_unknown_pragmas > in_system_header_at (input_location))
+  if (warn_unknown_pragmas > in_system_header)
     {
       const unsigned char *space, *name;
       const cpp_token *s;
@@ -597,10 +595,12 @@ interpret_integer (const cpp_token *token, unsigned int flags,
   tree value, type;
   enum integer_type_kind itk;
   cpp_num integer;
+  cpp_options *options = cpp_get_options (parse_in);
 
   *overflow = OT_NONE;
 
   integer = cpp_interpret_integer (parse_in, token, flags);
+  integer = cpp_num_sign_extend (integer, options->precision);
   if (integer.overflow)
     *overflow = OT_OVERFLOW;
 
@@ -776,19 +776,8 @@ interpret_float (const cpp_token *token, unsigned int flags,
     }
 
   copy = (char *) alloca (copylen + 1);
-  if (cxx_dialect > cxx11)
-    {
-      size_t maxlen = 0;
-      for (size_t i = 0; i < copylen; ++i)
-        if (token->val.str.text[i] != '\'')
-          copy[maxlen++] = token->val.str.text[i];
-      copy[maxlen] = '\0';
-    }
-  else
-    {
-      memcpy (copy, token->val.str.text, copylen);
-      copy[copylen] = '\0';
-    }
+  memcpy (copy, token->val.str.text, copylen);
+  copy[copylen] = '\0';
 
   real_from_string3 (&real, copy, TYPE_MODE (const_type));
   if (const_type != type)
@@ -1071,7 +1060,7 @@ lex_string (const cpp_token *tok, tree *valp, bool objc_string, bool translate)
   if (concats)
     strs = XOBFINISH (&str_ob, cpp_string *);
 
-  if (concats && !objc_string && !in_system_header_at (input_location))
+  if (concats && !objc_string && !in_system_header)
     warning (OPT_Wtraditional,
 	     "traditional C rejects string constant concatenation");
 

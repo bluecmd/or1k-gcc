@@ -64,7 +64,7 @@ type parser struct {
 }
 
 func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mode) {
-	p.file = fset.AddFile(filename, -1, len(src))
+	p.file = fset.AddFile(filename, fset.Base(), len(src))
 	var m scanner.Mode
 	if mode&ParseComments != 0 {
 		m = scanner.ScanComments
@@ -1150,7 +1150,7 @@ func (p *parser) parseTypeAssertion(x ast.Expr) ast.Expr {
 		defer un(trace(p, "TypeAssertion"))
 	}
 
-	lparen := p.expect(token.LPAREN)
+	p.expect(token.LPAREN)
 	var typ ast.Expr
 	if p.tok == token.TYPE {
 		// type switch: typ == nil
@@ -1158,9 +1158,9 @@ func (p *parser) parseTypeAssertion(x ast.Expr) ast.Expr {
 	} else {
 		typ = p.parseType()
 	}
-	rparen := p.expect(token.RPAREN)
+	p.expect(token.RPAREN)
 
-	return &ast.TypeAssertExpr{X: x, Type: typ, Lparen: lparen, Rparen: rparen}
+	return &ast.TypeAssertExpr{X: x, Type: typ}
 }
 
 func (p *parser) parseIndexOrSlice(x ast.Expr) ast.Expr {
@@ -1170,27 +1170,25 @@ func (p *parser) parseIndexOrSlice(x ast.Expr) ast.Expr {
 
 	lbrack := p.expect(token.LBRACK)
 	p.exprLev++
-	var index [3]ast.Expr // change the 3 to 2 to disable slice expressions w/ cap
+	var low, high ast.Expr
+	isSlice := false
 	if p.tok != token.COLON {
-		index[0] = p.parseRhs()
+		low = p.parseRhs()
 	}
-	ncolons := 0
-	for p.tok == token.COLON && ncolons < len(index)-1 {
+	if p.tok == token.COLON {
+		isSlice = true
 		p.next()
-		ncolons++
-		if p.tok != token.COLON && p.tok != token.RBRACK && p.tok != token.EOF {
-			index[ncolons] = p.parseRhs()
+		if p.tok != token.RBRACK {
+			high = p.parseRhs()
 		}
 	}
 	p.exprLev--
 	rbrack := p.expect(token.RBRACK)
 
-	if ncolons > 0 {
-		// slice expression
-		return &ast.SliceExpr{X: x, Lbrack: lbrack, Low: index[0], High: index[1], Max: index[2], Slice3: ncolons == 2, Rbrack: rbrack}
+	if isSlice {
+		return &ast.SliceExpr{X: x, Lbrack: lbrack, Low: low, High: high, Rbrack: rbrack}
 	}
-
-	return &ast.IndexExpr{X: x, Lbrack: lbrack, Index: index[0], Rbrack: rbrack}
+	return &ast.IndexExpr{X: x, Lbrack: lbrack, Index: low, Rbrack: rbrack}
 }
 
 func (p *parser) parseCallOrConversion(fun ast.Expr) *ast.CallExpr {
@@ -1408,7 +1406,7 @@ L:
 			}
 			switch p.tok {
 			case token.IDENT:
-				x = p.parseSelector(p.checkExprOrType(x))
+				x = p.parseSelector(p.checkExpr(x))
 			case token.LPAREN:
 				x = p.parseTypeAssertion(p.checkExpr(x))
 			default:
@@ -2147,13 +2145,12 @@ func (p *parser) parseImportSpec(doc *ast.CommentGroup, _ token.Token, _ int) as
 		ident = p.parseIdent()
 	}
 
-	pos := p.pos
-	var path string
+	var path *ast.BasicLit
 	if p.tok == token.STRING {
-		path = p.lit
-		if !isValidImport(path) {
-			p.error(pos, "invalid import path: "+path)
+		if !isValidImport(p.lit) {
+			p.error(p.pos, "invalid import path: "+p.lit)
 		}
+		path = &ast.BasicLit{ValuePos: p.pos, Kind: p.tok, Value: p.lit}
 		p.next()
 	} else {
 		p.expect(token.STRING) // use expect() error handling
@@ -2164,7 +2161,7 @@ func (p *parser) parseImportSpec(doc *ast.CommentGroup, _ token.Token, _ int) as
 	spec := &ast.ImportSpec{
 		Doc:     doc,
 		Name:    ident,
-		Path:    &ast.BasicLit{ValuePos: pos, Kind: token.STRING, Value: path},
+		Path:    path,
 		Comment: p.lineComment,
 	}
 	p.imports = append(p.imports, spec)
@@ -2180,9 +2177,8 @@ func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota
 	idents := p.parseIdentList()
 	typ := p.tryType()
 	var values []ast.Expr
-	// always permit optional initialization for more tolerant parsing
-	if p.tok == token.ASSIGN {
-		p.next()
+	if p.tok == token.ASSIGN || keyword == token.CONST && (typ != nil || iota == 0) || keyword == token.VAR && typ == nil {
+		p.expect(token.ASSIGN)
 		values = p.parseRhsList()
 	}
 	p.expectSemi() // call before accessing p.linecomment
@@ -2385,7 +2381,7 @@ func (p *parser) parseFile() *ast.File {
 	// Go spec: The package clause is not a declaration;
 	// the package name does not appear in any scope.
 	ident := p.parseIdent()
-	if ident.Name == "_" && p.mode&DeclarationErrors != 0 {
+	if ident.Name == "_" {
 		p.error(p.pos, "invalid package name _")
 	}
 	p.expectSemi()

@@ -1,11 +1,11 @@
 // Test that error messages about creating the closure object refer to
 // the lambda-introducer.
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 struct A
 {
   A();
-  A(const A& a) = delete;	// { dg-message "declared" }
+  A(const A& a) = delete;	// { dg-error "declared" }
 };
 
 int main()

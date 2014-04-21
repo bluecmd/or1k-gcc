@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
-// { dg-options "-pedantic" }
+// { dg-do compile }
+// { dg-options "-pedantic -std=c++0x" }
 
 enum x { y, };

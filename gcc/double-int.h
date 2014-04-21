@@ -1,5 +1,5 @@
 /* Operations with long integers.
-   Copyright (C) 2006-2014 Free Software Foundation, Inc.
+   Copyright (C) 2006-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -128,9 +128,7 @@ struct double_int
   double_int operator ^ (double_int) const;
   double_int and_not (double_int) const;
 
-  double_int lshift (HOST_WIDE_INT count) const;
   double_int lshift (HOST_WIDE_INT count, unsigned int prec, bool arith) const;
-  double_int rshift (HOST_WIDE_INT count) const;
   double_int rshift (HOST_WIDE_INT count, unsigned int prec, bool arith) const;
   double_int alshift (HOST_WIDE_INT count, unsigned int prec) const;
   double_int arshift (HOST_WIDE_INT count, unsigned int prec) const;
@@ -190,7 +188,7 @@ struct double_int
   bool operator == (double_int cst2) const;
   bool operator != (double_int cst2) const;
 
-  /* Please migrate away from using these member variables publicly.  */
+  /* Please migrate away from using these member variables publically.  */
 
   unsigned HOST_WIDE_INT low;
   HOST_WIDE_INT high;
@@ -256,6 +254,27 @@ inline double_int &
 double_int::operator -- ()
 {
   *this -= double_int_one;
+  return *this;
+}
+
+inline double_int &
+double_int::operator *= (double_int b)
+{
+  *this = *this * b;
+  return *this;
+}
+
+inline double_int &
+double_int::operator += (double_int b)
+{
+  *this = *this + b;
+  return *this;
+}
+
+inline double_int &
+double_int::operator -= (double_int b)
+{
+  *this = *this - b;
   return *this;
 }
 

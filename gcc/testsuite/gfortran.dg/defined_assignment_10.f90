@@ -26,10 +26,12 @@ end module
 program main
   use m0
   implicit none
+block
   type(parent), allocatable :: left
   type(parent) :: right
 !  print *, right%foo
   left = right
 !  print *, left%foo
-  if (left%foo%i /= 20) call abort()
+!  if (left%foo%i /= 20) call abort()
+end block
 end

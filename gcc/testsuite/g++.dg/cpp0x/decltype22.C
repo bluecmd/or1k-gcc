@@ -1,5 +1,5 @@
 // PR c++/42761
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template<typename _Tp> _Tp* fn();
 

@@ -1,5 +1,5 @@
 // PR c++/52521
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 // { dg-final { scan-assembler "_Zli2_wPKc" } }
 
 int operator "" _w(const char*);

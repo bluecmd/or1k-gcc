@@ -1,5 +1,5 @@
 // PR c++/50508
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template <class T>
   struct integral_constant {

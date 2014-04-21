@@ -1,5 +1,5 @@
 /* Handle errors.
-   Copyright (C) 2000-2014 Free Software Foundation, Inc.
+   Copyright (C) 2000-2013 Free Software Foundation, Inc.
    Contributed by Andy Vaught & Niels Kristian Bech Jensen
 
 This file is part of GCC.
@@ -30,15 +30,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "flags.h"
 #include "gfortran.h"
 
-#ifdef HAVE_TERMIOS_H
-# include <termios.h>
-#endif
-
-#ifdef GWINSZ_IN_SYS_IOCTL
-# include <sys/ioctl.h>
-#endif
-
-
 static int suppress_errors = 0;
 
 static int warnings_not_errors = 0; 
@@ -68,45 +59,12 @@ gfc_pop_suppress_errors (void)
 }
 
 
-/* Determine terminal width (for trimming source lines in output).  */
-
-static int
-get_terminal_width (void)
-{
-  /* Only limit the width if we're outputting to a terminal.  */
-#ifdef HAVE_UNISTD_H
-  if (!isatty (STDERR_FILENO))
-    return INT_MAX;
-#endif
-  
-  /* Method #1: Use ioctl (not available on all systems).  */
-#ifdef TIOCGWINSZ
-  struct winsize w;
-  w.ws_col = 0;
-  if (ioctl (0, TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
-    return w.ws_col;
-#endif
-
-  /* Method #2: Query environment variable $COLUMNS.  */
-  const char *p = getenv ("COLUMNS");
-  if (p)
-    {
-      int value = atoi (p);
-      if (value > 0)
-	return value;
-    }
-
-  /* If both fail, use reasonable default.  */
-  return 80;
-}
-
-
 /* Per-file error initialization.  */
 
 void
 gfc_error_init_1 (void)
 {
-  terminal_width = get_terminal_width ();
+  terminal_width = gfc_terminal_width ();
   errors = 0;
   warnings = 0;
   buffer_flag = 0;
@@ -848,10 +806,10 @@ gfc_notification_std (int std)
 
 /* Possibly issue a warning/error about use of a nonstandard (or deleted)
    feature.  An error/warning will be issued if the currently selected
-   standard does not contain the requested bits.  Return false if
+   standard does not contain the requested bits.  Return FAILURE if
    an error is generated.  */
 
-bool
+gfc_try
 gfc_notify_std (int std, const char *gmsgid, ...)
 {
   va_list argp;
@@ -861,10 +819,10 @@ gfc_notify_std (int std, const char *gmsgid, ...)
 
   warning = ((gfc_option.warn_std & std) != 0) && !inhibit_warnings;
   if ((gfc_option.allow_std & std) != 0 && !warning)
-    return true;
+    return SUCCESS;
 
   if (suppress_errors)
-    return warning ? true : false;
+    return warning ? SUCCESS : FAILURE;
 
   cur_error_buffer = warning ? &warning_buffer : &error_buffer;
   cur_error_buffer->flag = 1;
@@ -925,7 +883,7 @@ gfc_notify_std (int std, const char *gmsgid, ...)
       cur_error_buffer->flag = 0;
     }
 
-  return (warning && !warnings_are_errors) ? true : false;
+  return (warning && !warnings_are_errors) ? SUCCESS : FAILURE;
 }
 
 

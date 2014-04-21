@@ -10,6 +10,20 @@ import (
 	"syscall"
 )
 
+type sendfileOp struct {
+	anOp
+	src syscall.Handle // source
+	n   uint32
+}
+
+func (o *sendfileOp) Submit() (err error) {
+	return syscall.TransmitFile(o.fd.sysfd, o.src, o.n, 0, &o.o, nil, syscall.TF_WRITE_BEHIND)
+}
+
+func (o *sendfileOp) Name() string {
+	return "TransmitFile"
+}
+
 // sendFile copies the contents of r to c using the TransmitFile
 // system call to minimize copies.
 //
@@ -19,7 +33,7 @@ import (
 // if handled == false, sendFile performed no work.
 //
 // Note that sendfile for windows does not suppport >2GB file.
-func sendFile(fd *netFD, r io.Reader) (written int64, err error, handled bool) {
+func sendFile(c *netFD, r io.Reader) (written int64, err error, handled bool) {
 	var n int64 = 0 // by default, copy until EOF
 
 	lr, ok := r.(*io.LimitedReader)
@@ -34,17 +48,18 @@ func sendFile(fd *netFD, r io.Reader) (written int64, err error, handled bool) {
 		return 0, nil, false
 	}
 
-	if err := fd.writeLock(); err != nil {
+	if err := c.incref(false); err != nil {
 		return 0, err, true
 	}
-	defer fd.writeUnlock()
+	defer c.decref()
+	c.wio.Lock()
+	defer c.wio.Unlock()
 
-	o := &fd.wop
-	o.qty = uint32(n)
-	o.handle = syscall.Handle(f.Fd())
-	done, err := wsrv.ExecIO(o, "TransmitFile", func(o *operation) error {
-		return syscall.TransmitFile(o.fd.sysfd, o.handle, o.qty, 0, &o.o, nil, syscall.TF_WRITE_BEHIND)
-	})
+	var o sendfileOp
+	o.Init(c, 'w')
+	o.n = uint32(n)
+	o.src = syscall.Handle(f.Fd())
+	done, err := iosrv.ExecIO(&o, 0)
 	if err != nil {
 		return 0, err, false
 	}

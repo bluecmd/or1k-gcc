@@ -1,5 +1,5 @@
 /* IO Code translation/library interface
-   Copyright (C) 2002-2014 Free Software Foundation, Inc.
+   Copyright (C) 2002-2013 Free Software Foundation, Inc.
    Contributed by Paul Brook
 
 This file is part of GCC.
@@ -23,8 +23,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tree.h"
-#include "stringpool.h"
-#include "stor-layout.h"
 #include "ggc.h"
 #include "diagnostic-core.h"	/* For internal_error.  */
 #include "gfortran.h"
@@ -2028,8 +2026,20 @@ transfer_expr (gfc_se * se, gfc_typespec * ts, tree addr_expr, gfc_code * code)
       && ts->u.derived != NULL
       && (ts->is_iso_c == 1 || ts->u.derived->ts.is_iso_c == 1))
     {
-      ts->type = BT_INTEGER;
-      ts->kind = gfc_index_integer_kind;
+      /* C_PTR and C_FUNPTR have private components which means they can not
+         be printed.  However, if -std=gnu and not -pedantic, allow
+         the component to be printed to help debugging.  */
+      if (gfc_notification_std (GFC_STD_GNU) != SILENT)
+	{
+	  gfc_error_now ("Derived type '%s' at %L has PRIVATE components",
+			 ts->u.derived->name, code != NULL ? &(code->loc) :
+			 &gfc_current_locus);
+	  return;
+	}
+
+      ts->type = ts->u.derived->ts.type;
+      ts->kind = ts->u.derived->ts.kind;
+      ts->f90_type = ts->u.derived->ts.f90_type;
     }
 
   kind = ts->kind;
@@ -2149,10 +2159,10 @@ transfer_expr (gfc_se * se, gfc_typespec * ts, tree addr_expr, gfc_code * code)
 				      expr);
 
       /* Make sure that the derived type has been built.  An external
-	 function, if only referenced in an io statement, requires this
+	 function, if only referenced in an io statement requires this
 	 check (see PR58771).  */
       if (ts->u.derived->backend_decl == NULL_TREE)
-	(void) gfc_typenode_for_spec (ts);
+	tmp = gfc_typenode_for_spec (ts);
 
       for (c = ts->u.derived->components; c; c = c->next)
 	{
@@ -2268,10 +2278,7 @@ gfc_trans_transfer (gfc_code * code)
 	    {
 	      for (n = 0; n < ref->u.ar.dimen; n++)
 		if (ref->u.ar.dimen_type[n] == DIMEN_VECTOR)
-		  {
-		    seen_vector = true;
-		    break;
-		  }
+		  seen_vector = true;
 	    }
 
 	  if (seen_vector && last_dt == READ)

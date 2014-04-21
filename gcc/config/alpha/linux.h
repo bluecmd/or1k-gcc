@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler,
    for Alpha Linux-based GNU systems.
-   Copyright (C) 1996-2014 Free Software Foundation, Inc.
+   Copyright (C) 1996-2013 Free Software Foundation, Inc.
    Contributed by Richard Henderson.
 
 This file is part of GCC.
@@ -33,6 +33,16 @@ along with GCC; see the file COPYING3.  If not see
 	  builtin_define ("_GNU_SOURCE");			\
     } while (0)
 
+#undef TARGET_OS_D_BUILTINS 
+#define TARGET_OS_D_BUILTINS()					\
+    do {							\
+	if (OPTION_GLIBC)					\
+	  builtin_define ("GNU_GLibc");				\
+								\
+	builtin_define ("linux");				\
+	builtin_define ("Posix");				\
+    } while (0)
+
 #undef LIB_SPEC
 #define LIB_SPEC \
   "%{pthread:-lpthread} \
@@ -59,18 +69,16 @@ along with GCC; see the file COPYING3.  If not see
 
 #ifdef SINGLE_LIBC
 #define OPTION_GLIBC  (DEFAULT_LIBC == LIBC_GLIBC)
-#define OPTION_UCLIBC (DEFAULT_LIBC == LIBC_UCLIBC)
-#define OPTION_BIONIC (DEFAULT_LIBC == LIBC_BIONIC)
 #else
 #define OPTION_GLIBC  (linux_libc == LIBC_GLIBC)
-#define OPTION_UCLIBC (linux_libc == LIBC_UCLIBC)
-#define OPTION_BIONIC (linux_libc == LIBC_BIONIC)
 #endif
 
-/* Determine what functions are present at the runtime;
-   this includes full c99 runtime and sincos.  */
-#undef TARGET_LIBC_HAS_FUNCTION
-#define TARGET_LIBC_HAS_FUNCTION linux_libc_has_function
+/* Determine whether the entire c99 runtime is present in the
+   runtime library.  */
+#define TARGET_C99_FUNCTIONS (OPTION_GLIBC)
+
+/* Whether we have sincos that follows the GNU extension.  */
+#define TARGET_HAS_SINCOS (OPTION_GLIBC)
 
 #define TARGET_POSIX_IO
 

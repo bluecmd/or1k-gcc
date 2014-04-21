@@ -141,6 +141,44 @@ PrependVersionedLibdir (::java::lang::String* libpath)
   return retval;
 }
 
+static char*
+AppendJniLibdir (char *path, struct utsname *u)
+{
+  char* retval;
+  const char* jnilibdir = "/usr/lib/jni";
+#ifdef MULTIARCH_DIR
+  const char* jnilibdir2 = "/usr/lib/" MULTIARCH_DIR "/jni";
+  jsize len2 = strlen (jnilibdir2) + 2;
+#else
+  jsize len2 = 0;
+#endif
+
+#if defined(__linux__) && defined (__i386__)
+  if (! strcmp ("x86_64", u->machine))
+    jnilibdir = "/usr/lib32/jni";
+#endif
+
+  if (path)
+    {
+      jsize total = strlen (path)
+	+ (sizeof (PATH_SEPARATOR) - 1) + strlen (jnilibdir) +len2 + 1;
+      retval = (char*) _Jv_Malloc (total);
+      strcpy (retval, path);
+      strcat (retval, PATH_SEPARATOR);
+      strcat (retval, jnilibdir);
+    }
+  else
+    {
+      retval = (char*) _Jv_Malloc (strlen (jnilibdir) + len2 + 1);
+      strcpy (retval, jnilibdir);
+    }
+#ifdef MULTIARCH_DIR
+  strcat (retval, PATH_SEPARATOR);
+  strcat (retval, jnilibdir2);
+#endif
+  return retval;
+}
+
 void
 gnu::classpath::SystemProperties::insertSystemProperties (::java::util::Properties *newprops)
 {
@@ -373,8 +411,13 @@ gnu::classpath::SystemProperties::insertSystemProperties (::java::util::Properti
       // Prepend GCJ_VERSIONED_LIBDIR to the module load path so that
       // libgcj will find its own JNI libraries, like libgtkpeer.so.
       char* val = PrependVersionedLibdir (path);
-      _Jv_SetDLLSearchPath (val);
+
+      // Append jnilibdir
+      char* val2 = AppendJniLibdir (val, &u);
+
+      _Jv_SetDLLSearchPath (val2);
       _Jv_Free (val);
+      _Jv_Free (val2);
     }
   else
     {
@@ -382,9 +425,12 @@ gnu::classpath::SystemProperties::insertSystemProperties (::java::util::Properti
 #ifdef USE_LTDL
       char *libpath = getenv (LTDL_SHLIBPATH_VAR);
       char* val = _Jv_PrependVersionedLibdir (libpath);
-      SET ("java.library.path", val);
-      _Jv_SetDLLSearchPath (val);
+      // Append jnilibdir
+      char* val2 = AppendJniLibdir (val, &u);
+      SET ("java.library.path", val2);
+      _Jv_SetDLLSearchPath (val2);
       _Jv_Free (val);
+      _Jv_Free (val2);
 #else
       SET ("java.library.path", "");
 #endif

@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template<typename T>
 struct NonCopyable {
@@ -7,13 +7,13 @@ struct NonCopyable {
 };
 
 template<>
-NonCopyable<int>::NonCopyable(NonCopyable<int> const&) = delete; // { dg-message "declared" }
+NonCopyable<int>::NonCopyable(NonCopyable<int> const&) = delete; // { dg-error "declared" }
 
 template<typename T>
 NonCopyable<T>::NonCopyable(NonCopyable<T> const&) = default;
 
 template<>
-NonCopyable<double>::NonCopyable(NonCopyable<double> const&) = delete; // { dg-message "declared" }
+NonCopyable<double>::NonCopyable(NonCopyable<double> const&) = delete; // { dg-error "declared" }
 
 
 int main()

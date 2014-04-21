@@ -1,5 +1,5 @@
 // PR c++/49672
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template<typename ... Args>
 static void foo()

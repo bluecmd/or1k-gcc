@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2012, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -44,7 +44,6 @@ with Sem;      use Sem;
 with Sem_Aux;  use Sem_Aux;
 with Sem_Ch3;  use Sem_Ch3;
 with Sem_Ch6;  use Sem_Ch6;
-with Sem_Ch8;  use Sem_Ch8;
 with Sem_Eval; use Sem_Eval;
 with Sem_Type; use Sem_Type;
 with Sem_Util; use Sem_Util;
@@ -331,7 +330,7 @@ package body Sem_Disp is
 
          --  Ada 2005 (AI-50217)
 
-         elsif From_Limited_With (Designated_Type (T))
+         elsif From_With_Type (Designated_Type (T))
            and then Present (Non_Limited_View (Designated_Type (T)))
            and then Scope (Designated_Type (T)) = Scope (Subp)
          then
@@ -536,27 +535,6 @@ package body Sem_Disp is
 
                Set_Entity (Name (N), Alias (Subp));
                return;
-
-            --  An obscure special case: a null procedure may have a class-
-            --  wide pre/postcondition that includes a call to an abstract
-            --  subp. Calls within the expression may not have been rewritten
-            --  as dispatching calls yet, because the null body appears in
-            --  the current declarative part. The expression will be properly
-            --  rewritten/reanalyzed when the postcondition procedure is built.
-
-            --  Similarly, if this is a pre/postcondition for an abstract
-            --  subprogram, it may call another abstract function which is
-            --  a primitive of an abstract type. The call is non-dispatching
-            --  but will be legal in overridings of the operation.
-
-            elsif In_Spec_Expression
-              and then Is_Subprogram (Current_Scope)
-              and then
-                ((Nkind (Parent (Current_Scope)) = N_Procedure_Specification
-                   and then Null_Present (Parent (Current_Scope)))
-                 or else Is_Abstract_Subprogram (Current_Scope))
-            then
-               null;
 
             else
                --  We need to determine whether the context of the call
@@ -1124,11 +1102,11 @@ package body Sem_Disp is
 
                               if Has_Dispatch_Table (Tagged_Type) then
                                  Error_Msg_N
-                                   ("overriding of& is too late for building "
-                                    & " static dispatch tables!", Subp);
+                                   ("overriding of& is too late for building" &
+                                    " static dispatch tables!", Subp);
                                  Error_Msg_N
-                                   ("\spec should appear immediately after "
-                                    & "the type!", Subp);
+                                   ("\spec should appear immediately after" &
+                                    " the type!", Subp);
                               end if;
 
                            --  No code required to register primitives in VM
@@ -1203,25 +1181,12 @@ package body Sem_Disp is
       Ovr_Subp := Old_Subp;
 
       --  [Ada 2012:AI-0125]: Search for inherited hidden primitive that may be
-      --  overridden by Subp. This only applies to source subprograms, and
-      --  their declaration must carry an explicit overriding indicator.
+      --  overridden by Subp
 
       if No (Ovr_Subp)
         and then Ada_Version >= Ada_2012
-        and then Comes_From_Source (Subp)
-        and then
-          Nkind (Unit_Declaration_Node (Subp)) = N_Subprogram_Declaration
       then
          Ovr_Subp := Find_Hidden_Overridden_Primitive (Subp);
-
-         --  Verify that the proper overriding indicator has been supplied.
-
-         if Present (Ovr_Subp)
-           and then
-             not Must_Override (Specification (Unit_Declaration_Node (Subp)))
-         then
-            Error_Msg_NE ("missing overriding indicator for&", Subp, Subp);
-         end if;
       end if;
 
       --  Now it should be a correct primitive operation, put it in the list
@@ -1233,7 +1198,9 @@ package body Sem_Disp is
 
          Check_Subtype_Conformant (Subp, Ovr_Subp);
 
-         if Nam_In (Chars (Subp), Name_Initialize, Name_Adjust, Name_Finalize)
+         if (Chars (Subp) = Name_Initialize
+           or else Chars (Subp) = Name_Adjust
+           or else Chars (Subp) = Name_Finalize)
            and then Is_Controlled (Tagged_Type)
            and then not Is_Visibly_Controlled (Tagged_Type)
          then
@@ -1270,7 +1237,7 @@ package body Sem_Disp is
             --  emitted after those tables are built, to prevent access before
             --  elaboration in gigi.
 
-            if Body_Is_Last_Primitive and then Expander_Active then
+            if Body_Is_Last_Primitive and then Full_Expander_Active then
                declare
                   Subp_Body : constant Node_Id := Unit_Declaration_Node (Subp);
                   Elmt      : Elmt_Id;
@@ -1404,10 +1371,11 @@ package body Sem_Disp is
          Set_DT_Position (Subp, No_Uint);
 
       elsif Has_Controlled_Component (Tagged_Type)
-        and then Nam_In (Chars (Subp), Name_Initialize,
-                                       Name_Adjust,
-                                       Name_Finalize,
-                                       Name_Finalize_Address)
+        and then
+          (Chars (Subp) = Name_Initialize or else
+           Chars (Subp) = Name_Adjust     or else
+           Chars (Subp) = Name_Finalize   or else
+           Chars (Subp) = Name_Finalize_Address)
       then
          declare
             F_Node   : constant Node_Id := Freeze_Node (Tagged_Type);
@@ -1582,7 +1550,7 @@ package body Sem_Disp is
          if Derives_From (Node (Op1)) then
             if No (Prev) then
 
-               --  Avoid adding it to the list of primitives if already there
+               --  Avoid adding it to the list of primitives if already there!
 
                if Node (Op2) /= Subp then
                   Prepend_Elmt (Subp, New_Prim);
@@ -1874,14 +1842,12 @@ package body Sem_Disp is
       Vis_List  : Elist_Id;
 
    begin
-      --  This Ada 2012 rule applies only for type extensions or private
-      --  extensions, where the parent type is not in a parent unit, and
-      --  where an operation is never declared but still inherited.
+      --  This Ada 2012 rule is valid only for type extensions or private
+      --  extensions.
 
       if No (Tag_Typ)
         or else not Is_Record_Type (Tag_Typ)
         or else Etype (Tag_Typ) = Tag_Typ
-        or else In_Open_Scopes (Scope (Etype (Tag_Typ)))
       then
          return Empty;
       end if;
@@ -2256,7 +2222,7 @@ package body Sem_Disp is
 
    begin
       --  Diagnose failure to match No_Return in parent (Ada-2005, AI-414, but
-      --  we do it unconditionally in Ada 95 now, since this is our pragma).
+      --  we do it unconditionally in Ada 95 now, since this is our pragma!)
 
       if No_Return (Prev_Op) and then not No_Return (New_Op) then
          Error_Msg_N ("procedure & must have No_Return pragma", New_Op);
@@ -2479,7 +2445,7 @@ package body Sem_Disp is
                Set_Etype (Call_Node, Etype (Control));
                Set_Analyzed (Call_Node);
 
-               Expand_Interface_Conversion (Call_Node);
+               Expand_Interface_Conversion (Call_Node, Is_Static => False);
             end if;
          end;
 

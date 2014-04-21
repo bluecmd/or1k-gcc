@@ -1,8 +1,8 @@
 // PR c++/13358: g++ should accept a long long constant sans LL suffix
 // if -Wno-long-long is in use.
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
 // { dg-require-effective-target int32plus } 
-// { dg-options "-pedantic-errors -Wlong-long" }
+// { dg-options "-std=c++0x -pedantic-errors -Wlong-long" }
 
 
 void use_longlong ()

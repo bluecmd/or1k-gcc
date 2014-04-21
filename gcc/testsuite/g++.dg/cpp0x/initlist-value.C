@@ -1,5 +1,6 @@
 // Test for value-initialization via {}
-// { dg-do run { target c++11 } }
+// { dg-options -std=c++0x }
+// { dg-do run }
 
 void * operator new (__SIZE_TYPE__, void *p) { return p; }
 void * operator new[] (__SIZE_TYPE__, void *p) { return p; }

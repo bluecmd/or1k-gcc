@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build !netgo
-// +build darwin dragonfly freebsd linux netbsd openbsd
+// +build darwin freebsd linux netbsd openbsd
 
 package net
 
@@ -51,9 +50,6 @@ func cgoLookupHost(name string) (addrs []string, err error, completed bool) {
 }
 
 func cgoLookupPort(net, service string) (port int, err error, completed bool) {
-	acquireThread()
-	defer releaseThread()
-
 	var res *syscall.Addrinfo
 	var hints syscall.Addrinfo
 
@@ -103,9 +99,6 @@ func cgoLookupPort(net, service string) (port int, err error, completed bool) {
 }
 
 func cgoLookupIPCNAME(name string) (addrs []IP, cname string, err error, completed bool) {
-	acquireThread()
-	defer releaseThread()
-
 	var res *syscall.Addrinfo
 	var hints syscall.Addrinfo
 
@@ -121,18 +114,7 @@ func cgoLookupIPCNAME(name string) (addrs []IP, cname string, err error, complet
 		if gerrno == syscall.EAI_NONAME {
 			str = noSuchHost
 		} else if gerrno == syscall.EAI_SYSTEM {
-			errno := syscall.GetErrno()
-			if errno == 0 {
-				// err should not be nil, but sometimes getaddrinfo returns
-				// gerrno == C.EAI_SYSTEM with err == nil on Linux.
-				// The report claims that it happens when we have too many
-				// open files, so use syscall.EMFILE (too many open files in system).
-				// Most system calls would return ENFILE (too many open files),
-				// so at the least EMFILE should be easy to recognize if this
-				// comes up again. golang.org/issue/6232.
-				errno = syscall.EMFILE
-			}
-			str = errno.Error()
+			str = syscall.GetErrno().Error()
 		} else {
 			str = bytePtrToString(libc_gai_strerror(gerrno))
 		}
@@ -178,9 +160,6 @@ func cgoLookupCNAME(name string) (cname string, err error, completed bool) {
 }
 
 func copyIP(x IP) IP {
-	if len(x) < 16 {
-		return x.To16()
-	}
 	y := make(IP, len(x))
 	copy(y, x)
 	return y

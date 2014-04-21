@@ -1,5 +1,5 @@
 /* Subroutines used for code generation on Vitesse IQ2000 processors
-   Copyright (C) 2003-2014 Free Software Foundation, Inc.
+   Copyright (C) 2003-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -22,9 +22,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "tree.h"
-#include "stor-layout.h"
-#include "calls.h"
-#include "varasm.h"
 #include "rtl.h"
 #include "regs.h"
 #include "hard-reg-set.h"
@@ -384,7 +381,8 @@ iq2000_fill_delay_slot (const char *ret, enum delay_type type, rtx operands[],
   /* Make sure that we don't put nop's after labels.  */
   next_insn = NEXT_INSN (cur_insn);
   while (next_insn != 0
-	 && (NOTE_P (next_insn) || LABEL_P (next_insn)))
+	 && (GET_CODE (next_insn) == NOTE
+	     || GET_CODE (next_insn) == CODE_LABEL))
     next_insn = NEXT_INSN (next_insn);
 
   dslots_load_total += num_nops;
@@ -393,7 +391,7 @@ iq2000_fill_delay_slot (const char *ret, enum delay_type type, rtx operands[],
       || operands == 0
       || cur_insn == 0
       || next_insn == 0
-      || LABEL_P (next_insn)
+      || GET_CODE (next_insn) == CODE_LABEL
       || (set_reg = operands[0]) == 0)
     {
       dslots_number_nops = 0;
@@ -1107,8 +1105,8 @@ init_cumulative_args (CUMULATIVE_ARGS *cum, tree fntype,
 	  tree ret_type = TREE_TYPE (fntype);
 
 	  fprintf (stderr, ", fntype code = %s, ret code = %s\n",
-		   get_tree_code_name (TREE_CODE (fntype)),
-		   get_tree_code_name (TREE_CODE (ret_type)));
+		   tree_code_name[(int)TREE_CODE (fntype)],
+		   tree_code_name[(int)TREE_CODE (ret_type)]);
 	}
     }
 
@@ -1282,7 +1280,7 @@ iq2000_function_arg (cumulative_args_t cum_v, enum machine_mode mode,
 
       if (! type || TREE_CODE (type) != RECORD_TYPE
 	  || ! named  || ! TYPE_SIZE_UNIT (type)
-	  || ! tree_fits_uhwi_p (TYPE_SIZE_UNIT (type)))
+	  || ! host_integerp (TYPE_SIZE_UNIT (type), 1))
 	ret = gen_rtx_REG (mode, regbase + *arg_words + bias);
       else
 	{
@@ -1292,7 +1290,7 @@ iq2000_function_arg (cumulative_args_t cum_v, enum machine_mode mode,
 	    if (TREE_CODE (field) == FIELD_DECL
 		&& TREE_CODE (TREE_TYPE (field)) == REAL_TYPE
 		&& TYPE_PRECISION (TREE_TYPE (field)) == BITS_PER_WORD
-		&& tree_fits_shwi_p (bit_position (field))
+		&& host_integerp (bit_position (field), 0)
 		&& int_bit_position (field) % BITS_PER_WORD == 0)
 	      break;
 
@@ -1310,7 +1308,7 @@ iq2000_function_arg (cumulative_args_t cum_v, enum machine_mode mode,
 	      /* ??? If this is a packed structure, then the last hunk won't
 		 be 64 bits.  */
 	      chunks
-		= tree_to_uhwi (TYPE_SIZE_UNIT (type)) / UNITS_PER_WORD;
+		= tree_low_cst (TYPE_SIZE_UNIT (type), 1) / UNITS_PER_WORD;
 	      if (chunks + *arg_words + bias > (unsigned) MAX_ARGS_IN_REGISTERS)
 		chunks = MAX_ARGS_IN_REGISTERS - *arg_words - bias;
 
@@ -1535,8 +1533,8 @@ final_prescan_insn (rtx insn, rtx opvec[] ATTRIBUTE_UNUSED,
       iq2000_load_reg4 = 0;
     }
 
-  if (   (JUMP_P (insn)
-       || CALL_P (insn)
+  if (   (GET_CODE (insn) == JUMP_INSN
+       || GET_CODE (insn) == CALL_INSN
        || (GET_CODE (PATTERN (insn)) == RETURN))
 	   && NEXT_INSN (PREV_INSN (insn)) == insn)
     {
@@ -1546,7 +1544,7 @@ final_prescan_insn (rtx insn, rtx opvec[] ATTRIBUTE_UNUSED,
     }
   
   if (TARGET_STATS
-      && (JUMP_P (insn) || CALL_P (insn)))
+      && (GET_CODE (insn) == JUMP_INSN || GET_CODE (insn) == CALL_INSN))
     dslots_jump_total ++;
 }
 
@@ -2287,8 +2285,8 @@ iq2000_adjust_insn_length (rtx insn, int length)
   /* A unconditional jump has an unfilled delay slot if it is not part
      of a sequence.  A conditional jump normally has a delay slot.  */
   if (simplejump_p (insn)
-      || (   (JUMP_P (insn)
-	   || CALL_P (insn))))
+      || (   (GET_CODE (insn) == JUMP_INSN
+	   || GET_CODE (insn) == CALL_INSN)))
     length += 4;
 
   return length;

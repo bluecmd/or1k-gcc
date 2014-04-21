@@ -1,5 +1,5 @@
 // PR c++/35828
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template < typename > struct A ;
 template < template < typename > class = A >

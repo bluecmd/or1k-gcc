@@ -17,8 +17,8 @@ PROGRAM main
 
   INTEGER :: coarr[*]
 
-  CALL coarray(coarr)         ! { dg-error "Explicit interface required" }
-  CALL polymorph(tt)          ! { dg-error "Explicit interface required" }
+  CALL coarray(coarr)         ! { dg-error " must have an explicit interface" }
+  CALL polymorph(tt)          ! { dg-error " must have an explicit interface" }
 END PROGRAM
 
 SUBROUTINE coarray(a)

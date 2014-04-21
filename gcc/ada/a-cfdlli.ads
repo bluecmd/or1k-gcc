@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2004-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2012, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -30,10 +30,8 @@
 ------------------------------------------------------------------------------
 
 --  This spec is derived from Ada.Containers.Bounded_Doubly_Linked_Lists in the
---  Ada 2012 RM. The modifications are meant to facilitate formal proofs by
---  making it easier to express properties, and by making the specification of
---  this unit compatible with SPARK 2014. Note that the API of this unit may be
---  subject to incompatible changes as SPARK 2014 evolves.
+--  Ada 2012 RM. The modifications are to facilitate formal proofs by making it
+--  easier to express properties.
 
 --  The modifications are:
 
@@ -48,12 +46,14 @@
 --    There are three new functions:
 
 --      function Strict_Equal (Left, Right : List) return Boolean;
---      function First_To_Previous  (Container : List; Current : Cursor)
---         return List;
---      function Current_To_Last (Container : List; Current : Cursor)
---         return List;
+--      function Left  (Container : List; Position : Cursor) return List;
+--      function Right (Container : List; Position : Cursor) return List;
 
---    See subprogram specifications that follow for details
+--    See detailed specifications for these subprograms
+
+private with Ada.Streams;
+with Ada.Containers;
+with Ada.Iterator_Interfaces;
 
 generic
    type Element_Type is private;
@@ -62,15 +62,13 @@ generic
                       return Boolean is <>;
 
 package Ada.Containers.Formal_Doubly_Linked_Lists is
-   pragma Annotate (GNATprove, External_Axiomatization);
    pragma Pure;
 
-   type List (Capacity : Count_Type) is private with
-     Iterable => (First       => First,
-                  Next        => Next,
-                  Has_Element => Has_Element,
-                  Element     => Element);
-   pragma Preelaborable_Initialization (List);
+   type List (Capacity : Count_Type) is tagged private with
+      Constant_Indexing => Constant_Reference,
+      Default_Iterator  => Iterate,
+      Iterator_Element  => Element_Type;
+   --  pragma Preelaborable_Initialization (List);
 
    type Cursor is private;
    pragma Preelaborable_Initialization (Cursor);
@@ -79,264 +77,198 @@ package Ada.Containers.Formal_Doubly_Linked_Lists is
 
    No_Element : constant Cursor;
 
-   function "=" (Left, Right : List) return Boolean with
-     Global => null;
+   function Not_No_Element (Position : Cursor) return Boolean;
 
-   function Length (Container : List) return Count_Type with
-     Global => null;
+   package List_Iterator_Interfaces is new
+     Ada.Iterator_Interfaces (Cursor => Cursor, Has_Element => Not_No_Element);
 
-   function Is_Empty (Container : List) return Boolean with
-     Global => null;
+   function Iterate (Container : List; Start : Cursor)
+      return List_Iterator_Interfaces.Reversible_Iterator'Class;
 
-   procedure Clear (Container : in out List) with
-     Global => null;
+   function Iterate (Container : List)
+      return List_Iterator_Interfaces.Reversible_Iterator'Class;
 
-   procedure Assign (Target : in out List; Source : List) with
-     Global => null,
-     Pre    => Target.Capacity >= Length (Source);
+   function "=" (Left, Right : List) return Boolean;
 
-   function Copy (Source : List; Capacity : Count_Type := 0) return List with
-     Global => null,
-     Pre    => Capacity = 0 or else Capacity >= Source.Capacity;
+   function Length (Container : List) return Count_Type;
 
-   function Element
-     (Container : List;
-      Position : Cursor) return Element_Type
-   with
-     Global => null,
-     Pre    => Has_Element (Container, Position);
+   function Is_Empty (Container : List) return Boolean;
+
+   procedure Clear (Container : in out List);
+
+   procedure Assign (Target : in out List; Source : List);
+
+   function Copy (Source : List; Capacity : Count_Type := 0) return List;
+
+   function Element (Container : List; Position : Cursor) return Element_Type;
 
    procedure Replace_Element
      (Container : in out List;
       Position  : Cursor;
-      New_Item  : Element_Type)
-   with
-     Global => null,
-     Pre    => Has_Element (Container, Position);
+      New_Item  : Element_Type);
 
-   procedure Move (Target : in out List; Source : in out List) with
-     Global => null,
-     Pre    => Target.Capacity >= Length (Source);
+   procedure Query_Element
+     (Container : List; Position : Cursor;
+      Process   : not null access procedure (Element : Element_Type));
+
+   procedure Update_Element
+     (Container : in out List;
+      Position  : Cursor;
+      Process   : not null access procedure (Element : in out Element_Type));
+
+   procedure Move (Target : in out List; Source : in out List);
 
    procedure Insert
      (Container : in out List;
       Before    : Cursor;
       New_Item  : Element_Type;
-      Count     : Count_Type := 1)
-   with
-     Global => null,
-     Pre    => Length (Container) + Count <= Container.Capacity
-                 and then (Has_Element (Container, Before)
-                            or else Before = No_Element);
+      Count     : Count_Type := 1);
 
    procedure Insert
      (Container : in out List;
       Before    : Cursor;
       New_Item  : Element_Type;
       Position  : out Cursor;
-      Count     : Count_Type := 1)
-   with
-     Global => null,
-     Pre    => Length (Container) + Count <= Container.Capacity
-                 and then (Has_Element (Container, Before)
-                            or else Before = No_Element);
+      Count     : Count_Type := 1);
 
    procedure Insert
      (Container : in out List;
       Before    : Cursor;
       Position  : out Cursor;
-      Count     : Count_Type := 1)
-   with
-     Global => null,
-     Pre    => Length (Container) + Count <= Container.Capacity
-                 and then (Has_Element (Container, Before)
-                            or else Before = No_Element);
+      Count     : Count_Type := 1);
 
    procedure Prepend
      (Container : in out List;
       New_Item  : Element_Type;
-      Count     : Count_Type := 1)
-   with
-     Global => null,
-     Pre    => Length (Container) + Count <= Container.Capacity;
+      Count     : Count_Type := 1);
 
    procedure Append
      (Container : in out List;
       New_Item  : Element_Type;
-      Count     : Count_Type := 1)
-   with
-     Global => null,
-     Pre    => Length (Container) + Count <= Container.Capacity;
+      Count     : Count_Type := 1);
 
    procedure Delete
      (Container : in out List;
       Position  : in out Cursor;
-      Count     : Count_Type := 1)
-   with
-     Global => null,
-     Pre    => Has_Element (Container, Position);
+      Count     : Count_Type := 1);
 
    procedure Delete_First
      (Container : in out List;
-      Count     : Count_Type := 1)
-   with
-     Global => null;
+      Count     : Count_Type := 1);
 
    procedure Delete_Last
      (Container : in out List;
-      Count     : Count_Type := 1)
-   with
-     Global => null;
+      Count     : Count_Type := 1);
 
-   procedure Reverse_Elements (Container : in out List) with
-     Global => null;
+   procedure Reverse_Elements (Container : in out List);
 
    procedure Swap
      (Container : in out List;
-      I, J      : Cursor)
-   with
-     Global => null,
-     Pre    => Has_Element (Container, I) and then Has_Element (Container, J);
+      I, J      : Cursor);
 
    procedure Swap_Links
      (Container : in out List;
-      I, J      : Cursor)
-   with
-     Global => null,
-     Pre    => Has_Element (Container, I) and then Has_Element (Container, J);
+      I, J      : Cursor);
 
    procedure Splice
      (Target : in out List;
       Before : Cursor;
-      Source : in out List)
-   with
-     Global => null,
-     Pre    => Length (Source) + Length (Target) <= Target.Capacity
-                 and then (Has_Element (Target, Before)
-                            or else Before = No_Element);
+      Source : in out List);
 
    procedure Splice
      (Target   : in out List;
       Before   : Cursor;
       Source   : in out List;
-      Position : in out Cursor)
-   with
-     Global => null,
-     Pre    => Length (Source) + Length (Target) <= Target.Capacity
-                 and then (Has_Element (Target, Before)
-                            or else Before = No_Element)
-                 and then Has_Element (Source, Position);
+      Position : in out Cursor);
 
    procedure Splice
      (Container : in out List;
       Before    : Cursor;
-      Position  : Cursor)
-   with
-     Global => null,
-     Pre    => 2 * Length (Container) <= Container.Capacity
-                 and then (Has_Element (Container, Before)
-                            or else Before = No_Element)
-                 and then Has_Element (Container, Position);
+      Position  : Cursor);
 
-   function First (Container : List) return Cursor with
-     Global => null;
+   function First (Container : List) return Cursor;
 
-   function First_Element (Container : List) return Element_Type with
-     Global => null,
-     Pre    => not Is_Empty (Container);
+   function First_Element (Container : List) return Element_Type;
 
-   function Last (Container : List) return Cursor with
-     Global => null;
+   function Last (Container : List) return Cursor;
 
-   function Last_Element (Container : List) return Element_Type with
-     Global => null,
-     Pre    => not Is_Empty (Container);
+   function Last_Element (Container : List) return Element_Type;
 
-   function Next (Container : List; Position : Cursor) return Cursor with
-     Global => null,
-     Pre    => Has_Element (Container, Position) or else Position = No_Element;
+   function Next (Container : List; Position : Cursor) return Cursor;
 
-   procedure Next (Container : List; Position : in out Cursor) with
-     Global => null,
-     Pre    => Has_Element (Container, Position) or else Position = No_Element;
+   procedure Next (Container : List; Position : in out Cursor);
 
-   function Previous (Container : List; Position : Cursor) return Cursor with
-     Global => null,
-     Pre    => Has_Element (Container, Position) or else Position = No_Element;
+   function Previous (Container : List; Position : Cursor) return Cursor;
 
-   procedure Previous (Container : List; Position : in out Cursor) with
-     Global => null,
-     Pre    => Has_Element (Container, Position) or else Position = No_Element;
+   procedure Previous (Container : List; Position : in out Cursor);
 
    function Find
      (Container : List;
       Item      : Element_Type;
-      Position  : Cursor := No_Element) return Cursor
-   with
-     Global => null,
-     Pre    => Has_Element (Container, Position) or else Position = No_Element;
+      Position  : Cursor := No_Element) return Cursor;
 
    function Reverse_Find
      (Container : List;
       Item      : Element_Type;
-      Position  : Cursor := No_Element) return Cursor
-   with
-     Global => null,
-     Pre    => Has_Element (Container, Position) or else Position = No_Element;
+      Position  : Cursor := No_Element) return Cursor;
 
    function Contains
      (Container : List;
-      Item      : Element_Type) return Boolean
-   with
-     Global => null;
+      Item      : Element_Type) return Boolean;
 
-   function Has_Element (Container : List; Position : Cursor) return Boolean
-   with
-     Global => null;
+   function Has_Element (Container : List; Position : Cursor) return Boolean;
+
+   procedure Iterate
+     (Container : List;
+      Process   :
+      not null access procedure (Container : List; Position : Cursor));
+
+   procedure Reverse_Iterate
+     (Container : List;
+      Process   :
+      not null access procedure (Container : List; Position : Cursor));
 
    generic
       with function "<" (Left, Right : Element_Type) return Boolean is <>;
    package Generic_Sorting is
 
-      function Is_Sorted (Container : List) return Boolean with
-        Global => null;
+      function Is_Sorted (Container : List) return Boolean;
 
-      procedure Sort (Container : in out List) with
-        Global => null;
+      procedure Sort (Container : in out List);
 
-      procedure Merge (Target, Source : in out List) with
-        Global => null;
+      procedure Merge (Target, Source : in out List);
 
    end Generic_Sorting;
 
-   function Strict_Equal (Left, Right : List) return Boolean with
-     Global => null;
+   type Constant_Reference_Type
+      (Element : not null access constant Element_Type) is private
+   with
+      Implicit_Dereference => Element;
+
+   function Constant_Reference
+     (Container : List;      --  SHOULD BE ALIASED ???
+      Position  : Cursor)   return Constant_Reference_Type;
+
+   function Strict_Equal (Left, Right : List) return Boolean;
    --  Strict_Equal returns True if the containers are physically equal, i.e.
    --  they are structurally equal (function "=" returns True) and that they
    --  have the same set of cursors.
 
-   function First_To_Previous (Container : List; Current : Cursor) return List
-   with
-     Global => null,
-     Pre    => Has_Element (Container, Current) or else Current = No_Element;
-   function Current_To_Last (Container : List; Current : Cursor) return List
-   with
-     Global => null,
-     Pre    => Has_Element (Container, Current) or else Current = No_Element;
-   --  First_To_Previous returns a container containing all elements preceding
-   --  Current (excluded) in Container. Current_To_Last returns a container
-   --  containing all elements following Current (included) in Container.
-   --  These two new functions can be used to express invariant properties in
-   --  loops which iterate over containers. First_To_Previous returns the part
-   --  of the container already scanned and Current_To_Last the part not
-   --  scanned yet.
+   function Left  (Container : List; Position : Cursor) return List;
+   function Right (Container : List; Position : Cursor) return List;
+   --  Left returns a container containing all elements preceding Position
+   --  (excluded) in Container. Right returns a container containing all
+   --  elements following Position (included) in Container. These two new
+   --  functions can be used to express invariant properties in loops which
+   --  iterate over containers. Left returns the part of the container already
+   --  scanned and Right the part not scanned yet.
 
 private
 
    type Node_Type is record
       Prev    : Count_Type'Base := -1;
       Next    : Count_Type;
-      Element : Element_Type;
+      Element : aliased Element_Type;
    end record;
 
    function "=" (L, R : Node_Type) return Boolean is abstract;
@@ -347,14 +279,48 @@ private
    type List (Capacity : Count_Type) is tagged record
       Nodes  : Node_Array (1 .. Capacity) := (others => <>);
       Free   : Count_Type'Base := -1;
+      Busy   : Natural := 0;
+      Lock   : Natural := 0;
       Length : Count_Type := 0;
       First  : Count_Type := 0;
       Last   : Count_Type := 0;
    end record;
 
+   use Ada.Streams;
+
+   procedure Read
+     (Stream : not null access Root_Stream_Type'Class;
+      Item   : out List);
+
+   for List'Read use Read;
+
+   procedure Write
+     (Stream : not null access Root_Stream_Type'Class;
+      Item   : List);
+
+   for List'Write use Write;
+
+   type List_Access is access all List;
+   for List_Access'Storage_Size use 0;
+
    type Cursor is record
       Node : Count_Type := 0;
    end record;
+
+   type Constant_Reference_Type
+      (Element : not null access constant Element_Type) is null record;
+
+   procedure Read
+     (Stream : not null access Root_Stream_Type'Class;
+      Item   : out Cursor);
+
+   for Cursor'Read use Read;
+
+   procedure Write
+     (Stream : not null access Root_Stream_Type'Class;
+      Item   : Cursor);
+
+   for Cursor'Write use Write;
 
    Empty_List : constant List := (0, others => <>);
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd netbsd openbsd
+// +build darwin freebsd netbsd openbsd
 
 package net
 
@@ -18,17 +18,25 @@ func setIPv4MulticastInterface(fd *netFD, ifi *Interface) error {
 	}
 	var a [4]byte
 	copy(a[:], ip.To4())
-	if err := fd.incref(); err != nil {
+	if err := fd.incref(false); err != nil {
 		return err
 	}
 	defer fd.decref()
-	return os.NewSyscallError("setsockopt", syscall.SetsockoptInet4Addr(fd.sysfd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_IF, a))
+	err = syscall.SetsockoptInet4Addr(fd.sysfd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_IF, a)
+	if err != nil {
+		return os.NewSyscallError("setsockopt", err)
+	}
+	return nil
 }
 
 func setIPv4MulticastLoopback(fd *netFD, v bool) error {
-	if err := fd.incref(); err != nil {
+	if err := fd.incref(false); err != nil {
 		return err
 	}
 	defer fd.decref()
-	return os.NewSyscallError("setsockopt", syscall.SetsockoptByte(fd.sysfd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, byte(boolint(v))))
+	err := syscall.SetsockoptByte(fd.sysfd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, byte(boolint(v)))
+	if err != nil {
+		return os.NewSyscallError("setsockopt", err)
+	}
+	return nil
 }

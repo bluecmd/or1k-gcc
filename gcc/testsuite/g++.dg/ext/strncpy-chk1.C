@@ -1,7 +1,6 @@
 // PR c++/40502
 // { dg-do compile }
 // { dg-options "-O2" }
-// { dg-skip-if "packed attribute missing for struct A" { "epiphany-*-*" } { "*" } { "" } }
 
 struct A { char x[12], y[35]; }; // change to y[32] to get warning on or1k
 struct B { char z[50]; };
@@ -9,7 +8,7 @@ struct B { char z[50]; };
 inline void
 foo (char *dest, const char *__restrict src, __SIZE_TYPE__ n)
 {
-  __builtin___strncpy_chk (dest, src, n, __builtin_object_size (dest, 0));	// { dg-warning "will always overflow" "" { target { ! or1k*-*-* } } }
+  __builtin___strncpy_chk (dest, src, n, __builtin_object_size (dest, 0));	// { dg-warning "will always overflow" "" { target { ! or1k-*-* } } }
 }
 
 void bar (const char *, int);

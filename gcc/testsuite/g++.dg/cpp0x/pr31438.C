@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x" }
 
 template<typename> struct A;
 template<typename T, typename... U> struct A<T(U)> // { dg-error "parameter packs|U" }

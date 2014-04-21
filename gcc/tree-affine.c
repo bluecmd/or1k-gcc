@@ -1,5 +1,5 @@
 /* Operations with affine combinations of trees.
-   Copyright (C) 2005-2014 Free Software Foundation, Inc.
+   Copyright (C) 2005-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -21,20 +21,12 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tree.h"
-#include "expr.h"
 #include "tree-pretty-print.h"
 #include "pointer-set.h"
 #include "tree-affine.h"
-#include "basic-block.h"
-#include "tree-ssa-alias.h"
-#include "internal-fn.h"
-#include "gimple-expr.h"
-#include "is-a.h"
 #include "gimple.h"
-#include "gimplify.h"
 #include "flags.h"
 #include "dumpfile.h"
-#include "cfgexpand.h"
 
 /* Extends CST as appropriate for the affine combinations COMB.  */
 
@@ -385,53 +377,35 @@ add_elt_to_tree (tree expr, tree type, tree elt, double_int scale,
     type1 = sizetype;
 
   scale = double_int_ext_for_comb (scale, comb);
-
-  if (scale.is_minus_one ()
-      && POINTER_TYPE_P (TREE_TYPE (elt)))
-    {
-      elt = convert_to_ptrofftype (elt);
-      elt = fold_build1 (NEGATE_EXPR, TREE_TYPE (elt), elt);
-      scale = double_int_one;
-    }
+  elt = fold_convert (type1, elt);
 
   if (scale.is_one ())
     {
       if (!expr)
-	{
-	  if (POINTER_TYPE_P (TREE_TYPE (elt)))
-	    return elt;
-	  else
-	    return fold_convert (type1, elt);
-	}
+	return fold_convert (type, elt);
 
-      if (POINTER_TYPE_P (TREE_TYPE (expr)))
-	return fold_build_pointer_plus (expr, elt);
-      if (POINTER_TYPE_P (TREE_TYPE (elt)))
-	return fold_build_pointer_plus (elt, expr);
-      return fold_build2 (PLUS_EXPR, type1,
-			  expr, fold_convert (type1, elt));
+      if (POINTER_TYPE_P (type))
+        return fold_build_pointer_plus (expr, elt);
+      return fold_build2 (PLUS_EXPR, type, expr, elt);
     }
 
   if (scale.is_minus_one ())
     {
       if (!expr)
-	return fold_build1 (NEGATE_EXPR, type1,
-			    fold_convert (type1, elt));
+	return fold_convert (type, fold_build1 (NEGATE_EXPR, type1, elt));
 
-      if (POINTER_TYPE_P (TREE_TYPE (expr)))
+      if (POINTER_TYPE_P (type))
 	{
-	  elt = convert_to_ptrofftype (elt);
-	  elt = fold_build1 (NEGATE_EXPR, TREE_TYPE (elt), elt);
+	  elt = fold_build1 (NEGATE_EXPR, type1, elt);
 	  return fold_build_pointer_plus (expr, elt);
 	}
-      return fold_build2 (MINUS_EXPR, type1,
-			  expr, fold_convert (type1, elt));
+      return fold_build2 (MINUS_EXPR, type, expr, elt);
     }
 
-  elt = fold_convert (type1, elt);
   if (!expr)
-    return fold_build2 (MULT_EXPR, type1, elt,
-			double_int_to_tree (type1, scale));
+    return fold_convert (type,
+			 fold_build2 (MULT_EXPR, type1, elt,
+				      double_int_to_tree (type1, scale)));
 
   if (scale.is_negative ())
     {
@@ -443,13 +417,13 @@ add_elt_to_tree (tree expr, tree type, tree elt, double_int scale,
 
   elt = fold_build2 (MULT_EXPR, type1, elt,
 		     double_int_to_tree (type1, scale));
-  if (POINTER_TYPE_P (TREE_TYPE (expr)))
+  if (POINTER_TYPE_P (type))
     {
       if (code == MINUS_EXPR)
         elt = fold_build1 (NEGATE_EXPR, type1, elt);
       return fold_build_pointer_plus (expr, elt);
     }
-  return fold_build2 (code, type1, expr, elt);
+  return fold_build2 (code, type, expr, elt);
 }
 
 /* Makes tree from the affine combination COMB.  */
@@ -882,11 +856,10 @@ debug_aff (aff_tree *val)
   fprintf (stderr, "\n");
 }
 
-/* Computes address of the reference REF in ADDR.  The size of the accessed
-   location is stored to SIZE.  Returns the ultimate containing object to
-   which REF refers.  */
+/* Returns address of the reference REF in ADDR.  The size of the accessed
+   location is stored to SIZE.  */
 
-tree
+void
 get_inner_reference_aff (tree ref, aff_tree *addr, double_int *size)
 {
   HOST_WIDE_INT bitsize, bitpos;
@@ -913,8 +886,6 @@ get_inner_reference_aff (tree ref, aff_tree *addr, double_int *size)
   aff_combination_add (addr, &tmp);
 
   *size = double_int::from_shwi ((bitsize + BITS_PER_UNIT - 1) / BITS_PER_UNIT);
-
-  return base;
 }
 
 /* Returns true if a region of size SIZE1 at position 0 and a region of

@@ -1,5 +1,5 @@
 // From N1791
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 class C;
 typedef C Ct;

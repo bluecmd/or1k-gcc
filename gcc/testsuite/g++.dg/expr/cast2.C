@@ -1,5 +1,5 @@
 void (*p)();
 
 void f() {
-  (void *)p;
+  (void *)p; // { dg-warning "forbids cast" }
 }

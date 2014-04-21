@@ -1,5 +1,5 @@
 // PR c++/42083
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template<typename F>
 decltype(F()) run(F f) // { dg-message "note" }

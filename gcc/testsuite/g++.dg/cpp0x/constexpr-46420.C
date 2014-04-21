@@ -1,5 +1,5 @@
 // PR c++/46420
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template<typename> class vector { };
 struct A{};

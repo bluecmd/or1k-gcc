@@ -1,14 +1,14 @@
-2014-01-02  Richard Sandiford  <rdsandiford@googlemail.com>
+2013-10-16  Release Manager
 
-	Update copyright years
+	* GCC 4.8.2 released.
 
-2013-11-15  Andreas Schwab  <schwab@linux-m68k.org>
+2013-05-31  Release Manager
 
-	* configure: Regenerate.
+	* GCC 4.8.1 released.
 
-2013-03-27  Kai Tietz  <ktietz@redhat.com>
+2013-03-22  Release Manager
 
-	* configure: Regenerated.
+	* GCC 4.8.0 released.
 
 2013-02-13  Kai Tietz  <ktietz@redhat.com>
 
@@ -332,7 +332,7 @@
 
 	* New directory, new ChangeLog.
 
-Copyright (C) 2003-2014 Free Software Foundation, Inc.
+Copyright (C) 2003-2013 Free Software Foundation, Inc.
 
 This ChangeLog is free software; the Free Software Foundation gives
 unlimited permission to copy, distribute, and modify it.

@@ -119,11 +119,5 @@ else
   multilib_arg=
 fi
 
-AC_ARG_ENABLE(host-shared,
-[AS_HELP_STRING([--enable-host-shared],
-		[build host code as shared libraries])],
-[PICFLAG=-fPIC], [PICFLAG=])
-AC_SUBST(PICFLAG)
-
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

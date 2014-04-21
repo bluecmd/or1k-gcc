@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd
+// +build darwin freebsd linux netbsd openbsd
 
 package net
 
@@ -11,11 +11,15 @@ import (
 	"sync"
 )
 
-var onceReadProtocols sync.Once
+var (
+	protocols         map[string]int
+	onceReadProtocols sync.Once
+)
 
 // readProtocols loads contents of /etc/protocols into protocols map
 // for quick access.
 func readProtocols() {
+	protocols = make(map[string]int)
 	if file, err := open("/etc/protocols"); err == nil {
 		for line, ok := file.readLine(); ok; line, ok = file.readLine() {
 			// tcp    6   TCP    # transmission control protocol
@@ -27,13 +31,9 @@ func readProtocols() {
 				continue
 			}
 			if proto, _, ok := dtoi(f[1], 0); ok {
-				if _, ok := protocols[f[0]]; !ok {
-					protocols[f[0]] = proto
-				}
+				protocols[f[0]] = proto
 				for _, alias := range f[2:] {
-					if _, ok := protocols[alias]; !ok {
-						protocols[alias] = proto
-					}
+					protocols[alias] = proto
 				}
 			}
 		}

@@ -1,5 +1,3 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
-float operator ""_abc(const char*);
-
-int operator""_def(long double);
+float operator ""_abc(const char*); // { dg-error "missing space between|and suffix identifier" }

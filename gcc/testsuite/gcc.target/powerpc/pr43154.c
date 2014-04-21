@@ -1,6 +1,5 @@
 /* { dg-do compile { target { powerpc*-*-* } } } */
 /* { dg-skip-if "" { powerpc*-*-darwin* } { "*" } { "" } } */
-/* { dg-skip-if "" { powerpc*le-*-* } { "*" } { "" } } */
 /* { dg-require-effective-target powerpc_vsx_ok } */
 /* { dg-options "-O2 -mcpu=power7" } */
 

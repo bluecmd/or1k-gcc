@@ -1,5 +1,5 @@
 // PR c++/48089
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 // bang is ill-formed (diagnostic required) because its initializer is
 // non-constant, because it uses the value of an uninitialized object.

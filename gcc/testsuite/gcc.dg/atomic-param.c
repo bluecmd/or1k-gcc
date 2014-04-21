@@ -5,7 +5,6 @@
 
 int i;
 
-int
 main ()
 {
 

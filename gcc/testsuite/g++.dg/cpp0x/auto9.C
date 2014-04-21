@@ -1,6 +1,7 @@
 // PR c++/37962
 // Negative test for auto
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 #include <typeinfo>
 #include <stdarg.h>
@@ -15,13 +16,13 @@ const std::type_info &t2 = typeid (auto *);	// { dg-error "auto" }
 
 struct A
 {
-  operator auto ();				// { dg-error "auto" "" { target { ! c++1y } } }
-  operator auto *();				// { dg-error "auto" "" { target { ! c++1y } } }
+  operator auto ();				// { dg-error "auto" }
+  operator auto *();				// { dg-error "auto" }
 };
 
 struct A2
 {
-  operator auto () -> int;			// { dg-error "invalid use of" "" { target { ! c++1y } } }
+  operator auto () -> int;			// { dg-error "invalid use of" }
   operator auto *() -> int;			// { dg-error "auto" }
 };
 
@@ -41,7 +42,7 @@ bool d = (auto (A::*)()) 0;			// { dg-error "auto" }
 void
 foo ()
 {
-  __extension__ (auto) { 0 };			// { dg-error "auto" }
+  (auto) { 0 };					// { dg-error "auto" }
   C<int> c;
   dynamic_cast<auto> (c);			// { dg-error "auto" }
   reinterpret_cast<auto> (c);			// { dg-error "auto" }
@@ -78,10 +79,10 @@ enum struct D : auto * { FF = 0 };		// { dg-error "must be an integral type|decl
 void
 bar ()
 {
-  try { } catch (auto i) { }			// { dg-error "parameter" }
-  try { } catch (auto) { }			// { dg-error "parameter" }
-  try { } catch (auto *i) { }			// { dg-error "parameter" }
-  try { } catch (auto *) { }			// { dg-error "parameter" }
+  try { } catch (auto i) { }			// { dg-error "parameter declared" }
+  try { } catch (auto) { }			// { dg-error "parameter declared" }
+  try { } catch (auto *i) { }			// { dg-error "parameter declared" }
+  try { } catch (auto *) { }			// { dg-error "parameter declared" }
 }
 
 void
@@ -98,8 +99,8 @@ baz (int i, ...)
 template <typename T = auto> struct E {};	// { dg-error "invalid use of" }
 template <class T = auto *> struct F {};	// { dg-error "invalid use of|expected" }
 
-auto fnlate () -> auto;				// { dg-error "invalid use of" "" { target { ! c++1y } } }
-auto fnlate2 () -> auto *;			// { dg-error "invalid use of|expected" "" { target { ! c++1y } } }
+auto fnlate () -> auto;				// { dg-error "invalid use of" }
+auto fnlate2 () -> auto *;			// { dg-error "invalid use of|expected" }
 
 void
 badthrow () throw (auto)			// { dg-error "invalid use of" }

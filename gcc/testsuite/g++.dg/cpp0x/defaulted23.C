@@ -1,37 +1,27 @@
 // Test for checking of exception specifications on defaulted fns
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 struct A
 {
   A() noexcept = default;
 };
 
-A a;
-
 struct B
 {
-  B() throw (int) = default; // { dg-message "exception-specification" }
+  B() throw (int) = default; // { dg-error "exception-specification that differs from the implicit declaration" }
 };
-
-B b;				// { dg-error "deleted" }
 
 struct C
 {
   C() throw (int) { }
 };
 
-C c;
-
 struct D: C
 {
   D() throw (int) = default;
 };
 
-D d;
-
 struct E
 {
   E() = default;
 };
-
-E e;

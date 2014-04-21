@@ -23,7 +23,7 @@ implicit none
 
 abstract interface
   function abs_fun(x,sz)
-    integer,intent(in) :: x(:)
+    integer :: x(:)
     interface
       pure integer function sz(b)
         integer,intent(in) :: b(:)

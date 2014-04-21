@@ -1,6 +1,6 @@
 // PR c++/43856
 // Test for implicit 'this' capture via rewriting.
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 struct S1 {
   int operator()(int);

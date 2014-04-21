@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-ipa-inline -fno-devirtualize-speculatively" } */
+/* { dg-options "-O2 -fdump-ipa-inline" } */
 int baz ();
 struct A
 {
@@ -46,4 +46,5 @@ bar ()
    and two to fn3. While doing so the new symbol for fn2 needs to be
    introduced.  */
 /* { dg-final { scan-ipa-dump-times "Discovered a virtual call to a known target" 3 "inline"  } } */
+/* { dg-final { scan-ipa-dump-times "and turned into root of the clone tree" 1 "inline"  } } */
 /* { dg-final { cleanup-ipa-dump "inline" } } */

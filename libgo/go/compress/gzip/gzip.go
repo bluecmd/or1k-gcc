@@ -26,15 +26,14 @@ const (
 // to its wrapped io.Writer.
 type Writer struct {
 	Header
-	w           io.Writer
-	level       int
-	wroteHeader bool
-	compressor  *flate.Writer
-	digest      hash.Hash32
-	size        uint32
-	closed      bool
-	buf         [10]byte
-	err         error
+	w          io.Writer
+	level      int
+	compressor *flate.Writer
+	digest     hash.Hash32
+	size       uint32
+	closed     bool
+	buf        [10]byte
+	err        error
 }
 
 // NewWriter creates a new Writer that satisfies writes by compressing data
@@ -63,39 +62,14 @@ func NewWriterLevel(w io.Writer, level int) (*Writer, error) {
 	if level < DefaultCompression || level > BestCompression {
 		return nil, fmt.Errorf("gzip: invalid compression level: %d", level)
 	}
-	z := new(Writer)
-	z.init(w, level)
-	return z, nil
-}
-
-func (z *Writer) init(w io.Writer, level int) {
-	digest := z.digest
-	if digest != nil {
-		digest.Reset()
-	} else {
-		digest = crc32.NewIEEE()
-	}
-	compressor := z.compressor
-	if compressor != nil {
-		compressor.Reset(w)
-	}
-	*z = Writer{
+	return &Writer{
 		Header: Header{
 			OS: 255, // unknown
 		},
-		w:          w,
-		level:      level,
-		digest:     digest,
-		compressor: compressor,
-	}
-}
-
-// Reset discards the Writer z's state and makes it equivalent to the
-// result of its original state from NewWriter or NewWriterLevel, but
-// writing to w instead. This permits reusing a Writer rather than
-// allocating a new one.
-func (z *Writer) Reset(w io.Writer) {
-	z.init(w, z.level)
+		w:      w,
+		level:  level,
+		digest: crc32.NewIEEE(),
+	}, nil
 }
 
 // GZIP (RFC 1952) is little-endian, unlike ZLIB (RFC 1950).
@@ -164,8 +138,7 @@ func (z *Writer) Write(p []byte) (int, error) {
 	}
 	var n int
 	// Write the GZIP header lazily.
-	if !z.wroteHeader {
-		z.wroteHeader = true
+	if z.compressor == nil {
 		z.buf[0] = gzipID1
 		z.buf[1] = gzipID2
 		z.buf[2] = gzipDeflate
@@ -210,9 +183,7 @@ func (z *Writer) Write(p []byte) (int, error) {
 				return n, z.err
 			}
 		}
-		if z.compressor == nil {
-			z.compressor, _ = flate.NewWriter(z.w, z.level)
-		}
+		z.compressor, _ = flate.NewWriter(z.w, z.level)
 	}
 	z.size += uint32(len(p))
 	z.digest.Write(p)
@@ -235,11 +206,8 @@ func (z *Writer) Flush() error {
 	if z.closed {
 		return nil
 	}
-	if !z.wroteHeader {
+	if z.compressor == nil {
 		z.Write(nil)
-		if z.err != nil {
-			return z.err
-		}
 	}
 	z.err = z.compressor.Flush()
 	return z.err
@@ -254,7 +222,7 @@ func (z *Writer) Close() error {
 		return nil
 	}
 	z.closed = true
-	if !z.wroteHeader {
+	if z.compressor == nil {
 		z.Write(nil)
 		if z.err != nil {
 			return z.err

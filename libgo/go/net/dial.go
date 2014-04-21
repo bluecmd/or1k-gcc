@@ -37,13 +37,6 @@ type Dialer struct {
 	// network being dialed.
 	// If nil, a local address is automatically chosen.
 	LocalAddr Addr
-
-	// DualStack allows a single dial to attempt to establish
-	// multiple IPv4 and IPv6 connections and to return the first
-	// established connection when the network is "tcp" and the
-	// destination is a host name that has multiple address family
-	// DNS records.
-	DualStack bool
 }
 
 // Return either now+Timeout or Deadline, whichever comes first.
@@ -89,13 +82,13 @@ func parseNetwork(net string) (afnet string, proto int, err error) {
 	return "", 0, UnknownNetworkError(net)
 }
 
-func resolveAddr(op, net, addr string, deadline time.Time) (netaddr, error) {
+func resolveAddr(op, net, addr string, deadline time.Time) (Addr, error) {
 	afnet, _, err := parseNetwork(net)
 	if err != nil {
-		return nil, err
+		return nil, &OpError{op, net, nil, err}
 	}
 	if op == "dial" && addr == "" {
-		return nil, errMissingAddress
+		return nil, &OpError{op, net, nil, errMissingAddress}
 	}
 	switch afnet {
 	case "unix", "unixgram", "unixpacket":
@@ -150,74 +143,12 @@ func DialTimeout(network, address string, timeout time.Duration) (Conn, error) {
 // See func Dial for a description of the network and address
 // parameters.
 func (d *Dialer) Dial(network, address string) (Conn, error) {
-	ra, err := resolveAddr("dial", network, address, d.deadline())
-	if err != nil {
-		return nil, &OpError{Op: "dial", Net: network, Addr: nil, Err: err}
-	}
-	dialer := func(deadline time.Time) (Conn, error) {
-		return dialSingle(network, address, d.LocalAddr, ra.toAddr(), deadline)
-	}
-	if ras, ok := ra.(addrList); ok && d.DualStack && network == "tcp" {
-		dialer = func(deadline time.Time) (Conn, error) {
-			return dialMulti(network, address, d.LocalAddr, ras, deadline)
-		}
-	}
-	return dial(network, ra.toAddr(), dialer, d.deadline())
+	return resolveAndDial(network, address, d.LocalAddr, d.deadline())
 }
 
-// dialMulti attempts to establish connections to each destination of
-// the list of addresses. It will return the first established
-// connection and close the other connections. Otherwise it returns
-// error on the last attempt.
-func dialMulti(net, addr string, la Addr, ras addrList, deadline time.Time) (Conn, error) {
-	type racer struct {
-		Conn
-		Addr
-		error
-	}
-	// Sig controls the flow of dial results on lane. It passes a
-	// token to the next racer and also indicates the end of flow
-	// by using closed channel.
-	sig := make(chan bool, 1)
-	lane := make(chan racer, 1)
-	for _, ra := range ras {
-		go func(ra Addr) {
-			c, err := dialSingle(net, addr, la, ra, deadline)
-			if _, ok := <-sig; ok {
-				lane <- racer{c, ra, err}
-			} else if err == nil {
-				// We have to return the resources
-				// that belong to the other
-				// connections here for avoiding
-				// unnecessary resource starvation.
-				c.Close()
-			}
-		}(ra.toAddr())
-	}
-	defer close(sig)
-	var failAddr Addr
-	lastErr := errTimeout
-	nracers := len(ras)
-	for nracers > 0 {
-		sig <- true
-		select {
-		case racer := <-lane:
-			if racer.error == nil {
-				return racer.Conn, nil
-			}
-			failAddr = racer.Addr
-			lastErr = racer.error
-			nracers--
-		}
-	}
-	return nil, &OpError{Op: "dial", Net: net, Addr: failAddr, Err: lastErr}
-}
-
-// dialSingle attempts to establish and returns a single connection to
-// the destination address.
-func dialSingle(net, addr string, la, ra Addr, deadline time.Time) (c Conn, err error) {
+func dial(net, addr string, la, ra Addr, deadline time.Time) (c Conn, err error) {
 	if la != nil && la.Network() != ra.Network() {
-		return nil, &OpError{Op: "dial", Net: net, Addr: ra, Err: errors.New("mismatched local address type " + la.Network())}
+		return nil, &OpError{"dial", net, ra, errors.New("mismatched local addr type " + la.Network())}
 	}
 	switch ra := ra.(type) {
 	case *TCPAddr:
@@ -233,13 +164,20 @@ func dialSingle(net, addr string, la, ra Addr, deadline time.Time) (c Conn, err 
 		la, _ := la.(*UnixAddr)
 		c, err = dialUnix(net, la, ra, deadline)
 	default:
-		return nil, &OpError{Op: "dial", Net: net, Addr: ra, Err: &AddrError{Err: "unexpected address type", Addr: addr}}
+		err = &OpError{"dial", net + " " + addr, ra, UnknownNetworkError(net)}
 	}
 	if err != nil {
-		return nil, err // c is non-nil interface containing nil pointer
+		return nil, err
 	}
-	return c, nil
+	return
 }
+
+type stringAddr struct {
+	net, addr string
+}
+
+func (a stringAddr) Network() string { return a.net }
+func (a stringAddr) String() string  { return a.addr }
 
 // Listen announces on the local network address laddr.
 // The network net must be a stream-oriented network: "tcp", "tcp4",
@@ -248,21 +186,15 @@ func dialSingle(net, addr string, la, ra Addr, deadline time.Time) (c Conn, err 
 func Listen(net, laddr string) (Listener, error) {
 	la, err := resolveAddr("listen", net, laddr, noDeadline)
 	if err != nil {
-		return nil, &OpError{Op: "listen", Net: net, Addr: nil, Err: err}
+		return nil, err
 	}
-	var l Listener
-	switch la := la.toAddr().(type) {
+	switch la := la.(type) {
 	case *TCPAddr:
-		l, err = ListenTCP(net, la)
+		return ListenTCP(net, la)
 	case *UnixAddr:
-		l, err = ListenUnix(net, la)
-	default:
-		return nil, &OpError{Op: "listen", Net: net, Addr: la, Err: &AddrError{Err: "unexpected address type", Addr: laddr}}
+		return ListenUnix(net, la)
 	}
-	if err != nil {
-		return nil, err // l is non-nil interface containing nil pointer
-	}
-	return l, nil
+	return nil, UnknownNetworkError(net)
 }
 
 // ListenPacket announces on the local network address laddr.
@@ -272,21 +204,15 @@ func Listen(net, laddr string) (Listener, error) {
 func ListenPacket(net, laddr string) (PacketConn, error) {
 	la, err := resolveAddr("listen", net, laddr, noDeadline)
 	if err != nil {
-		return nil, &OpError{Op: "listen", Net: net, Addr: nil, Err: err}
+		return nil, err
 	}
-	var l PacketConn
-	switch la := la.toAddr().(type) {
+	switch la := la.(type) {
 	case *UDPAddr:
-		l, err = ListenUDP(net, la)
+		return ListenUDP(net, la)
 	case *IPAddr:
-		l, err = ListenIP(net, la)
+		return ListenIP(net, la)
 	case *UnixAddr:
-		l, err = ListenUnixgram(net, la)
-	default:
-		return nil, &OpError{Op: "listen", Net: net, Addr: la, Err: &AddrError{Err: "unexpected address type", Addr: laddr}}
+		return ListenUnixgram(net, la)
 	}
-	if err != nil {
-		return nil, err // l is non-nil interface containing nil pointer
-	}
-	return l, nil
+	return nil, UnknownNetworkError(net)
 }

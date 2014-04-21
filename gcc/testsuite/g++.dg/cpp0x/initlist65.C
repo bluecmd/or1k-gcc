@@ -1,5 +1,5 @@
 // Core 1270
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++11 }
 
 struct A
 {

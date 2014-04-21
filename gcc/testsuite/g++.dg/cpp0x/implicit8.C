@@ -1,6 +1,6 @@
 // The hack for PR c++/44909 breaks this testcase.  We need feedback
 // from the C++ committee to know how to proceed.
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 struct A
 {

@@ -1,6 +1,5 @@
 // PR c++/41920
-// { dg-do compile { target c++11 } }
-// { dg-options "-Wall -Wextra" }
+// { dg-options "-std=c++0x -Wall -Wextra" }
 
 int foo(int i)
 {

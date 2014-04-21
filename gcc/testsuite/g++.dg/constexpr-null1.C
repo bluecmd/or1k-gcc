@@ -1,5 +1,5 @@
 // PR c++/46670
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 extern unsigned char __TBB_ReverseByte(unsigned char src);
 extern unsigned char *reversed;

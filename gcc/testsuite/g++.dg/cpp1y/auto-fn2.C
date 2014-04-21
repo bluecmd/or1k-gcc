@@ -1,3 +1,3 @@
-// { dg-do compile { target c++1y } }
+// { dg-options -std=c++1y }
 
 auto f() { return f(); }	// { dg-error "auto" }

@@ -1,4 +1,5 @@
-// { dg-do run { target c++11 } }
+// { dg-do run }
+// { dg-options "-std=c++0x" }
 // Contributed by Sylvain Pion
 static int rvalue_constructions = 0;
 

@@ -1,5 +1,5 @@
 // PR c++/47570
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 unsigned int constexpr one()
 { return 1; }

@@ -1,12 +1,16 @@
-// { dg-do run { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 // Test typeid
 
 #include <typeinfo>
 
-int main()
+#define assert_true(b) do { char c[2 * bool(b) - 1]; } while(0)
+
+void fun()
 {
+  typeid(nullptr);
   const decltype(nullptr) mynull = 0;
-  if (typeid(nullptr) != typeid(mynull))
-    __builtin_abort();
+  typeid(mynull);
+  assert_true(typeid(nullptr) == typeid(mynull));
 }

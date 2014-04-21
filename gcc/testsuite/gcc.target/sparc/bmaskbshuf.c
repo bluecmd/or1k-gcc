@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O -mvis2" } */
-
+/* { dg-options "-O -mcpu=ultrasparc3 -mvis -mvis2" } */
 typedef long long int64_t;
 typedef int vec32 __attribute__((vector_size(8)));
 typedef short vec16 __attribute__((vector_size(8)));

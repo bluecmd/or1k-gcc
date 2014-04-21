@@ -6,6 +6,7 @@ package zip
 
 import (
 	"bufio"
+	"compress/flate"
 	"encoding/binary"
 	"errors"
 	"hash"
@@ -197,14 +198,17 @@ func (w *Writer) CreateHeader(fh *FileHeader) (io.Writer, error) {
 		compCount: &countWriter{w: w.cw},
 		crc32:     crc32.NewIEEE(),
 	}
-	comp := compressor(fh.Method)
-	if comp == nil {
+	switch fh.Method {
+	case Store:
+		fw.comp = nopCloser{fw.compCount}
+	case Deflate:
+		var err error
+		fw.comp, err = flate.NewWriter(fw.compCount, 5)
+		if err != nil {
+			return nil, err
+		}
+	default:
 		return nil, ErrAlgorithm
-	}
-	var err error
-	fw.comp, err = comp(fw.compCount)
-	if err != nil {
-		return nil, err
 	}
 	fw.rawCount = &countWriter{w: fw.comp}
 

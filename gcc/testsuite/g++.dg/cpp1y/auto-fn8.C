@@ -1,6 +1,6 @@
-// { dg-do compile { target c++1y } }
+// { dg-options "-std=c++1y -pedantic-errors" }
 
-auto f() { return 42; }		// { dg-message "old declaration .auto" }
+auto f() { return 42; }		// { dg-error "deduced return type" }
 auto f();			// OK
 int f();			// { dg-error "new declaration" }
 

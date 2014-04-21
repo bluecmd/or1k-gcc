@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 // [temp.alias]/3:
 // The type-id in an alias template declaration shall not refer

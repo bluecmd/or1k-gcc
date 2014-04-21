@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -105,16 +106,7 @@ type Request struct {
 	// following a hyphen uppercase and the rest lowercase.
 	Header Header
 
-	// Body is the request's body.
-	//
-	// For client requests, a nil body means the request has no
-	// body, such as a GET request. The HTTP Client's Transport
-	// is responsible for calling the Close method.
-	//
-	// For server requests, the Request Body is always non-nil
-	// but will return EOF immediately when no body is present.
-	// The Server will close the request body. The ServeHTTP
-	// Handler does not need to.
+	// The message body.
 	Body io.ReadCloser
 
 	// ContentLength records the length of the associated content.
@@ -191,7 +183,7 @@ type Request struct {
 	TLS *tls.ConnectionState
 }
 
-// ProtoAtLeast reports whether the HTTP protocol used
+// ProtoAtLeast returns whether the HTTP protocol used
 // in the request is at least major.minor.
 func (r *Request) ProtoAtLeast(major, minor int) bool {
 	return r.ProtoMajor > major ||
@@ -224,7 +216,7 @@ func (r *Request) Cookie(name string) (*Cookie, error) {
 // means all cookies, if any, are written into the same line,
 // separated by semicolon.
 func (r *Request) AddCookie(c *Cookie) {
-	s := fmt.Sprintf("%s=%s", sanitizeCookieName(c.Name), sanitizeCookieValue(c.Value))
+	s := fmt.Sprintf("%s=%s", sanitizeName(c.Name), sanitizeValue(c.Value))
 	if c := r.Header.Get("Cookie"); c != "" {
 		r.Header.Set("Cookie", c+"; "+s)
 	} else {
@@ -291,11 +283,6 @@ func valueOrDefault(value, def string) string {
 	return def
 }
 
-// NOTE: This is not intended to reflect the actual Go version being used.
-// It was changed from "Go http package" to "Go 1.1 package http" at the
-// time of the Go 1.1 release because the former User-Agent had ended up
-// on a blacklist for some intrusion detection systems.
-// See https://codereview.appspot.com/7532043.
 const defaultUserAgent = "Go 1.1 package http"
 
 // Write writes an HTTP/1.1 request -- header and body -- in wire format.
@@ -437,10 +424,6 @@ func ParseHTTPVersion(vers string) (major, minor int, ok bool) {
 }
 
 // NewRequest returns a new Request given a method, URL, and optional body.
-//
-// If the provided body is also an io.Closer, the returned
-// Request.Body is set to body and will be closed by the Client
-// methods Do, Post, and PostForm, and Transport.RoundTrip.
 func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
@@ -480,7 +463,8 @@ func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
 // With HTTP Basic Authentication the provided username and password
 // are not encrypted.
 func (r *Request) SetBasicAuth(username, password string) {
-	r.Header.Set("Authorization", "Basic "+basicAuth(username, password))
+	s := username + ":" + password
+	r.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s)))
 }
 
 // parseRequestLine parses "GET /foo HTTP/1.1" into its three parts.

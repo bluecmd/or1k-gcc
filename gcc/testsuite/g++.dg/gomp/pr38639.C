@@ -1,6 +1,6 @@
 // PR c++/38639
-// { dg-do compile { target c++11 } }
-// { dg-options "-fopenmp" }
+// { dg-do compile }
+// { dg-options "-fopenmp -std=c++0x" }
 
 template<int> void
 foo ()

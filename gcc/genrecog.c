@@ -1,5 +1,5 @@
 /* Generate code from machine description to recognize rtl as insns.
-   Copyright (C) 1987-2014 Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -58,7 +58,7 @@
 #include "gensupport.h"
 
 #define OUTPUT_LABEL(INDENT_STRING, LABEL_NUMBER) \
-  printf ("%sL%d: ATTRIBUTE_UNUSED_LABEL\n", (INDENT_STRING), (LABEL_NUMBER))
+  printf("%sL%d: ATTRIBUTE_UNUSED_LABEL\n", (INDENT_STRING), (LABEL_NUMBER))
 
 /* Ways of obtaining an rtx to be tested.  */
 enum position_type {
@@ -457,8 +457,9 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
 	  {
 	    pred = lookup_predicate (pred_name);
 	    if (!pred)
-	      error_with_line (pattern_lineno, "unknown predicate '%s'",
-			       pred_name);
+	      message_with_line (pattern_lineno,
+				 "warning: unknown predicate '%s'",
+				 pred_name);
 	  }
 	else
 	  pred = 0;
@@ -476,9 +477,9 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
 		|| GET_CODE (insn) == DEFINE_PEEPHOLE2)
 	      {
 		if (constraints0)
-		  error_with_line (pattern_lineno,
-				   "constraints not supported in %s",
-				   rtx_name[GET_CODE (insn)]);
+		  message_with_line (pattern_lineno,
+				     "warning: constraints not supported in %s",
+				     rtx_name[GET_CODE (insn)]);
 	      }
 
 	    /* A MATCH_OPERAND that is a SET should have an output reload.  */
@@ -509,9 +510,10 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
 	   while not likely to occur at runtime, results in less efficient
 	   code from insn-recog.c.  */
 	if (set && pred && pred->allows_non_lvalue)
-	  error_with_line (pattern_lineno,
-			   "destination operand %d allows non-lvalue",
-			   XINT (pattern, 0));
+	  message_with_line (pattern_lineno,
+			     "warning: destination operand %d "
+			     "allows non-lvalue",
+			     XINT (pattern, 0));
 
 	/* A modeless MATCH_OPERAND can be handy when we can check for
 	   multiple modes in the c_test.  In most other cases, it is a
@@ -779,16 +781,16 @@ add_to_sequence (rtx pattern, struct decision_head *last,
 		allows_const_int = pred->codes[CONST_INT];
 		if (was_code == MATCH_PARALLEL
 		    && pred->singleton != PARALLEL)
-		  error_with_line (pattern_lineno,
-				   "predicate '%s' used in match_parallel "
-				   "does not allow only PARALLEL", pred->name);
+		  message_with_line (pattern_lineno,
+			"predicate '%s' used in match_parallel "
+			"does not allow only PARALLEL", pred->name);
 		else
 		  code = pred->singleton;
 	      }
 	    else
-	      error_with_line (pattern_lineno,
-			       "unknown predicate '%s' in '%s' expression",
-			       pred_name, GET_RTX_NAME (was_code));
+	      message_with_line (pattern_lineno,
+			"warning: unknown predicate '%s' in '%s' expression",
+			pred_name, GET_RTX_NAME (was_code));
 	  }
 
 	/* Can't enforce a mode if we allow const_int.  */
@@ -1617,7 +1619,7 @@ write_afterward (struct decision *start, struct decision *afterward,
 		 const char *indent)
 {
   if (!afterward || start->subroutine_number > 0)
-    printf ("%sgoto ret0;\n", indent);
+    printf("%sgoto ret0;\n", indent);
   else
     {
       change_state (start->position, afterward->position, indent);
@@ -1667,7 +1669,7 @@ write_switch (struct decision *start, int depth)
       struct decision *ret;
       RTX_CODE code;
 
-      memset (codemap, 0, sizeof (codemap));
+      memset (codemap, 0, sizeof(codemap));
 
       printf ("  switch (GET_CODE (x%d))\n    {\n", depth);
       code = p->tests->u.code;
@@ -1760,8 +1762,7 @@ write_switch (struct decision *start, int depth)
       if (type == DT_elt_zero_wide_safe)
 	{
 	  indent = "  ";
-	  printf ("  if ((int) XWINT (x%d, 0) == XWINT (x%d, 0))\n",
-		  depth, depth);
+	  printf("  if ((int) XWINT (x%d, 0) == XWINT (x%d, 0))\n", depth, depth);
 	}
       printf ("%s  switch (", indent);
       switch (type)
@@ -1936,7 +1937,7 @@ write_action (struct decision *p, struct decision_test *test,
 
   if (test->type == DT_accept_op)
     {
-      printf ("%soperands[%d] = x%d;\n", indent, test->u.opno, depth);
+      printf("%soperands[%d] = x%d;\n", indent, test->u.opno, depth);
 
       /* Only allow DT_accept_insn to follow.  */
       if (test->next)
@@ -1991,7 +1992,7 @@ write_action (struct decision *p, struct decision_test *test,
     }
   else
     {
-      printf ("%sgoto L%d;\n", indent, success->number);
+      printf("%sgoto L%d;\n", indent, success->number);
       success->need_label = 1;
     }
 
@@ -2356,7 +2357,7 @@ make_insn_sequence (rtx insn, enum routine_type type)
 
   validate_pattern (x, insn, NULL_RTX, 0);
 
-  memset (&head, 0, sizeof (head));
+  memset(&head, 0, sizeof(head));
   last = add_to_sequence (x, &head, &root_pos, type, 1);
 
   /* Find the end of the test chain on the last node.  */
@@ -2422,7 +2423,7 @@ make_insn_sequence (rtx insn, enum routine_type type)
 		}
 
 	      /* Recognize it.  */
-	      memset (&clobber_head, 0, sizeof (clobber_head));
+	      memset (&clobber_head, 0, sizeof(clobber_head));
 	      last = add_to_sequence (new_rtx, &clobber_head, &root_pos,
 				      type, 1);
 
@@ -2492,7 +2493,7 @@ process_tree (struct decision_head *head, enum routine_type subroutine_type)
       /* We run this after find_afterward, because find_afterward needs
 	 the redundant DT_mode tests on predicates to determine whether
 	 two tests can both be true or not.  */
-      simplify_tests (head);
+      simplify_tests(head);
 
       write_subroutines (head, subroutine_type);
     }
@@ -2600,12 +2601,12 @@ debug_decision_2 (struct decision_test *test)
       break;
     case DT_pred:
       fprintf (stderr, "pred=(%s,%s)",
-	       test->u.pred.name, GET_MODE_NAME (test->u.pred.mode));
+	       test->u.pred.name, GET_MODE_NAME(test->u.pred.mode));
       break;
     case DT_c_test:
       {
 	char sub[16+4];
-	strncpy (sub, test->u.c_test, sizeof (sub));
+	strncpy (sub, test->u.c_test, sizeof(sub));
 	memcpy (sub+16, "...", 4);
 	fprintf (stderr, "c_test=\"%s\"", sub);
       }

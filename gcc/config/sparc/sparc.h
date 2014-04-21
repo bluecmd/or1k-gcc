@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler, for Sun SPARC.
-   Copyright (C) 1987-2014 Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com).
    64-bit SPARC-V9 support by Michael Tiemann, Jim Wilson, and Doug Evans,
    at Cygnus Support.
@@ -26,6 +26,31 @@ along with GCC; see the file COPYING3.  If not see
    whatever definitions are necessary.  */
 
 #define TARGET_CPU_CPP_BUILTINS() sparc_target_macros ()
+
+/* Target CPU builtins for D.  */
+#define TARGET_CPU_D_BUILTINS()			\
+do						\
+    {						\
+      if (TARGET_64BIT)				\
+	builtin_define ("SPARC64");		\
+      else					\
+	builtin_define ("SPARC");		\
+						\
+      if(TARGET_V8PLUS)				\
+	builtin_define ("SPARC_V8Plus");	\
+						\
+      if(TARGET_FPU)				\
+	{					\
+	  builtin_define ("D_HardFloat");	\
+	  builtin_define ("SPARC_HardFloat");	\
+	}					\
+      else					\
+	{					\
+	  builtin_define ("D_SoftFloat");	\
+	  builtin_define ("SPARC_SoftFloat");	\
+	}					\
+    }						\
+  while (0)
 
 /* Specify this in a cover file to provide bi-architecture (32/64) support.  */
 /* #define SPARC_BI_ARCH */
@@ -1777,6 +1802,3 @@ extern int sparc_indent_opcode;
 #ifndef SUBTARGET_DEFAULT_MEMORY_MODEL
 #define SUBTARGET_DEFAULT_MEMORY_MODEL	SMM_DEFAULT
 #endif
-
-/* Define this to 1 if the FE_EXCEPT values defined in fenv.h start at 1.  */
-#define SPARC_LOW_FE_EXCEPT_VALUES 0

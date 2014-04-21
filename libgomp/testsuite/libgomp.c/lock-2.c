@@ -4,6 +4,9 @@
 int
 main (void)
 {
+#ifdef __FreeBSD_kernel__
+  return 1;
+#endif
   int l = 0;
   omp_nest_lock_t lock;
   omp_init_nest_lock (&lock);

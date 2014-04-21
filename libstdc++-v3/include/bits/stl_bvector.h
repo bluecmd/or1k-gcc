@@ -1,6 +1,6 @@
 // vector<bool> specialization -*- C++ -*-
 
-// Copyright (C) 2001-2014 Free Software Foundation, Inc.
+// Copyright (C) 2001-2013 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -222,10 +222,6 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
     _Bit_iterator(_Bit_type * __x, unsigned int __y)
     : _Bit_iterator_base(__x, __y) { }
 
-    iterator
-    _M_const_cast() const
-    { return *this; }
-
     reference
     operator*() const
     { return reference(_M_p, 1UL << _M_offset); }
@@ -311,10 +307,6 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
     _Bit_const_iterator(const _Bit_iterator& __x)
     : _Bit_iterator_base(__x._M_p, __x._M_offset) { }
-
-    _Bit_iterator
-    _M_const_cast() const
-    { return _Bit_iterator(_M_p, _M_offset); }
 
     const_reference
     operator*() const
@@ -785,10 +777,7 @@ template<typename _Alloc>
     _M_range_check(size_type __n) const
     {
       if (__n >= this->size())
-	__throw_out_of_range_fmt(__N("vector<bool>::_M_range_check: __n "
-				     "(which is %zu) >= this->size() "
-				     "(which is %zu)"),
-				 __n, this->size());
+        __throw_out_of_range(__N("vector<bool>::_M_range_check"));
     }
 
   public:
@@ -866,33 +855,24 @@ template<typename _Alloc>
     }
 
     iterator
-#if __cplusplus >= 201103L
-    insert(const_iterator __position, const bool& __x = bool())
-#else
     insert(iterator __position, const bool& __x = bool())
-#endif
     {
       const difference_type __n = __position - begin();
       if (this->_M_impl._M_finish._M_p != this->_M_impl._M_end_of_storage
 	  && __position == end())
         *this->_M_impl._M_finish++ = __x;
       else
-        _M_insert_aux(__position._M_const_cast(), __x);
+        _M_insert_aux(__position, __x);
       return begin() + __n;
     }
 
 #if __cplusplus >= 201103L
     template<typename _InputIterator,
 	     typename = std::_RequireInputIter<_InputIterator>>
-      iterator
-      insert(const_iterator __position,
+      void
+      insert(iterator __position,
 	     _InputIterator __first, _InputIterator __last)
-      {
-	difference_type __offset = __position - cbegin();
-	_M_insert_dispatch(__position._M_const_cast(),
-			   __first, __last, __false_type());
-	return begin() + __offset;
-      }
+      { _M_insert_dispatch(__position, __first, __last, __false_type()); }
 #else
     template<typename _InputIterator>
       void
@@ -904,24 +884,13 @@ template<typename _Alloc>
       }
 #endif
 
-#if __cplusplus >= 201103L
-    iterator
-    insert(const_iterator __position, size_type __n, const bool& __x)
-    {
-      difference_type __offset = __position - cbegin();
-      _M_fill_insert(__position._M_const_cast(), __n, __x);
-      return begin() + __offset;
-    }
-#else
     void
     insert(iterator __position, size_type __n, const bool& __x)
     { _M_fill_insert(__position, __n, __x); }
-#endif
 
 #if __cplusplus >= 201103L
-    iterator
-    insert(const_iterator __p, initializer_list<bool> __l)
-    { return this->insert(__p, __l.begin(), __l.end()); }
+    void insert(iterator __p, initializer_list<bool> __l)
+    { this->insert(__p, __l.begin(), __l.end()); }
 #endif
 
     void
@@ -929,20 +898,21 @@ template<typename _Alloc>
     { --this->_M_impl._M_finish; }
 
     iterator
-#if __cplusplus >= 201103L
-    erase(const_iterator __position)
-#else
     erase(iterator __position)
-#endif
-    { return _M_erase(__position._M_const_cast()); }
+    {
+      if (__position + 1 != end())
+        std::copy(__position + 1, end(), __position);
+      --this->_M_impl._M_finish;
+      return __position;
+    }
 
     iterator
-#if __cplusplus >= 201103L
-    erase(const_iterator __first, const_iterator __last)
-#else
     erase(iterator __first, iterator __last)
-#endif
-    { return _M_erase(__first._M_const_cast(), __last._M_const_cast()); }
+    {
+      if (__first != __last)
+	_M_erase_at_end(std::copy(__last, end(), __first));
+      return __first;
+    }
 
     void
     resize(size_type __new_size, bool __x = bool())
@@ -971,18 +941,7 @@ template<typename _Alloc>
     clear() _GLIBCXX_NOEXCEPT
     { _M_erase_at_end(begin()); }
 
-#if __cplusplus >= 201103L
-    template<typename... _Args>
-      void
-      emplace_back(_Args&&... __args)
-      { push_back(bool(__args...)); }
-
-    template<typename... _Args>
-      iterator
-      emplace(const_iterator __pos, _Args&&... __args)
-      { return insert(__pos, bool(__args...)); }
-#endif
-
+   
   protected:
     // Precondition: __first._M_offset == 0 && __result._M_offset == 0.
     iterator
@@ -1165,12 +1124,6 @@ template<typename _Alloc>
     void
     _M_erase_at_end(iterator __pos)
     { this->_M_impl._M_finish = __pos; }
-
-    iterator
-    _M_erase(iterator __pos);
-
-    iterator
-    _M_erase(iterator __first, iterator __last);
   };
 
 _GLIBCXX_END_NAMESPACE_CONTAINER

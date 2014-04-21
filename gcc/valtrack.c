@@ -1,6 +1,6 @@
 /* Infrastructure for tracking user variable locations and values
    throughout compilation.
-   Copyright (C) 2010-2014 Free Software Foundation, Inc.
+   Copyright (C) 2010-2013 Free Software Foundation, Inc.
    Contributed by Alexandre Oliva <aoliva@redhat.com>.
 
 This file is part of GCC.
@@ -93,10 +93,9 @@ cleanup_auto_inc_dec (rtx src, enum machine_mode mem_mode ATTRIBUTE_UNUSED)
       gcc_assert (mem_mode != VOIDmode && mem_mode != BLKmode);
       return gen_rtx_PLUS (GET_MODE (x),
 			   cleanup_auto_inc_dec (XEXP (x, 0), mem_mode),
-			   gen_int_mode (code == PRE_INC
-					 ? GET_MODE_SIZE (mem_mode)
-					 : -GET_MODE_SIZE (mem_mode),
-					 GET_MODE (x)));
+			   GEN_INT (code == PRE_INC
+				    ? GET_MODE_SIZE (mem_mode)
+				    : -GET_MODE_SIZE (mem_mode)));
 
     case POST_INC:
     case POST_DEC:

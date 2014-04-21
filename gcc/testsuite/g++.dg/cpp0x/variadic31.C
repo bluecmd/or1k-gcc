@@ -1,5 +1,4 @@
-// { dg-options "-g" }
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x -g" }
 template<typename... T>
 void eat(T...) { }
 

@@ -1,6 +1,6 @@
 // Versatile string -*- C++ -*-
 
-// Copyright (C) 2005-2014 Free Software Foundation, Inc.
+// Copyright (C) 2005-2013 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -85,9 +85,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       _M_check(size_type __pos, const char* __s) const
       {
 	if (__pos > this->size())
-	  std::__throw_out_of_range_fmt(__N("%s: __pos (which is %zu) > "
-					    "this->size() (which is %zu)"),
-					__s, __pos, this->size());
+	  std::__throw_out_of_range(__N(__s));
 	return __pos;
       }
 
@@ -100,7 +98,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       // NB: _M_limit doesn't check for a bad __pos value.
       size_type
-      _M_limit(size_type __pos, size_type __off) const _GLIBCXX_NOEXCEPT
+      _M_limit(size_type __pos, size_type __off) const
       {
 	const bool __testoff =  __off < this->size() - __pos;
 	return __testoff ? __off : this->size() - __pos;
@@ -108,7 +106,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       // True if _Rep and source do not overlap.
       bool
-      _M_disjunct(const _CharT* __s) const _GLIBCXX_NOEXCEPT
+      _M_disjunct(const _CharT* __s) const
       {
 	return (std::less<const _CharT*>()(__s, this->_M_data())
 		|| std::less<const _CharT*>()(this->_M_data()
@@ -118,11 +116,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       // For the internal use we have functions similar to `begin'/`end'
       // but they do not call _M_leak.
       iterator
-      _M_ibegin() const _GLIBCXX_NOEXCEPT
+      _M_ibegin() const
       { return iterator(this->_M_data()); }
 
       iterator
-      _M_iend() const _GLIBCXX_NOEXCEPT
+      _M_iend() const
       { return iterator(this->_M_data() + this->_M_length()); }
 
     public:
@@ -131,10 +129,16 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       // arguments, per 17.4.4.4 para. 2 item 2.
 
       /**
+       *  @brief  Default constructor creates an empty string.
+       */
+      __versa_string()
+      : __vstring_base() { }
+      
+      /**
        *  @brief  Construct an empty string using allocator @a a.
        */
       explicit
-      __versa_string(const _Alloc& __a = _Alloc()) _GLIBCXX_NOEXCEPT
+      __versa_string(const _Alloc& __a)
       : __vstring_base(__a) { }
 
       // NB: per LWG issue 42, semantics different from IS:
@@ -265,7 +269,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  copying).  @a __str is a valid, but unspecified string.
        */
       __versa_string&
-      operator=(__versa_string&& __str) noexcept
+      operator=(__versa_string&& __str)
       {
 	// NB: DR 1204.
 	this->swap(__str);
@@ -466,7 +470,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 #if __cplusplus >= 201103L
       /// A non-binding request to reduce capacity() to size().
       void
-      shrink_to_fit() noexcept
+      shrink_to_fit()
       {
 	if (capacity() > size())
 	  {
@@ -534,7 +538,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  see at().)
        */
       const_reference
-      operator[] (size_type __pos) const _GLIBCXX_NOEXCEPT
+      operator[] (size_type __pos) const
       {
 	_GLIBCXX_DEBUG_ASSERT(__pos <= this->size());
 	return this->_M_data()[__pos];
@@ -551,14 +555,12 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  see at().)  Unshares the string.
        */
       reference
-      operator[](size_type __pos) _GLIBCXX_NOEXCEPT
+      operator[](size_type __pos)
       {
-        // Allow pos == size() both in C++98 mode, as v3 extension,
-	// and in C++11 mode.
+        // allow pos == size() as v3 extension:
 	_GLIBCXX_DEBUG_ASSERT(__pos <= this->size());
-        // In pedantic mode be strict in C++98 mode.
-	_GLIBCXX_DEBUG_PEDASSERT(__cplusplus >= 201103L
-				 || __pos < this->size());
+        // but be strict in pedantic mode:
+	_GLIBCXX_DEBUG_PEDASSERT(__pos < this->size());
 	this->_M_leak();
 	return this->_M_data()[__pos];
       }
@@ -577,10 +579,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       at(size_type __n) const
       {
 	if (__n >= this->size())
-	  std::__throw_out_of_range_fmt(__N("__versa_string::at: __n "
-					    "(which is %zu) >= this->size() "
-					    "(which is %zu)"),
-					__n, this->size());
+	  std::__throw_out_of_range(__N("__versa_string::at"));
 	return this->_M_data()[__n];
       }
 
@@ -599,10 +598,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       at(size_type __n)
       {
 	if (__n >= this->size())
-	  std::__throw_out_of_range_fmt(__N("__versa_string::at: __n "
-					    "(which is %zu) >= this->size() "
-					    "(which is %zu)"),
-					__n, this->size());
+	  std::__throw_out_of_range(__N("__versa_string::at"));
 	this->_M_leak();
 	return this->_M_data()[__n];
       }
@@ -613,7 +609,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  element of the %string.
        */
       reference
-      front() _GLIBCXX_NOEXCEPT
+      front()
       { return operator[](0); }
 
       /**
@@ -621,7 +617,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  element of the %string.
        */
       const_reference
-      front() const _GLIBCXX_NOEXCEPT
+      front() const
       { return operator[](0); }
 
       /**
@@ -629,7 +625,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  element of the %string.
        */
       reference
-      back() _GLIBCXX_NOEXCEPT
+      back()
       { return operator[](this->size() - 1); }
 
       /**
@@ -637,7 +633,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  last element of the %string.
        */
       const_reference
-      back() const _GLIBCXX_NOEXCEPT
+      back() const
       { return operator[](this->size() - 1); }
 #endif
 
@@ -816,7 +812,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  @a __str is a valid, but unspecified string.
        */
       __versa_string&
-      assign(__versa_string&& __str) noexcept
+      assign(__versa_string&& __str)
       {
 	this->swap(__str);
 	return *this;
@@ -920,31 +916,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       { return this->assign(__l.begin(), __l.end()); }
 #endif // C++11
 
-#if __cplusplus >= 201103L
-      /**
-       *  @brief  Insert multiple characters.
-       *  @param __p  Const_iterator referencing location in string to
-       *              insert at.
-       *  @param __n  Number of characters to insert
-       *  @param __c  The character to insert.
-       *  @return  Iterator referencing the first inserted char.
-       *  @throw  std::length_error  If new length exceeds @c max_size().
-       *
-       *  Inserts @a __n copies of character @a __c starting at the
-       *  position referenced by iterator @a __p.  If adding
-       *  characters causes the length to exceed max_size(),
-       *  length_error is thrown.  The value of the string doesn't
-       *  change if an error is thrown.
-      */
-      iterator
-      insert(const_iterator __p, size_type __n, _CharT __c)
-      {
-	_GLIBCXX_DEBUG_PEDASSERT(__p >= _M_ibegin() && __p <= _M_iend());
-	const size_type __pos = __p - _M_ibegin();
-	this->replace(__p, __p, __n, __c);
-	return iterator(this->_M_data() + __pos); 
-      }
-#else
       /**
        *  @brief  Insert multiple characters.
        *  @param __p  Iterator referencing location in string to insert at.
@@ -961,34 +932,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       void
       insert(iterator __p, size_type __n, _CharT __c)
       {	this->replace(__p, __p, __n, __c);  }
-#endif
 
-#if __cplusplus >= 201103L
-      /**
-       *  @brief  Insert a range of characters.
-       *  @param __p  Const_iterator referencing location in string to
-       *              insert at.
-       *  @param __beg  Start of range.
-       *  @param __end  End of range.
-       *  @return  Iterator referencing the first inserted char.
-       *  @throw  std::length_error  If new length exceeds @c max_size().
-       *
-       *  Inserts characters in range [beg,end).  If adding characters
-       *  causes the length to exceed max_size(), length_error is
-       *  thrown.  The value of the string doesn't change if an error
-       *  is thrown.
-      */
-      template<class _InputIterator,
-	       typename = std::_RequireInputIter<_InputIterator>>
-	iterator
-        insert(const_iterator __p, _InputIterator __beg, _InputIterator __end)
-        {
-	  _GLIBCXX_DEBUG_PEDASSERT(__p >= _M_ibegin() && __p <= _M_iend());
-	  const size_type __pos = __p - _M_ibegin();
-	  this->replace(__p, __p, __beg, __end);
-	  return iterator(this->_M_data() + __pos);
-	}
-#else
       /**
        *  @brief  Insert a range of characters.
        *  @param __p  Iterator referencing location in string to insert at.
@@ -1001,24 +945,26 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  thrown.  The value of the string doesn't change if an error
        *  is thrown.
       */
+#if __cplusplus >= 201103L
+      template<class _InputIterator,
+	       typename = std::_RequireInputIter<_InputIterator>>
+#else
       template<class _InputIterator>
+#endif
         void
         insert(iterator __p, _InputIterator __beg, _InputIterator __end)
         { this->replace(__p, __p, __beg, __end); }
-#endif
 
 #if __cplusplus >= 201103L
       /**
        *  @brief  Insert an initializer_list of characters.
-       *  @param __p  Const_iterator referencing location in string to
-       *              insert at.
+       *  @param __p  Iterator referencing location in string to insert at.
        *  @param __l  The initializer_list of characters to insert.
-       *  @return  Iterator referencing the first inserted char.
        *  @throw  std::length_error  If new length exceeds @c max_size().
        */
-      iterator
-      insert(const_iterator __p, std::initializer_list<_CharT> __l)
-      { return this->insert(__p, __l.begin(), __l.end()); }
+      void
+      insert(iterator __p, std::initializer_list<_CharT> __l)
+      { this->insert(__p, __l.begin(), __l.end()); }
 #endif // C++11
 
       /**
@@ -1141,11 +1087,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  change if an error is thrown.
       */
       iterator
-#if __cplusplus >= 201103L
-      insert(const_iterator __p, _CharT __c)
-#else
-      insert(iterator __p, _CharT __c)	
-#endif
+      insert(iterator __p, _CharT __c)
       {
 	_GLIBCXX_DEBUG_PEDASSERT(__p >= _M_ibegin() && __p <= _M_iend());
 	const size_type __pos = __p - _M_ibegin();
@@ -1186,11 +1128,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  value of the string doesn't change if an error is thrown.
       */
       iterator
-#if __cplusplus >= 201103L
-      erase(const_iterator __position)
-#else
-      erase(iterator __position)	
-#endif
+      erase(iterator __position)
       {
 	_GLIBCXX_DEBUG_PEDASSERT(__position >= _M_ibegin()
 				 && __position < _M_iend());
@@ -1211,11 +1149,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  is thrown.
       */
       iterator
-#if __cplusplus >= 201103L
-      erase(const_iterator __first, const_iterator __last)
-#else
       erase(iterator __first, iterator __last)
-#endif
       {
 	_GLIBCXX_DEBUG_PEDASSERT(__first >= _M_ibegin() && __first <= __last
 				 && __last <= _M_iend());
@@ -1371,12 +1305,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  the string doesn't change if an error is thrown.
       */
       __versa_string&
-#if __cplusplus >= 201103L
-      replace(const_iterator __i1, const_iterator __i2,
-	      const __versa_string& __str)
-#else
       replace(iterator __i1, iterator __i2, const __versa_string& __str)
-#endif
       { return this->replace(__i1, __i2, __str._M_data(), __str.size()); }
 
       /**
@@ -1394,12 +1323,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  value of the string doesn't change if an error is thrown.
       */
       __versa_string&
-#if __cplusplus >= 201103L
-      replace(const_iterator __i1, const_iterator __i2,
-	      const _CharT* __s, size_type __n)
-#else
       replace(iterator __i1, iterator __i2, const _CharT* __s, size_type __n)
-#endif
       {
 	_GLIBCXX_DEBUG_PEDASSERT(_M_ibegin() <= __i1 && __i1 <= __i2
 				 && __i2 <= _M_iend());
@@ -1420,11 +1344,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  the string doesn't change if an error is thrown.
       */
       __versa_string&
-#if __cplusplus >= 201103L
-      replace(const_iterator __i1, const_iterator __i2, const _CharT* __s)
-#else
-      replace(iterator __i1, iterator __i2, const _CharT* __s)	
-#endif
+      replace(iterator __i1, iterator __i2, const _CharT* __s)
       {
 	__glibcxx_requires_string(__s);
 	return this->replace(__i1, __i2, __s, traits_type::length(__s));
@@ -1445,12 +1365,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  the string doesn't change if an error is thrown.
       */
       __versa_string&
-#if __cplusplus >= 201103L
-      replace(const_iterator __i1, const_iterator __i2, size_type __n,
-	      _CharT __c)
-#else
       replace(iterator __i1, iterator __i2, size_type __n, _CharT __c)
-#endif
       {
 	_GLIBCXX_DEBUG_PEDASSERT(_M_ibegin() <= __i1 && __i1 <= __i2
 				 && __i2 <= _M_iend());
@@ -1475,7 +1390,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       template<class _InputIterator,
 	       typename = std::_RequireInputIter<_InputIterator>>
         __versa_string&
-        replace(const_iterator __i1, const_iterator __i2,
+        replace(iterator __i1, iterator __i2,
 		_InputIterator __k1, _InputIterator __k2)
         {
 	  _GLIBCXX_DEBUG_PEDASSERT(_M_ibegin() <= __i1 && __i1 <= __i2
@@ -1501,13 +1416,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       // Specializations for the common case of pointer and iterator:
       // useful to avoid the overhead of temporary buffering in _M_replace.
       __versa_string&
-#if __cplusplus >= 201103L
-      replace(const_iterator __i1, const_iterator __i2,
-	      _CharT* __k1, _CharT* __k2)
-#else
-      replace(iterator __i1, iterator __i2,
-	      _CharT* __k1, _CharT* __k2)
-#endif
+      replace(iterator __i1, iterator __i2, _CharT* __k1, _CharT* __k2)
       {
 	_GLIBCXX_DEBUG_PEDASSERT(_M_ibegin() <= __i1 && __i1 <= __i2
 				 && __i2 <= _M_iend());
@@ -1517,13 +1426,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       }
 
       __versa_string&
-#if __cplusplus >= 201103L
-      replace(const_iterator __i1, const_iterator __i2,
-	      const _CharT* __k1, const _CharT* __k2)
-#else
       replace(iterator __i1, iterator __i2,
 	      const _CharT* __k1, const _CharT* __k2)
-#endif
       {
 	_GLIBCXX_DEBUG_PEDASSERT(_M_ibegin() <= __i1 && __i1 <= __i2
 				 && __i2 <= _M_iend());
@@ -1533,13 +1437,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       }
 
       __versa_string&
-#if __cplusplus >= 201103L
-      replace(const_iterator __i1, const_iterator __i2,
-	      iterator __k1, iterator __k2)
-#else
-      replace(iterator __i1, iterator __i2,
-	      iterator __k1, iterator __k2)
-#endif
+      replace(iterator __i1, iterator __i2, iterator __k1, iterator __k2)
       {
 	_GLIBCXX_DEBUG_PEDASSERT(_M_ibegin() <= __i1 && __i1 <= __i2
 				 && __i2 <= _M_iend());
@@ -1549,13 +1447,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       }
 
       __versa_string&
-#if __cplusplus >= 201103L
-      replace(const_iterator __i1, const_iterator __i2,
-	      const_iterator __k1, const_iterator __k2)
-#else
       replace(iterator __i1, iterator __i2,
 	      const_iterator __k1, const_iterator __k2)
-#endif
       {
 	_GLIBCXX_DEBUG_PEDASSERT(_M_ibegin() <= __i1 && __i1 <= __i2
 				 && __i2 <= _M_iend());
@@ -1578,24 +1471,22 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  of result exceeds max_size(), length_error is thrown.  The
        *  value of the string doesn't change if an error is thrown.
       */
-      __versa_string&
-      replace(const_iterator __i1, const_iterator __i2,
-	      std::initializer_list<_CharT> __l)
+      __versa_string& replace(iterator __i1, iterator __i2,
+			      std::initializer_list<_CharT> __l)
       { return this->replace(__i1, __i2, __l.begin(), __l.end()); }
 #endif // C++11
 
     private:
       template<class _Integer>
 	__versa_string&
-	_M_replace_dispatch(const_iterator __i1, const_iterator __i2,
-			    _Integer __n, _Integer __val, std::__true_type)
+	_M_replace_dispatch(iterator __i1, iterator __i2, _Integer __n,
+			    _Integer __val, std::__true_type)
         { return _M_replace_aux(__i1 - _M_ibegin(), __i2 - __i1, __n, __val); }
 
       template<class _InputIterator>
 	__versa_string&
-	_M_replace_dispatch(const_iterator __i1, const_iterator __i2,
-			    _InputIterator __k1, _InputIterator __k2,
-			    std::__false_type);
+	_M_replace_dispatch(iterator __i1, iterator __i2, _InputIterator __k1,
+			    _InputIterator __k2, std::__false_type);
 
       __versa_string&
       _M_replace_aux(size_type __pos1, size_type __n1, size_type __n2,
@@ -1633,7 +1524,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  constant time.
       */
       void
-      swap(__versa_string& __s) _GLIBCXX_NOEXCEPT
+      swap(__versa_string& __s)
       { this->_M_swap(__s); }
 
       // String operations:

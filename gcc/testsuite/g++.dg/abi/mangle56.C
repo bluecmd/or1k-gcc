@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 template <class T> T g(T t1, T t2) { return t2; }
 // { dg-final { scan-assembler "_Z2f1IiEDTcl1gfp_ilEEET_" } }

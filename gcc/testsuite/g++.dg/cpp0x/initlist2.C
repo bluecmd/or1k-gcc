@@ -1,7 +1,8 @@
 // Test that conversion to std::initializer_list takes priority over other
 // user-defined conversions.
 
-// { dg-do link { target c++11 } }
+// { dg-do link }
+// { dg-options "-std=c++0x" }
 
 #include <initializer_list>
 

@@ -2,7 +2,6 @@
    storage for d1.a.  */
 /* { dg-do run } */
 /* { dg-options "" } */
-/* { dg-skip-if "packed attribute missing for d1" { "epiphany-*-*" } { "*" } { "" } } */
 extern void abort (void);
 extern void exit (int);
 

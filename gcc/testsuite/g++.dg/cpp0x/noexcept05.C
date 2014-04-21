@@ -8,7 +8,7 @@
 // { dg-final { scan-assembler-not "EHB" } }
 // { dg-final { scan-assembler "LSDA" } }
 
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 struct A { ~A(); };
 void g();

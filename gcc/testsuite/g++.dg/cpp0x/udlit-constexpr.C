@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 constexpr unsigned long long
 operator"" _grow(unsigned long long n)

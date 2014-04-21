@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005-2014 Free Software Foundation, Inc.
+// Copyright (C) 2005-2013 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -90,7 +90,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     annotate_base()
     {
       label();
-      map_alloc();
+      map();
     }
 
     static void
@@ -111,8 +111,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  std::__throw_logic_error(error.c_str());
 	}
 
-      const_iterator found = map_alloc().find(p);
-      if (found != map_alloc().end())
+      const_iterator found = map().find(p);
+      if (found != map().end())
 	{
 	  std::string error("annotate_base::insert double insert!\n");
 	  log_to_string(error, make_entry(p, size));
@@ -120,52 +120,22 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  std::__throw_logic_error(error.c_str());
 	}
 
-      map_alloc().insert(make_entry(p, size));
+      map().insert(make_entry(p, size));
     }
 
     void
     erase(void* p, size_t size)
     {
       check_allocated(p, size);
-      map_alloc().erase(p);
+      map().erase(p);
     }
-
-#if __cplusplus >= 201103L
-    void
-    insert_construct(void* p)
-    {
-      if (!p)
-	{
-	  std::string error("annotate_base::insert_construct null!\n");
-	  std::__throw_logic_error(error.c_str());
-	}
-
-      auto found = map_construct().find(p);
-      if (found != map_construct().end())
-	{
-	  std::string error("annotate_base::insert_construct double insert!\n");
-	  log_to_string(error, std::make_pair(p, get_label()));
-	  log_to_string(error, *found);
-	  std::__throw_logic_error(error.c_str());
-	}
-
-      map_construct().insert(std::make_pair(p, get_label()));
-    }
-
-    void
-    erase_construct(void* p)
-    {
-      check_constructed(p);
-      map_construct().erase(p);
-    }
-#endif
 
     // See if a particular address and allocation size has been saved.
     inline void
     check_allocated(void* p, size_t size)
     {
-      const_iterator found = map_alloc().find(p);
-      if (found == map_alloc().end())
+      const_iterator found = map().find(p);
+      if (found == map().end())
 	{
 	  std::string error("annotate_base::check_allocated by value "
 			    "null erase!\n");
@@ -185,121 +155,32 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
     // See if a given label has been allocated.
     inline void
-    check(size_t label)
+    check_allocated(size_t label)
     {
-      std::string found;
-      {
-	const_iterator beg = map_alloc().begin();
-	const_iterator end = map_alloc().end();
-	while (beg != end)
-	  {
-	    if (beg->second.first == label)
-	      log_to_string(found, *beg);
-	    ++beg;
-	  }
-      }
-
-#if __cplusplus >= 201103L
-      {
-	auto beg = map_construct().begin();
-	auto end = map_construct().end();
-	while (beg != end)
-	  {
-	    if (beg->second == label)
-	      log_to_string(found, *beg);
-	    ++beg;
-	  }
-      }
-#endif
-
-      if (!found.empty())
-	{
-	  std::string error("annotate_base::check by label\n");
-	  error += found;
-	  std::__throw_logic_error(error.c_str());
-	}
-    }
-
-    // See if there is anything left allocated or constructed.
-    inline static void
-    check()
-    {
-      std::string found;
-      {
-	const_iterator beg = map_alloc().begin();
-	const_iterator end = map_alloc().end();
-	while (beg != end)
-	  {
-	    log_to_string(found, *beg);
-	    ++beg;
-	  }
-      }
-
-#if __cplusplus >= 201103L
-      {
-	auto beg = map_construct().begin();
-	auto end = map_construct().end();
-	while (beg != end)
-	  {
-	    log_to_string(found, *beg);
-	    ++beg;
-	  }
-      }
-#endif
-
-      if (!found.empty())
-	{
-	  std::string error("annotate_base::check \n");
-	  error += found;
-	  std::__throw_logic_error(error.c_str());
-	}
-    }
-
-#if __cplusplus >= 201103L
-    inline void
-    check_constructed(void* p)
-    {
-      auto found = map_construct().find(p);
-      if (found == map_construct().end())
-	{
-	  std::string error("annotate_base::check_constructed not "
-			    "constructed!\n");
-	  log_to_string(error, std::make_pair(p, get_label()));
-	  std::__throw_logic_error(error.c_str());
-	}
-    }
-
-    inline void
-    check_constructed(size_t label)
-    {
-      auto beg = map_construct().begin();
-      auto end = map_construct().end();
+      const_iterator beg = map().begin();
+      const_iterator end = map().end();
       std::string found;
       while (beg != end)
 	{
-	  if (beg->second == label)
+	  if (beg->second.first == label)
 	    log_to_string(found, *beg);
 	  ++beg;
 	}
 
       if (!found.empty())
 	{
-	  std::string error("annotate_base::check_constructed by label\n");
+	  std::string error("annotate_base::check_allocated by label\n");
 	  error += found;
 	  std::__throw_logic_error(error.c_str());
 	}
     }
-#endif
 
   private:
-    typedef std::pair<size_t, size_t>		data_type;
-    typedef std::map<void*, data_type> 		map_alloc_type;
-    typedef map_alloc_type::value_type 		entry_type;
-    typedef map_alloc_type::const_iterator 		const_iterator;
-    typedef map_alloc_type::const_reference 		const_reference;
-#if __cplusplus >= 201103L
-    typedef std::map<void*, size_t>		map_construct_type;
-#endif
+    typedef std::pair<size_t, size_t> 		data_type;
+    typedef std::map<void*, data_type> 		map_type;
+    typedef map_type::value_type 		entry_type;
+    typedef map_type::const_iterator 		const_iterator;
+    typedef map_type::const_reference 		const_reference;
 
     friend std::ostream&
     operator<<(std::ostream&, const annotate_base&);
@@ -308,8 +189,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     make_entry(void* p, size_t size)
     { return std::make_pair(p, data_type(get_label(), size)); }
 
-    static void
-    log_to_string(std::string& s, const_reference ref)
+    void
+    log_to_string(std::string& s, const_reference ref) const
     {
       char buf[40];
       const char tab('\t');
@@ -329,24 +210,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       s += '\n';
     }
 
-#if __cplusplus >= 201103L
-    static void
-    log_to_string(std::string& s, const std::pair<const void*, size_t>& ref)
-    {
-      char buf[40];
-      const char tab('\t');
-      s += "label: ";
-      unsigned long l = static_cast<unsigned long>(ref.second);
-      __builtin_sprintf(buf, "%lu", l);
-      s += buf;
-      s += tab;
-      s += "address: ";
-      __builtin_sprintf(buf, "%p", ref.first);
-      s += buf;
-      s += '\n';
-    }
-#endif
-
     static size_t&
     label()
     {
@@ -354,21 +217,12 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       return _S_label;
     }
 
-    static map_alloc_type&
-    map_alloc()
+    static map_type&
+    map()
     {
-      static map_alloc_type _S_map;
+      static map_type _S_map;
       return _S_map;
     }
-
-#if __cplusplus >= 201103L
-    static map_construct_type&
-    map_construct()
-    {
-      static map_construct_type _S_map;
-      return _S_map;
-    }
-#endif
   };
 
   inline std::ostream&
@@ -376,20 +230,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   {
     std::string error;
     typedef annotate_base base_type;
-    {
-      base_type::const_iterator beg = __b.map_alloc().begin();
-      base_type::const_iterator end = __b.map_alloc().end();
-      for (; beg != end; ++beg)
-	__b.log_to_string(error, *beg);
-    }
-#if __cplusplus >= 201103L
-    {
-      auto beg = __b.map_construct().begin();
-      auto end = __b.map_construct().end();
-      for (; beg != end; ++beg)
-	__b.log_to_string(error, *beg);      
-    }
-#endif
+    base_type::const_iterator beg = __b.map().begin();
+    base_type::const_iterator end = __b.map().end();
+    for (; beg != end; ++beg)
+      __b.log_to_string(error, *beg);
     return os << error;
   }
 
@@ -841,18 +685,12 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       template<typename _Up, typename... _Args>
         void
         construct(_Up* __p, _Args&&... __args)
-	{
-	  _M_allocator.construct(__p, std::forward<_Args>(__args)...);
-	  insert_construct(__p);
-	}
+	{ return _M_allocator.construct(__p, std::forward<_Args>(__args)...); }
 
       template<typename _Up>
         void 
         destroy(_Up* __p)
-        {
-	  erase_construct(__p);
-	  _M_allocator.destroy(__p);
-	}
+        { _M_allocator.destroy(__p); }
 #else
       void
       construct(pointer __p, const value_type& val)
@@ -878,8 +716,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       }
 
       void
-      check(size_type __n)
-      { annotate_base::check(__n); }
+      check_allocated(size_type __n)
+      { annotate_base::check_allocated(__n); }
   };
 
   template<typename _Tp, typename _Cond>
@@ -953,14 +791,13 @@ namespace std _GLIBCXX_VISIBILITY(default)
       size_t
       operator()(const __gnu_cxx::throw_value_limit& __val) const
       {
-	__gnu_cxx::throw_value_limit::throw_conditionally();
 	std::hash<std::size_t> __h;
 	size_t __result = __h(__val._M_i);
 	return __result;
       }
     };
 
-  /// Explicit specialization of std::hash for __gnu_cxx::throw_value_random.
+  /// Explicit specialization of std::hash for __gnu_cxx::throw_value_limit.
   template<>
     struct hash<__gnu_cxx::throw_value_random>
     : public std::unary_function<__gnu_cxx::throw_value_random, size_t>
@@ -968,7 +805,6 @@ namespace std _GLIBCXX_VISIBILITY(default)
       size_t
       operator()(const __gnu_cxx::throw_value_random& __val) const
       {
-	__gnu_cxx::throw_value_random::throw_conditionally();
 	std::hash<std::size_t> __h;
 	size_t __result = __h(__val._M_i);
 	return __result;

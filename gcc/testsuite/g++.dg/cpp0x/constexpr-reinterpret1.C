@@ -1,6 +1,8 @@
 // PR c++/56728
 // { dg-require-effective-target c++11 }
 
+// { dg-prune-output "error" }
+
 class B {
 public:
   static B instance;
@@ -18,7 +20,7 @@ public:
   {
     /* I am surprised this is considered a constexpr */
     return *((Inner *)4);
-  } // { dg-error "reinterpret_cast" }
+  }
 };
 
 B B::instance;

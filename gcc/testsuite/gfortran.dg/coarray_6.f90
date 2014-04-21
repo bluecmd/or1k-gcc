@@ -75,7 +75,7 @@ subroutine valid(a)
   type t2
     type(t) :: b
   end type t2
-  type(t2), save :: xt2[*] ! { dg-error "nonpointer, nonallocatable scalar, which is not a coarray" }
+  type(t2), save :: xt2[*]
 end subroutine valid
 
 program main

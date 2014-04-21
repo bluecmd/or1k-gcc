@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 
 # "sh update_web_docs_libstdcxx.sh"
@@ -39,12 +39,7 @@ rm -f Makefile
 
 # copy the tree to the onlinedocs area, preserve directory structure
 #find . -depth -print | cpio -pdv $WWWDIR
-find . -depth -print | cpio -pd $WWWDIR 2>&1 | grep -v "newer or same age version exists"
-
-err=${PIPESTATUS[1]}
-if [ $err -gt 0 ]; then
-    printf "\nCopying failed with error code %d.\n" $err
-fi
+find . -depth -print | cpio -pd $WWWDIR > /dev/null 2>&1
 
 cd /
 /bin/rm -rf $WORKDIR

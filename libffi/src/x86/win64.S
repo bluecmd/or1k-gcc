@@ -295,7 +295,7 @@ SYMBOL_NAME(ffi_closure_win64):
 	mov	%rax, %rcx	# context is first parameter
 	mov	%rsp, %rdx	# stack is second parameter
 	add	$48, %rdx	# point to start of arguments
-	leaq	SYMBOL_NAME(ffi_closure_win64_inner)(%rip), %rax
+	mov	$SYMBOL_NAME(ffi_closure_win64_inner), %rax
 	callq	*%rax		# call the real closure function
 	add	$40, %rsp
 	movq	%rax, %xmm0	# If the closure returned a float,

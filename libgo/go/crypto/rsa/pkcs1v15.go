@@ -124,11 +124,7 @@ func decryptPKCS1v15(rand io.Reader, priv *PrivateKey, ciphertext []byte) (valid
 		lookingForIndex = subtle.ConstantTimeSelect(equals0, 0, lookingForIndex)
 	}
 
-	// The PS padding must be at least 8 bytes long, and it starts two
-	// bytes into em.
-	validPS := subtle.ConstantTimeLessOrEq(2+8, index)
-
-	valid = firstByteIsZero & secondByteIsTwo & (^lookingForIndex & 1) & validPS
+	valid = firstByteIsZero & secondByteIsTwo & (^lookingForIndex & 1)
 	msg = em[index+1:]
 	return
 }

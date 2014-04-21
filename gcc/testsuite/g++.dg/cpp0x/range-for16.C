@@ -1,7 +1,8 @@
 // Test for range-based for loop with arrays of
 // incomplete type or unknown size
 
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 extern int a[10];
 extern int b[];

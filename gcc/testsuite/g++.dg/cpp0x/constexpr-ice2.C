@@ -1,3 +1,3 @@
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 int x;
 constexpr int& rx = x;

@@ -1,7 +1,8 @@
 // Test for range-based for loop
 // Test the loop with an array
 
-// { dg-do run { target c++11 } }
+// { dg-do run }
+// { dg-options "-std=c++0x" }
 
 extern "C" void abort();
 

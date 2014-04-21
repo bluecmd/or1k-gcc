@@ -42,22 +42,13 @@ func (p *Process) wait() (ps *ProcessState, err error) {
 	return &ProcessState{p.Pid, syscall.WaitStatus{ExitCode: ec}, &u}, nil
 }
 
-func terminateProcess(pid, exitcode int) error {
-	h, e := syscall.OpenProcess(syscall.PROCESS_TERMINATE, false, uint32(pid))
-	if e != nil {
-		return NewSyscallError("OpenProcess", e)
-	}
-	defer syscall.CloseHandle(h)
-	e = syscall.TerminateProcess(h, uint32(exitcode))
-	return NewSyscallError("TerminateProcess", e)
-}
-
 func (p *Process) signal(sig Signal) error {
 	if p.done() {
 		return errors.New("os: process already finished")
 	}
 	if sig == Kill {
-		return terminateProcess(p.Pid, 1)
+		e := syscall.TerminateProcess(syscall.Handle(p.handle), 1)
+		return NewSyscallError("TerminateProcess", e)
 	}
 	// TODO(rsc): Handle Interrupt too?
 	return syscall.Errno(syscall.EWINDOWS)

@@ -1,5 +1,5 @@
 /* Definitions of target machine GNU compiler.  IA-64 version.
-   Copyright (C) 1999-2014 Free Software Foundation, Inc.
+   Copyright (C) 1999-2013 Free Software Foundation, Inc.
    Contributed by James E. Wilson <wilson@cygnus.com> and
    		  David Mosberger <davidm@hpl.hp.com>.
 
@@ -38,6 +38,13 @@ do {						\
 	builtin_define("__itanium__");		\
 	if (TARGET_BIG_ENDIAN)			\
 	  builtin_define("__BIG_ENDIAN__");	\
+} while (0)
+
+/* Target CPU builtins for D.  */
+#define TARGET_CPU_D_BUILTINS()			\
+do {						\
+	builtin_define ("IA64");		\
+	builtin_define ("D_HardFloat");		\
 } while (0)
 
 #ifndef SUBTARGET_EXTRA_SPECS

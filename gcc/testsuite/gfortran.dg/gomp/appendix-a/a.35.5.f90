@@ -6,7 +6,7 @@
 !$OMP CRITICAL
             CALL WORK(N,1)
 ! incorrect nesting of barrier region in a critical region
-!$OMP BARRIER	! { dg-error "region may not be closely nested inside of" }
+!$OMP BARRIER
             CALL WORK(N,2)
 !$OMP END CRITICAL
 !$OMP END PARALLEL

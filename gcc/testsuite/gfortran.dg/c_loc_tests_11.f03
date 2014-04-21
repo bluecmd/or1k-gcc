@@ -1,6 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-std=f2008" }
-!
 ! Test argument checking for C_LOC with subcomponent parameters.
 module c_vhandle_mod
   use iso_c_binding
@@ -31,9 +29,9 @@ contains
     integer(c_int), intent(in) :: handle
     
     if (.true.) then   ! The ultimate component is an allocatable target 
-      get_double_vector_address = c_loc(dbv_pool(handle)%v)  ! OK: Interop type and allocatable
+      get_double_vector_address = c_loc(dbv_pool(handle)%v)
     else
-      get_double_vector_address = c_loc(vv)  ! OK: Interop type and allocatable
+      get_double_vector_address = c_loc(vv)
     endif
     
   end function get_double_vector_address
@@ -41,9 +39,9 @@ contains
 
   type(c_ptr) function get_foo_address(handle)
     integer(c_int), intent(in) :: handle    
-    get_foo_address = c_loc(foo_pool(handle)%v)
+    get_foo_address = c_loc(foo_pool(handle)%v)    
 
-    get_foo_address = c_loc(foo_pool2(handle)%v) ! { dg-error "TS 29113: Noninteroperable array at .1. as argument to C_LOC: Expression is a noninteroperable derived type" }
+    get_foo_address = c_loc(foo_pool2(handle)%v) ! { dg-error "must be a scalar" } 
   end function get_foo_address
 
     

@@ -1,6 +1,7 @@
 /* Contributed by Kris Van Hees <kris.van.hees@oracle.com> */
 /* Test parsing of u and U prefixes when also used as macros. */
-/* { dg-do compile { target c++11 } } */
+/* { dg-do compile } */
+/* { dg-options "-std=gnu++0x" } */
 
 #define u	L
 #define U	L

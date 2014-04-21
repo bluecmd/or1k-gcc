@@ -160,9 +160,6 @@ cat > sysinfo.c <<EOF
 #if defined(HAVE_SYS_INOTIFY_H)
 #include <sys/inotify.h>
 #endif
-#if defined(HAVE_NETINET_ICMP6_H)
-#include <netinet/icmp6.h>
-#endif
 
 /* Constants that may only be defined as expressions on some systems,
    expressions too complex for -fdump-go-spec to handle.  These are
@@ -218,11 +215,6 @@ if ! grep '^const O_ASYNC' ${OUT} >/dev/null 2>&1; then
 fi
 if ! grep '^const O_CLOEXEC' ${OUT} >/dev/null 2>&1; then
   echo "const O_CLOEXEC = 0" >> ${OUT}
-fi
-
-# The os package requires F_DUPFD_CLOEXEC to be defined.
-if ! grep '^const F_DUPFD_CLOEXEC' ${OUT} >/dev/null 2>&1; then
-  echo "const F_DUPFD_CLOEXEC = 0" >> ${OUT}
 fi
 
 # These flags can be lost on i386 GNU/Linux when using
@@ -717,18 +709,6 @@ if ! grep 'type IPMreqn ' ${OUT} >/dev/null 2>&1; then
   echo 'type IPMreqn struct { Multiaddr [4]byte; Interface [4]byte; Ifindex int32 }' >> ${OUT}
 fi
 
-# The icmp6_filter struct.
-grep '^type _icmp6_filter ' gen-sysinfo.go | \
-    sed -e 's/_icmp6_filter/ICMPv6Filter/' \
-      -e 's/data/Data/' \
-      -e 's/filt/Filt/' \
-    >> ${OUT}
-
-# We need ICMPv6Filter to compile the syscall package.
-if ! grep 'type ICMPv6Filter ' ${OUT} > /dev/null 2>&1; then
-  echo 'type ICMPv6Filter struct { Data [8]uint32 }' >> ${OUT}
-fi
-
 # Try to guess the type to use for fd_set.
 fd_set=`grep '^type _fd_set ' gen-sysinfo.go || true`
 fds_bits_type="_C_long"
@@ -1141,8 +1121,7 @@ set cmsghdr Cmsghdr ip_mreq IPMreq ip_mreqn IPMreqn ipv6_mreq IPv6Mreq \
     in6_pktinfo Inet6Pktinfo inotify_event InotifyEvent linger Linger \
     msghdr Msghdr nlattr NlAttr nlmsgerr NlMsgerr nlmsghdr NlMsghdr \
     rtattr RtAttr rtgenmsg RtGenmsg rtmsg RtMsg rtnexthop RtNexthop \
-    sock_filter SockFilter sock_fprog SockFprog ucred Ucred \
-    icmp6_filter ICMPv6Filter
+    sock_filter SockFilter sock_fprog SockFprog ucred Ucred
 while test $# != 0; do
     nc=$1
     ngo=$2
@@ -1163,9 +1142,6 @@ if ! grep 'const SizeofIPv6Mreq ' ${OUT} >/dev/null 2>&1; then
 fi
 if ! grep 'const SizeofIPMreqn ' ${OUT} >/dev/null 2>&1; then
     echo 'const SizeofIPMreqn = 12' >> ${OUT}
-fi
-if ! grep 'const SizeofICMPv6Filter ' ${OUT} >/dev/null 2>&1; then
-    echo 'const SizeofICMPv6Filter = 32' >> ${OUT}
 fi
 
 exit $?

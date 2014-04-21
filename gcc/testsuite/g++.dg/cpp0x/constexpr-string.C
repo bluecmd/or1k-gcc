@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 constexpr char c1 = "hi"[1];
 constexpr char c2 = "hi"[2];

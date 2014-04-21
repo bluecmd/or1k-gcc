@@ -11,7 +11,6 @@ extern void abort(void);
 short v, count;
 
 
-int
 main ()
 {
   v = 0;

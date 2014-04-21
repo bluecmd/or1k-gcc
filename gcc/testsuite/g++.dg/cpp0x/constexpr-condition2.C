@@ -1,5 +1,5 @@
 // PR c++/48909
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 #define SA(X) static_assert((X),#X)
 

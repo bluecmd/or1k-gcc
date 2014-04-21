@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2012, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -34,10 +34,25 @@ with Ada.Containers.Hash_Tables.Generic_Bounded_Keys;
 pragma Elaborate_All (Ada.Containers.Hash_Tables.Generic_Bounded_Keys);
 
 with Ada.Containers.Prime_Numbers; use Ada.Containers.Prime_Numbers;
+with Ada.Finalization;             use Ada.Finalization;
 
 with System; use type System.Address;
 
 package body Ada.Containers.Bounded_Hashed_Sets is
+
+   type Iterator is new Limited_Controlled and
+     Set_Iterator_Interfaces.Forward_Iterator with
+   record
+      Container : Set_Access;
+   end record;
+
+   overriding procedure Finalize (Object : in out Iterator);
+
+   overriding function First (Object : Iterator) return Cursor;
+
+   overriding function Next
+     (Object   : Iterator;
+      Position : Cursor) return Cursor;
 
    -----------------------
    -- Local Subprograms --
@@ -328,8 +343,6 @@ package body Ada.Containers.Bounded_Hashed_Sets is
    is
       Tgt_Node, Src_Node : Count_Type;
 
-      Src : Set renames Source'Unrestricted_Access.all;
-
       TN : Nodes_Type renames Target.Nodes;
       SN : Nodes_Type renames Source.Nodes;
 
@@ -358,7 +371,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
                HT_Ops.Free (Target, Tgt_Node);
             end if;
 
-            Src_Node := HT_Ops.Next (Src, Src_Node);
+            Src_Node := HT_Ops.Next (Source, Src_Node);
          end loop;
 
       else
@@ -483,7 +496,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
                return True;
             end if;
 
-            R_Node := Next (R_HT.Nodes (R_Node));
+            R_Node := HT_Ops.Next (R_HT, R_Node);
          end loop;
       end Find_Equivalent_Key;
 
@@ -513,20 +526,6 @@ package body Ada.Containers.Bounded_Hashed_Sets is
 
       pragma Assert (Vet (Left), "bad Left cursor in Equivalent_Elements");
       pragma Assert (Vet (Right), "bad Right cursor in Equivalent_Elements");
-
-      --  AI05-0022 requires that a container implementation detect element
-      --  tampering by a generic actual subprogram. However, the following case
-      --  falls outside the scope of that AI. Randy Brukardt explained on the
-      --  ARG list on 2013/02/07 that:
-
-      --  (Begin Quote):
-      --  But for an operation like "<" [the ordered set analog of
-      --  Equivalent_Elements], there is no need to "dereference" a cursor
-      --  after the call to the generic formal parameter function, so nothing
-      --  bad could happen if tampering is undetected. And the operation can
-      --  safely return a result without a problem even if an element is
-      --  deleted from the container.
-      --  (End Quote).
 
       declare
          LN : Node_Type renames Left.Container.Nodes (Left.Node);
@@ -625,8 +624,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
      (Container : Set;
       Item      : Element_Type) return Cursor
    is
-      Node : constant Count_Type :=
-               Element_Keys.Find (Container'Unrestricted_Access.all, Item);
+      Node : constant Count_Type := Element_Keys.Find (Container, Item);
    begin
       return (if Node = 0 then No_Element
               else Cursor'(Container'Unrestricted_Access, Node));
@@ -882,7 +880,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
 
    function Is_In (HT : Set; Key : Node_Type) return Boolean is
    begin
-      return Element_Keys.Find (HT'Unrestricted_Access.all, Key.Element) /= 0;
+      return Element_Keys.Find (HT, Key.Element) /= 0;
    end Is_In;
 
    ---------------
@@ -907,8 +905,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
          if not Is_In (Of_Set, SN (Subset_Node)) then
             return False;
          end if;
-         Subset_Node := HT_Ops.Next
-                          (Subset'Unrestricted_Access.all, Subset_Node);
+         Subset_Node := HT_Ops.Next (Subset, Subset_Node);
       end loop;
 
       return True;
@@ -1067,7 +1064,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
          if Is_In (Right, Left.Nodes (Left_Node)) then
             return True;
          end if;
-         Left_Node := HT_Ops.Next (Left'Unrestricted_Access.all, Left_Node);
+         Left_Node := HT_Ops.Next (Left, Left_Node);
       end loop;
 
       return False;
@@ -1499,8 +1496,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
             return False;
          end if;
 
-         X := S.Buckets (Element_Keys.Checked_Index
-                           (S, N (Position.Node).Element));
+         X := S.Buckets (Element_Keys.Index (S, N (Position.Node).Element));
 
          for J in 1 .. S.Length loop
             if X = Position.Node then
@@ -1604,8 +1600,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
         (Container : aliased Set;
          Key       : Key_Type) return Constant_Reference_Type
       is
-         Node : constant Count_Type :=
-                  Key_Keys.Find (Container'Unrestricted_Access.all, Key);
+         Node : constant Count_Type := Key_Keys.Find (Container, Key);
 
       begin
          if Node = 0 then
@@ -1659,12 +1654,11 @@ package body Ada.Containers.Bounded_Hashed_Sets is
         (Container : Set;
          Key       : Key_Type) return Element_Type
       is
-         Node : constant Count_Type :=
-                  Key_Keys.Find (Container'Unrestricted_Access.all, Key);
+         Node : constant Count_Type := Key_Keys.Find (Container, Key);
 
       begin
          if Node = 0 then
-            raise Constraint_Error with "key not in set";
+            raise Constraint_Error with "key not in map";  --  ??? "set"
          end if;
 
          return Container.Nodes (Node).Element;
@@ -1704,8 +1698,7 @@ package body Ada.Containers.Bounded_Hashed_Sets is
         (Container : Set;
          Key       : Key_Type) return Cursor
       is
-         Node : constant Count_Type :=
-                  Key_Keys.Find (Container'Unrestricted_Access.all, Key);
+         Node : constant Count_Type := Key_Keys.Find (Container, Key);
       begin
          return (if Node = 0 then No_Element
                  else Cursor'(Container'Unrestricted_Access, Node));
@@ -1847,8 +1840,9 @@ package body Ada.Containers.Bounded_Hashed_Sets is
            (Vet (Position),
             "bad cursor in Update_Element_Preserving_Key");
 
-         --  Per AI05-0022, the container implementation is required to detect
-         --  element tampering by a generic actual subprogram.
+         --  Record bucket now, in case key is changed
+
+         Indx := HT_Ops.Index (Container.Buckets, N (Position.Node));
 
          declare
             E : Element_Type renames N (Position.Node).Element;
@@ -1857,19 +1851,12 @@ package body Ada.Containers.Bounded_Hashed_Sets is
             B : Natural renames Container.Busy;
             L : Natural renames Container.Lock;
 
-            Eq : Boolean;
-
          begin
             B := B + 1;
             L := L + 1;
 
             begin
-               --  Record bucket now, in case key is changed
-               Indx := HT_Ops.Index (Container.Buckets, N (Position.Node));
-
                Process (E);
-
-               Eq := Equivalent_Keys (K, Key (E));
             exception
                when others =>
                   L := L - 1;
@@ -1880,7 +1867,8 @@ package body Ada.Containers.Bounded_Hashed_Sets is
             L := L - 1;
             B := B - 1;
 
-            if Eq then
+            if Equivalent_Keys (K, Key (E)) then
+               pragma Assert (Hash (K) = Hash (E));
                return;
             end if;
          end;

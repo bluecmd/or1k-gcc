@@ -177,7 +177,7 @@ proc libjava_init { args } {
 
     set text [eval exec "$GCJ_UNDER_TEST -B$specdir -v 2>@ stdout"]
     regexp " version \[^\n\r\]*" $text version
-    set libjava_version [lindex $version 1]
+    set libjava_version 4.8
 
     verbose "version: $libjava_version"
 

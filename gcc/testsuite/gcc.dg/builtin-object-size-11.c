@@ -1,7 +1,6 @@
 /* PR48985 */
 /* { dg-do run } */
 /* { dg-options "-std=gnu89" } */
-/* { dg-skip-if "packed attribute missing for struct s" { "epiphany-*-*" } { "*" } { "" } } */
 
 extern void abort (void);
 

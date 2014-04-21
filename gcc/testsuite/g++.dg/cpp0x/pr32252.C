@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 int x[5];
 
 template<int M, int N, int (&... p)[N]> struct A;

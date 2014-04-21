@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x" }
 template<template<int, int> class Meta, int Initial, int... Values>
 struct accumulate {
   static const int value = Initial;

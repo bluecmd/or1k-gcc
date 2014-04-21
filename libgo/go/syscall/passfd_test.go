@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build linux dragonfly darwin freebsd netbsd openbsd
+// +build linux darwin freebsd netbsd openbsd
 
 package syscall_test
 
@@ -13,7 +13,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"runtime"
 	"syscall"
 	"testing"
 	"time"
@@ -27,10 +26,6 @@ import (
 // "-test.run=^TestPassFD$" and an environment variable used to signal
 // that the test should become the child process instead.
 func TestPassFD(t *testing.T) {
-	if runtime.GOOS == "dragonfly" {
-		// TODO(jsing): Figure out why sendmsg is returning EINVAL.
-		t.Skip("Skipping test on dragonfly")
-	}
 	if os.Getenv("GO_WANT_HELPER_PROCESS") == "1" {
 		passFDChild()
 		return

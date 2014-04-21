@@ -1,6 +1,5 @@
 // { dg-do compile { target i?86-*-* x86_64-*-* } }
-// { dg-require-effective-target c++11 }
-// { dg-options "-O3 -msse2" }
+// { dg-options "-O3 -msse2 -std=c++11" }
 // { dg-require-effective-target sse2 }
 
 // You can make NON-template typedefs with a large alignment.

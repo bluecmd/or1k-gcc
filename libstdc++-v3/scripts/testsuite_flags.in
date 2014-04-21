@@ -18,10 +18,8 @@ Usage:
 		    --build-cc
 		    --install-cxx
 		    --cxxflags
-		    --cxxldflags
 		    --cxxpchflags
-		    --cxxvtvflags
-
+		    --cxxldflags
 EOF
 }
 
@@ -58,12 +56,7 @@ case ${query} in
     --cxxflags)
       CXXFLAGS_default="-D_GLIBCXX_ASSERT -fmessage-length=0"
       CXXFLAGS_config="@SECTION_FLAGS@ @CXXFLAGS@ @EXTRA_CXX_FLAGS@"
-      echo ${CXXFLAGS_default} ${CXXFLAGS_config} 
-      ;;
-    --cxxvtvflags)
-      CXXFLAGS_vtv="@VTV_CXXFLAGS@"
-      LDFLAGS_vtv="@VTV_CXXLINKFLAGS@"
-      echo ${CXXFLAGS_vtv} ${LDFLAGS_vtv}
+      echo ${CXXFLAGS_default} ${CXXFLAGS_config}
       ;;
     --cxxparallelflags)
       CXXFLAGS_parallel="-D_GLIBCXX_PARALLEL -fopenmp

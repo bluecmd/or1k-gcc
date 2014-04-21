@@ -1,6 +1,5 @@
 /* { dg-do run } */
 /* { dg-options "-fschedule-insns" } */
-/* { dg-require-effective-target scheduling } */
 
 extern void abort (void) __attribute__((noreturn));
 

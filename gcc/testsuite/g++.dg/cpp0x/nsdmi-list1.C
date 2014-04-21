@@ -1,5 +1,5 @@
 // PR c++/50563
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 struct S1 {
   int a{10}, b{20};     // OK

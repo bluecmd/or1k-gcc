@@ -1,6 +1,5 @@
 // PR c++/42370
-// { dg-do compile { target c++11 } }
-// { dg-options "-Wall" }
+// { dg-options "-std=c++0x -Wall" }
 
 void foo()
 {

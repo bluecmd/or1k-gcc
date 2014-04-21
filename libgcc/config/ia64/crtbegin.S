@@ -1,4 +1,4 @@
-/* Copyright (C) 2000-2014 Free Software Foundation, Inc.
+/* Copyright (C) 2000-2013 Free Software Foundation, Inc.
    Contributed by Jes Sorensen, <Jes.Sorensen@cern.ch>
 
    This file is part of GCC.
@@ -252,3 +252,7 @@ __do_jv_register_classes:
 .weak __cxa_finalize
 #endif
 .weak _Jv_RegisterClasses
+
+#ifdef __linux__
+.section .note.GNU-stack; .previous
+#endif

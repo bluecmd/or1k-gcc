@@ -1,5 +1,4 @@
-// { dg-do compile { target c++11 } }
-// { dg-options "-fabi-version=0" }
+// { dg-options "-std=c++0x -fabi-version=0" }
 
 template<typename T> int cmp1(T a, T b);
 int cmp2(char a, char b);

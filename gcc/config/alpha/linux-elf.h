@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler
    for Alpha Linux-based GNU systems using ELF.
-   Copyright (C) 1996-2014 Free Software Foundation, Inc.
+   Copyright (C) 1996-2013 Free Software Foundation, Inc.
    Contributed by Richard Henderson.
 
 This file is part of GCC.
@@ -37,7 +37,7 @@ along with GCC; see the file COPYING3.  If not see
 
 #define ELF_DYNAMIC_LINKER	GNU_USER_DYNAMIC_LINKER
 
-#define LINK_SPEC "-m elf64alpha %{G*} %{relax:-relax}		\
+#define LINK_SPEC "-m elf64alpha --hash-style=gnu %{G*} %{relax:-relax}	\
   %{O*:-O3} %{!O*:-O1}						\
   %{shared:-shared}						\
   %{!shared:							\

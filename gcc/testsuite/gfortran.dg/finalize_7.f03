@@ -52,3 +52,6 @@ PROGRAM finalizer
   IMPLICIT NONE
   ! Nothing here
 END PROGRAM finalizer
+
+! TODO: Remove this once finalization is implemented.
+! { dg-excess-errors "not yet implemented" }

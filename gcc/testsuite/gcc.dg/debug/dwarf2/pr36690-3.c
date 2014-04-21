@@ -1,6 +1,6 @@
 /* PR debug/36690 */
 /* { dg-do compile } */
-/* { dg-options "-O0 -gdwarf -dA" } */
+/* { dg-options "-O0 -gdwarf-2 -dA" } */
 
 int cnt;
 

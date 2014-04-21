@@ -1,6 +1,6 @@
-// { dg-do compile { target c++11 } }
-// { dg-options "-Woverflow" }
+// { dg-options "-std=c++0x -Woverflow" }
 // PR c++/52654
+
 int
 operator"" _w(unsigned long long)
 { return 0; }

@@ -1,5 +1,5 @@
 /* PR target/39013 */
-/* { dg-do compile { target *-*-linux* *-*-gnu* } } */
+/* { dg-do compile { target *-*-linux* } } */
 /* { dg-options "-O2 -fpie -std=gnu89" } */
 
 inline int foo (void);

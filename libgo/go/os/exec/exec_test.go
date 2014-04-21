@@ -156,34 +156,6 @@ func TestPipes(t *testing.T) {
 	check("Wait", err)
 }
 
-const stdinCloseTestString = "Some test string."
-
-// Issue 6270.
-func TestStdinClose(t *testing.T) {
-	check := func(what string, err error) {
-		if err != nil {
-			t.Fatalf("%s: %v", what, err)
-		}
-	}
-	cmd := helperCommand("stdinClose")
-	stdin, err := cmd.StdinPipe()
-	check("StdinPipe", err)
-	// Check that we can access methods of the underlying os.File.`
-	if _, ok := stdin.(interface {
-		Fd() uintptr
-	}); !ok {
-		t.Error("can't access methods of underlying *os.File")
-	}
-	check("Start", cmd.Start())
-	go func() {
-		_, err := io.Copy(stdin, strings.NewReader(stdinCloseTestString))
-		check("Copy", err)
-		// Before the fix, this next line would race with cmd.Wait.
-		check("Close", stdin.Close())
-	}()
-	check("Wait", cmd.Wait())
-}
-
 // Issue 5071
 func TestPipeLookPathLeak(t *testing.T) {
 	fd0 := numOpenFDS(t)
@@ -227,29 +199,8 @@ func basefds() uintptr {
 	return n
 }
 
-func closeUnexpectedFds(t *testing.T, m string) {
-	for fd := basefds(); fd <= 101; fd++ {
-		err := os.NewFile(fd, "").Close()
-		if err == nil {
-			t.Logf("%s: Something already leaked - closed fd %d", m, fd)
-		}
-	}
-}
-
 func TestExtraFilesFDShuffle(t *testing.T) {
-	t.Skip("flaky test; see http://golang.org/issue/5780")
-	switch runtime.GOOS {
-	case "darwin":
-		// TODO(cnicolaou): http://golang.org/issue/2603
-		// leads to leaked file descriptors in this test when it's
-		// run from a builder.
-		closeUnexpectedFds(t, "TestExtraFilesFDShuffle")
-	case "netbsd":
-		// http://golang.org/issue/3955
-		closeUnexpectedFds(t, "TestExtraFilesFDShuffle")
-	case "windows":
-		t.Skip("no operating system support; skipping")
-	}
+	t.Skip("TODO: TestExtraFilesFDShuffle is too non-portable; skipping")
 
 	// syscall.StartProcess maps all the FDs passed to it in
 	// ProcAttr.Files (the concatenation of stdin,stdout,stderr and
@@ -349,7 +300,12 @@ func TestExtraFiles(t *testing.T) {
 	// our environment.
 	if !testedAlreadyLeaked {
 		testedAlreadyLeaked = true
-		closeUnexpectedFds(t, "TestExtraFiles")
+		for fd := basefds(); fd <= 101; fd++ {
+			err := os.NewFile(fd, "").Close()
+			if err == nil {
+				t.Logf("Something already leaked - closed fd %d", fd)
+			}
+		}
 	}
 
 	// Force network usage, to verify the epoll (or whatever) fd
@@ -478,7 +434,7 @@ func TestHelperProcess(*testing.T) {
 	// Determine which command to use to display open files.
 	ofcmd := "lsof"
 	switch runtime.GOOS {
-	case "dragonfly", "freebsd", "netbsd", "openbsd":
+	case "freebsd", "netbsd", "openbsd":
 		ofcmd = "fstat"
 	}
 
@@ -539,17 +495,6 @@ func TestHelperProcess(*testing.T) {
 				os.Exit(1)
 			}
 		}
-	case "stdinClose":
-		b, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if s := string(b); s != stdinCloseTestString {
-			fmt.Fprintf(os.Stderr, "Error: Read %q, want %q", s, stdinCloseTestString)
-			os.Exit(1)
-		}
-		os.Exit(0)
 	case "read3": // read fd 3
 		fd3 := os.NewFile(3, "fd3")
 		bs, err := ioutil.ReadAll(fd3)
@@ -558,9 +503,6 @@ func TestHelperProcess(*testing.T) {
 			os.Exit(1)
 		}
 		switch runtime.GOOS {
-		case "dragonfly":
-			// TODO(jsing): Determine why DragonFly is leaking
-			// file descriptors...
 		case "darwin":
 			// TODO(bradfitz): broken? Sometimes.
 			// http://golang.org/issue/2603
@@ -602,11 +544,13 @@ func TestHelperProcess(*testing.T) {
 		n, _ := strconv.Atoi(args[0])
 		os.Exit(n)
 	case "describefiles":
-		f := os.NewFile(3, fmt.Sprintf("fd3"))
-		ln, err := net.FileListener(f)
-		if err == nil {
-			fmt.Printf("fd3: listener %s\n", ln.Addr())
-			ln.Close()
+		for fd := uintptr(3); fd < 25; fd++ {
+			f := os.NewFile(fd, fmt.Sprintf("fd-%d", fd))
+			ln, err := net.FileListener(f)
+			if err == nil {
+				fmt.Printf("fd%d: listener %s\n", fd, ln.Addr())
+				ln.Close()
+			}
 		}
 		os.Exit(0)
 	case "extraFilesAndPipes":

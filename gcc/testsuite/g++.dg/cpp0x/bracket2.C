@@ -1,4 +1,5 @@
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=gnu++0x" }
 
 template<int i> class X { /* ... */ };
 X< 1>2 > x1;    // // { dg-error "numeric constant" }

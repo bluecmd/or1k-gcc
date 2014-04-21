@@ -19,13 +19,23 @@ type literalNode struct {
 	freq    int32
 }
 
-// A levelInfo describes the state of the constructed tree for a given depth.
+type chain struct {
+	// The sum of the leaves in this tree
+	freq int32
+
+	// The number of literals to the left of this item at this level
+	leafCount int32
+
+	// The right child of this chain in the previous level.
+	up *chain
+}
+
 type levelInfo struct {
 	// Our level.  for better printing
 	level int32
 
-	// The frequency of the last node at this level
-	lastFreq int32
+	// The most recent chain generated for this level
+	lastChain *chain
 
 	// The frequency of the next character to add to this level
 	nextCharFreq int32
@@ -37,6 +47,12 @@ type levelInfo struct {
 	// The number of chains remaining to generate for this level before moving
 	// up to the next level
 	needed int32
+
+	// The levelInfo for level+1
+	up *levelInfo
+
+	// The levelInfo for level-1
+	down *levelInfo
 }
 
 func maxNode() literalNode { return literalNode{math.MaxUint16, math.MaxInt32} }
@@ -105,8 +121,6 @@ func (h *huffmanEncoder) bitLength(freq []int32) int64 {
 	return total
 }
 
-const maxBitsLimit = 16
-
 // Return the number of literals assigned to each bit size in the Huffman encoding
 //
 // This method is only called when list.length >= 3
@@ -117,13 +131,9 @@ const maxBitsLimit = 16
 //             frequency, and has as its last element a special element with frequency
 //             MaxInt32
 // maxBits     The maximum number of bits that should be used to encode any literal.
-//             Must be less than 16.
 // return      An integer array in which array[i] indicates the number of literals
 //             that should be encoded in i bits.
 func (h *huffmanEncoder) bitCounts(list []literalNode, maxBits int32) []int32 {
-	if maxBits >= maxBitsLimit {
-		panic("flate: maxBits too large")
-	}
 	n := int32(len(list))
 	list = list[0 : n+1]
 	list[n] = maxNode()
@@ -138,61 +148,53 @@ func (h *huffmanEncoder) bitCounts(list []literalNode, maxBits int32) []int32 {
 	// A bogus "Level 0" whose sole purpose is so that
 	// level1.prev.needed==0.  This makes level1.nextPairFreq
 	// be a legitimate value that never gets chosen.
-	var levels [maxBitsLimit]levelInfo
-	// leafCounts[i] counts the number of literals at the left
-	// of ancestors of the rightmost node at level i.
-	// leafCounts[i][j] is the number of literals at the left
-	// of the level j ancestor.
-	var leafCounts [maxBitsLimit][maxBitsLimit]int32
-
+	top := &levelInfo{needed: 0}
+	chain2 := &chain{list[1].freq, 2, new(chain)}
 	for level := int32(1); level <= maxBits; level++ {
 		// For every level, the first two items are the first two characters.
 		// We initialize the levels as if we had already figured this out.
-		levels[level] = levelInfo{
+		top = &levelInfo{
 			level:        level,
-			lastFreq:     list[1].freq,
+			lastChain:    chain2,
 			nextCharFreq: list[2].freq,
 			nextPairFreq: list[0].freq + list[1].freq,
+			down:         top,
 		}
-		leafCounts[level][level] = 2
+		top.down.up = top
 		if level == 1 {
-			levels[level].nextPairFreq = math.MaxInt32
+			top.nextPairFreq = math.MaxInt32
 		}
 	}
 
 	// We need a total of 2*n - 2 items at top level and have already generated 2.
-	levels[maxBits].needed = 2*n - 4
+	top.needed = 2*n - 4
 
-	level := maxBits
+	l := top
 	for {
-		l := &levels[level]
 		if l.nextPairFreq == math.MaxInt32 && l.nextCharFreq == math.MaxInt32 {
 			// We've run out of both leafs and pairs.
 			// End all calculations for this level.
-			// To make sure we never come back to this level or any lower level,
+			// To m sure we never come back to this level or any lower level,
 			// set nextPairFreq impossibly large.
+			l.lastChain = nil
 			l.needed = 0
-			levels[level+1].nextPairFreq = math.MaxInt32
-			level++
+			l = l.up
+			l.nextPairFreq = math.MaxInt32
 			continue
 		}
 
-		prevFreq := l.lastFreq
+		prevFreq := l.lastChain.freq
 		if l.nextCharFreq < l.nextPairFreq {
 			// The next item on this row is a leaf node.
-			n := leafCounts[level][level] + 1
-			l.lastFreq = l.nextCharFreq
-			// Lower leafCounts are the same of the previous node.
-			leafCounts[level][level] = n
+			n := l.lastChain.leafCount + 1
+			l.lastChain = &chain{l.nextCharFreq, n, l.lastChain.up}
 			l.nextCharFreq = list[n].freq
 		} else {
 			// The next item on this row is a pair from the previous row.
 			// nextPairFreq isn't valid until we generate two
 			// more values in the level below
-			l.lastFreq = l.nextPairFreq
-			// Take leaf counts from the lower level, except counts[level] remains the same.
-			copy(leafCounts[level][:level], leafCounts[level-1][:level])
-			levels[l.level-1].needed = 2
+			l.lastChain = &chain{l.nextPairFreq, l.lastChain.leafCount, l.down.lastChain}
+			l.down.needed = 2
 		}
 
 		if l.needed--; l.needed == 0 {
@@ -200,33 +202,33 @@ func (h *huffmanEncoder) bitCounts(list []literalNode, maxBits int32) []int32 {
 			// Continue calculating one level up.  Fill in nextPairFreq
 			// of that level with the sum of the two nodes we've just calculated on
 			// this level.
-			if l.level == maxBits {
+			up := l.up
+			if up == nil {
 				// All done!
 				break
 			}
-			levels[l.level+1].nextPairFreq = prevFreq + l.lastFreq
-			level++
+			up.nextPairFreq = prevFreq + l.lastChain.freq
+			l = up
 		} else {
 			// If we stole from below, move down temporarily to replenish it.
-			for levels[level-1].needed > 0 {
-				level--
+			for l.down.needed > 0 {
+				l = l.down
 			}
 		}
 	}
 
 	// Somethings is wrong if at the end, the top level is null or hasn't used
 	// all of the leaves.
-	if leafCounts[maxBits][maxBits] != n {
-		panic("leafCounts[maxBits][maxBits] != n")
+	if top.lastChain.leafCount != n {
+		panic("top.lastChain.leafCount != n")
 	}
 
 	bitCount := make([]int32, maxBits+1)
 	bits := 1
-	counts := &leafCounts[maxBits]
-	for level := maxBits; level > 0; level-- {
+	for chain := top.lastChain; chain.up != nil; chain = chain.up {
 		// chain.leafCount gives the number of literals requiring at least "bits"
 		// bits to encode.
-		bitCount[bits] = counts[level] - counts[level-1]
+		bitCount[bits] = chain.leafCount - chain.up.leafCount
 		bits++
 	}
 	return bitCount

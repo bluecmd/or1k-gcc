@@ -10,6 +10,8 @@
 
 #define	NOSELGEN	1
 
+static	int32	debug	= 0;
+
 typedef	struct	WaitQ	WaitQ;
 typedef	struct	SudoG	SudoG;
 typedef	struct	Select	Select;
@@ -40,9 +42,8 @@ struct	Hchan
 	uintgo	qcount;			// total data in the q
 	uintgo	dataqsiz;		// size of the circular q
 	uint16	elemsize;
-	uint8	elemalign;
-	uint8	pad;			// ensures proper alignment of the buffer that follows Hchan in memory
 	bool	closed;
+	uint8	elemalign;
 	uintgo	sendx;			// send index
 	uintgo	recvx;			// receive index
 	WaitQ	recvq;			// list of recv waiters
@@ -58,8 +59,6 @@ uint32 runtime_Hchansize = sizeof(Hchan);
 
 enum
 {
-	debug = 0,
-
 	// Scase.kind
 	CaseRecv,
 	CaseSend,
@@ -106,17 +105,17 @@ runtime_makechan_c(ChanType *t, int64 hint)
 		runtime_panicstring("makechan: size out of range");
 
 	n = sizeof(*c);
-	n = ROUND(n, elem->__align);
 
 	// allocate memory in one call
-	c = (Hchan*)runtime_mallocgc(n + hint*elem->__size, (uintptr)t | TypeInfo_Chan, 0);
+	c = (Hchan*)runtime_mal(n + hint*elem->__size);
 	c->elemsize = elem->__size;
 	c->elemalign = elem->__align;
 	c->dataqsiz = hint;
+	runtime_settype(c, (uintptr)t | TypeInfo_Chan);
 
 	if(debug)
-		runtime_printf("makechan: chan=%p; elemsize=%D; dataqsiz=%D\n",
-			c, (int64)elem->__size, (int64)c->dataqsiz);
+		runtime_printf("makechan: chan=%p; elemsize=%D; elemalign=%d; dataqsiz=%D\n",
+			c, (int64)elem->__size, elem->__align, (int64)c->dataqsiz);
 
 	return c;
 }
@@ -186,7 +185,7 @@ runtime_chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 		return;  // not reached
 	}
 
-	if(runtime_gcwaiting())
+	if(runtime_gcwaiting)
 		runtime_gosched();
 
 	if(debug) {
@@ -201,6 +200,7 @@ runtime_chansend(ChanType *t, Hchan *c, byte *ep, bool *pres, void *pc)
 	}
 
 	runtime_lock(c);
+	// TODO(dvyukov): add similar instrumentation to select.
 	if(raceenabled)
 		runtime_racereadpc(c, pc, runtime_chansend);
 	if(c->closed)
@@ -311,7 +311,7 @@ runtime_chanrecv(ChanType *t, Hchan* c, byte *ep, bool *selected, bool *received
 	int64 t0;
 	G *g;
 
-	if(runtime_gcwaiting())
+	if(runtime_gcwaiting)
 		runtime_gosched();
 
 	if(debug)
@@ -927,7 +927,6 @@ selectgo(Select **selp)
 {
 	Select *sel;
 	uint32 o, i, j, k;
-	int64 t0;
 	Scase *cas, *dfl;
 	Hchan *c;
 	SudoG *sg;
@@ -936,20 +935,13 @@ selectgo(Select **selp)
 	G *g;
 
 	sel = *selp;
-	if(runtime_gcwaiting())
+	if(runtime_gcwaiting)
 		runtime_gosched();
 
 	if(debug)
 		runtime_printf("select: sel=%p\n", sel);
 
 	g = runtime_g();
-
-	t0 = 0;
-	if(runtime_blockprofilerate > 0) {
-		t0 = runtime_cputicks();
-		for(i=0; i<sel->ncase; i++)
-			sel->scase[i].sg.releasetime = -1;
-	}
 
 	// The compiler rewrites selects that statically have
 	// only 0 or 1 cases plus default into simpler constructs.
@@ -1031,8 +1023,6 @@ loop:
 			break;
 
 		case CaseSend:
-			if(raceenabled)
-				runtime_racereadpc(c, runtime_selectgo, runtime_chansend);
 			if(c->closed)
 				goto sclose;
 			if(c->dataqsiz > 0) {
@@ -1134,8 +1124,6 @@ asyncrecv:
 	if(sg != nil) {
 		gp = sg->g;
 		selunlock(sel);
-		if(sg->releasetime)
-			sg->releasetime = runtime_cputicks();
 		runtime_ready(gp);
 	} else {
 		selunlock(sel);
@@ -1154,8 +1142,6 @@ asyncsend:
 	if(sg != nil) {
 		gp = sg->g;
 		selunlock(sel);
-		if(sg->releasetime)
-			sg->releasetime = runtime_cputicks();
 		runtime_ready(gp);
 	} else {
 		selunlock(sel);
@@ -1175,8 +1161,6 @@ syncrecv:
 		runtime_memmove(cas->sg.elem, sg->elem, c->elemsize);
 	gp = sg->g;
 	gp->param = sg;
-	if(sg->releasetime)
-		sg->releasetime = runtime_cputicks();
 	runtime_ready(gp);
 	goto retc;
 
@@ -1202,15 +1186,11 @@ syncsend:
 		runtime_memmove(sg->elem, cas->sg.elem, c->elemsize);
 	gp = sg->g;
 	gp->param = sg;
-	if(sg->releasetime)
-		sg->releasetime = runtime_cputicks();
 	runtime_ready(gp);
 
 retc:
 	// return index corresponding to chosen case
 	index = cas->index;
-	if(cas->sg.releasetime > 0)
-		runtime_blockevent(cas->sg.releasetime - t0, 2);
 	runtime_free(sel);
 	return index;
 
@@ -1317,28 +1297,9 @@ reflect_rselect(Slice cases)
 	return ret;
 }
 
-static void closechan(Hchan *c, void *pc);
-
 // closechan(sel *byte);
 void
 runtime_closechan(Hchan *c)
-{
-	closechan(c, runtime_getcallerpc(&c));
-}
-
-// For reflect
-//	func chanclose(c chan)
-
-void reflect_chanclose(uintptr) __asm__ (GOSYM_PREFIX "reflect.chanclose");
-
-void
-reflect_chanclose(uintptr c)
-{
-	closechan((Hchan*)c, runtime_getcallerpc(&c));
-}
-
-static void
-closechan(Hchan *c, void *pc)
 {
 	SudoG *sg;
 	G* gp;
@@ -1346,7 +1307,7 @@ closechan(Hchan *c, void *pc)
 	if(c == nil)
 		runtime_panicstring("close of nil channel");
 
-	if(runtime_gcwaiting())
+	if(runtime_gcwaiting)
 		runtime_gosched();
 
 	runtime_lock(c);
@@ -1356,7 +1317,7 @@ closechan(Hchan *c, void *pc)
 	}
 
 	if(raceenabled) {
-		runtime_racewritepc(c, pc, runtime_closechan);
+		runtime_racewritepc(c, runtime_getcallerpc(&c), runtime_closechan);
 		runtime_racerelease(c);
 	}
 
@@ -1369,8 +1330,6 @@ closechan(Hchan *c, void *pc)
 			break;
 		gp = sg->g;
 		gp->param = nil;
-		if(sg->releasetime)
-			sg->releasetime = runtime_cputicks();
 		runtime_ready(gp);
 	}
 
@@ -1381,8 +1340,6 @@ closechan(Hchan *c, void *pc)
 			break;
 		gp = sg->g;
 		gp->param = nil;
-		if(sg->releasetime)
-			sg->releasetime = runtime_cputicks();
 		runtime_ready(gp);
 	}
 
@@ -1393,6 +1350,17 @@ void
 __go_builtin_close(Hchan *c)
 {
 	runtime_closechan(c);
+}
+
+// For reflect
+//	func chanclose(c chan)
+
+void reflect_chanclose(uintptr) __asm__ (GOSYM_PREFIX "reflect.chanclose");
+
+void
+reflect_chanclose(uintptr c)
+{
+	runtime_closechan((Hchan*)c);
 }
 
 // For reflect

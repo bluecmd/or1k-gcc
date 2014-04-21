@@ -3,8 +3,7 @@
 // can be converted to type T with a qualification conversion (4.4) are
 // also candidate functions.
 
-// { dg-do compile { target c++11 } }
-// { dg-options "" }
+// { dg-options -std=c++0x }
 
 struct A { };
 struct B: A { };

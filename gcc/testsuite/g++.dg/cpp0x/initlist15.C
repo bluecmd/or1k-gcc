@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 // Just discard errors pointing at header files
 // { dg-prune-output "include" }

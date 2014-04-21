@@ -1,6 +1,6 @@
 /* Definitions for ia64-linux target.
 
-Copyright (C) 2000-2014 Free Software Foundation, Inc.
+Copyright (C) 2000-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -58,7 +58,7 @@ do {						\
 #define GLIBC_DYNAMIC_LINKER "/lib/ld-linux-ia64.so.2"
 
 #undef LINK_SPEC
-#define LINK_SPEC "\
+#define LINK_SPEC " --hash-style=gnu \
   %{shared:-shared} \
   %{!shared: \
     %{!static: \
@@ -85,6 +85,9 @@ do {						\
 
 #undef TARGET_INIT_LIBFUNCS
 #define TARGET_INIT_LIBFUNCS ia64_soft_fp_init_libfuncs
+
+#undef TARGET_ASM_FILE_END
+#define TARGET_ASM_FILE_END file_end_indicate_exec_stack
 
 /* Define this to be nonzero if static stack checking is supported.  */
 #define STACK_CHECK_STATIC_BUILTIN 1

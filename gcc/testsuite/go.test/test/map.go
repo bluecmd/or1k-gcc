@@ -5,7 +5,6 @@
 // license that can be found in the LICENSE file.
 
 // Test maps, almost exhaustively.
-// NaN complexity test is in mapnan.go.
 
 package main
 
@@ -13,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"time"
 )
 
 const count = 100
@@ -41,7 +41,7 @@ func testbasic() {
 	for i := 0; i < len(mlit); i++ {
 		s := string([]byte{byte(i) + '0'})
 		if mlit[s] != i {
-			panic(fmt.Sprintf("mlit[%s] = %d\n", s, mlit[s]))
+			fmt.Printf("mlit[%s] = %d\n", s, mlit[s])
 		}
 	}
 
@@ -102,46 +102,46 @@ func testbasic() {
 
 	// test len
 	if len(mib) != count {
-		panic(fmt.Sprintf("len(mib) = %d\n", len(mib)))
+		fmt.Printf("len(mib) = %d\n", len(mib))
 	}
 	if len(mii) != count {
-		panic(fmt.Sprintf("len(mii) = %d\n", len(mii)))
+		fmt.Printf("len(mii) = %d\n", len(mii))
 	}
 	if len(mfi) != count {
-		panic(fmt.Sprintf("len(mfi) = %d\n", len(mfi)))
+		fmt.Printf("len(mfi) = %d\n", len(mfi))
 	}
 	if len(mif) != count {
-		panic(fmt.Sprintf("len(mif) = %d\n", len(mif)))
+		fmt.Printf("len(mif) = %d\n", len(mif))
 	}
 	if len(msi) != count {
-		panic(fmt.Sprintf("len(msi) = %d\n", len(msi)))
+		fmt.Printf("len(msi) = %d\n", len(msi))
 	}
 	if len(mis) != count {
-		panic(fmt.Sprintf("len(mis) = %d\n", len(mis)))
+		fmt.Printf("len(mis) = %d\n", len(mis))
 	}
 	if len(mss) != count {
-		panic(fmt.Sprintf("len(mss) = %d\n", len(mss)))
+		fmt.Printf("len(mss) = %d\n", len(mss))
 	}
 	if len(mspa) != count {
-		panic(fmt.Sprintf("len(mspa) = %d\n", len(mspa)))
+		fmt.Printf("len(mspa) = %d\n", len(mspa))
 	}
 	if len(mipT) != count {
-		panic(fmt.Sprintf("len(mipT) = %d\n", len(mipT)))
+		fmt.Printf("len(mipT) = %d\n", len(mipT))
 	}
 	if len(mpTi) != count {
-		panic(fmt.Sprintf("len(mpTi) = %d\n", len(mpTi)))
+		fmt.Printf("len(mpTi) = %d\n", len(mpTi))
 	}
 	//	if len(mti) != count {
-	//              panic(fmt.Sprintf("len(mti) = %d\n", len(mti)))
+	//		fmt.Printf("len(mti) = %d\n", len(mti))
 	//	}
 	if len(mipM) != count {
-		panic(fmt.Sprintf("len(mipM) = %d\n", len(mipM)))
+		fmt.Printf("len(mipM) = %d\n", len(mipM))
 	}
 	//	if len(mti) != count {
-	//		panic(fmt.Sprintf("len(mti) = %d\n", len(mti)))
+	//		fmt.Printf("len(mti) = %d\n", len(mti))
 	//	}
 	if len(mit) != count {
-		panic(fmt.Sprintf("len(mit) = %d\n", len(mit)))
+		fmt.Printf("len(mit) = %d\n", len(mit))
 	}
 
 	// test construction directly
@@ -151,48 +151,48 @@ func testbasic() {
 		f := float32(i)
 		// BUG m := M(i, i+1)
 		if mib[i] != (i != 0) {
-			panic(fmt.Sprintf("mib[%d] = %t\n", i, mib[i]))
+			fmt.Printf("mib[%d] = %t\n", i, mib[i])
 		}
 		if mii[i] != 10*i {
-			panic(fmt.Sprintf("mii[%d] = %d\n", i, mii[i]))
+			fmt.Printf("mii[%d] = %d\n", i, mii[i])
 		}
 		if mfi[f] != 10*i {
-			panic(fmt.Sprintf("mfi[%d] = %d\n", i, mfi[f]))
+			fmt.Printf("mfi[%d] = %d\n", i, mfi[f])
 		}
 		if mif[i] != 10.0*f {
-			panic(fmt.Sprintf("mif[%d] = %g\n", i, mif[i]))
+			fmt.Printf("mif[%d] = %g\n", i, mif[i])
 		}
 		if mis[i] != s {
-			panic(fmt.Sprintf("mis[%d] = %s\n", i, mis[i]))
+			fmt.Printf("mis[%d] = %s\n", i, mis[i])
 		}
 		if msi[s] != i {
-			panic(fmt.Sprintf("msi[%s] = %d\n", s, msi[s]))
+			fmt.Printf("msi[%s] = %d\n", s, msi[s])
 		}
 		if mss[s] != s10 {
-			panic(fmt.Sprintf("mss[%s] = %g\n", s, mss[s]))
+			fmt.Printf("mss[%s] = %g\n", s, mss[s])
 		}
 		for j := 0; j < len(mspa[s]); j++ {
 			if mspa[s][j] != s10 {
-				panic(fmt.Sprintf("mspa[%s][%d] = %s\n", s, j, mspa[s][j]))
+				fmt.Printf("mspa[%s][%d] = %s\n", s, j, mspa[s][j])
 			}
 		}
 		if mipT[i].i != int64(i) || mipT[i].f != f {
-			panic(fmt.Sprintf("mipT[%d] = %v\n", i, mipT[i]))
+			fmt.Printf("mipT[%d] = %v\n", i, mipT[i])
 		}
 		if mpTi[apT[i]] != i {
-			panic(fmt.Sprintf("mpTi[apT[%d]] = %d\n", i, mpTi[apT[i]]))
+			fmt.Printf("mpTi[apT[%d]] = %d\n", i, mpTi[apT[i]])
 		}
 		//	if(mti[t] != i) {
-		//		panic(fmt.Sprintf("mti[%s] = %s\n", s, mti[t]))
+		//		fmt.Printf("mti[%s] = %s\n", s, mti[t])
 		//	}
 		if mipM[i][i] != i+1 {
-			panic(fmt.Sprintf("mipM[%d][%d] = %d\n", i, i, mipM[i][i]))
+			fmt.Printf("mipM[%d][%d] = %d\n", i, i, mipM[i][i])
 		}
 		//	if(mti[t] != i) {
-		//		panic(fmt.Sprintf("mti[%v] = %d\n", t, mti[t]))
+		//		fmt.Printf("mti[%v] = %d\n", t, mti[t])
 		//	}
 		if mit[i].i != int64(i) || mit[i].f != f {
-			panic(fmt.Sprintf("mit[%d] = {%d %g}\n", i, mit[i].i, mit[i].f))
+			fmt.Printf("mit[%d] = {%d %g}\n", i, mit[i].i, mit[i].f)
 		}
 	}
 
@@ -204,131 +204,131 @@ func testbasic() {
 		{
 			_, b := mib[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mib[%d]\n", i))
+				fmt.Printf("tuple existence decl: mib[%d]\n", i)
 			}
 			_, b = mib[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mib[%d]\n", i))
+				fmt.Printf("tuple existence assign: mib[%d]\n", i)
 			}
 		}
 		{
 			_, b := mii[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mii[%d]\n", i))
+				fmt.Printf("tuple existence decl: mii[%d]\n", i)
 			}
 			_, b = mii[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mii[%d]\n", i))
+				fmt.Printf("tuple existence assign: mii[%d]\n", i)
 			}
 		}
 		{
 			_, b := mfi[f]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mfi[%d]\n", i))
+				fmt.Printf("tuple existence decl: mfi[%d]\n", i)
 			}
 			_, b = mfi[f]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mfi[%d]\n", i))
+				fmt.Printf("tuple existence assign: mfi[%d]\n", i)
 			}
 		}
 		{
 			_, b := mif[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mif[%d]\n", i))
+				fmt.Printf("tuple existence decl: mif[%d]\n", i)
 			}
 			_, b = mif[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mif[%d]\n", i))
+				fmt.Printf("tuple existence assign: mif[%d]\n", i)
 			}
 		}
 		{
 			_, b := mis[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mis[%d]\n", i))
+				fmt.Printf("tuple existence decl: mis[%d]\n", i)
 			}
 			_, b = mis[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mis[%d]\n", i))
+				fmt.Printf("tuple existence assign: mis[%d]\n", i)
 			}
 		}
 		{
 			_, b := msi[s]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: msi[%d]\n", i))
+				fmt.Printf("tuple existence decl: msi[%d]\n", i)
 			}
 			_, b = msi[s]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: msi[%d]\n", i))
+				fmt.Printf("tuple existence assign: msi[%d]\n", i)
 			}
 		}
 		{
 			_, b := mss[s]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mss[%d]\n", i))
+				fmt.Printf("tuple existence decl: mss[%d]\n", i)
 			}
 			_, b = mss[s]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mss[%d]\n", i))
+				fmt.Printf("tuple existence assign: mss[%d]\n", i)
 			}
 		}
 		{
 			_, b := mspa[s]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mspa[%d]\n", i))
+				fmt.Printf("tuple existence decl: mspa[%d]\n", i)
 			}
 			_, b = mspa[s]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mspa[%d]\n", i))
+				fmt.Printf("tuple existence assign: mspa[%d]\n", i)
 			}
 		}
 		{
 			_, b := mipT[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mipT[%d]\n", i))
+				fmt.Printf("tuple existence decl: mipT[%d]\n", i)
 			}
 			_, b = mipT[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mipT[%d]\n", i))
+				fmt.Printf("tuple existence assign: mipT[%d]\n", i)
 			}
 		}
 		{
 			_, b := mpTi[apT[i]]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mpTi[apT[%d]]\n", i))
+				fmt.Printf("tuple existence decl: mpTi[apT[%d]]\n", i)
 			}
 			_, b = mpTi[apT[i]]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mpTi[apT[%d]]\n", i))
+				fmt.Printf("tuple existence assign: mpTi[apT[%d]]\n", i)
 			}
 		}
 		{
 			_, b := mipM[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mipM[%d]\n", i))
+				fmt.Printf("tuple existence decl: mipM[%d]\n", i)
 			}
 			_, b = mipM[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mipM[%d]\n", i))
+				fmt.Printf("tuple existence assign: mipM[%d]\n", i)
 			}
 		}
 		{
 			_, b := mit[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence decl: mit[%d]\n", i))
+				fmt.Printf("tuple existence decl: mit[%d]\n", i)
 			}
 			_, b = mit[i]
 			if !b {
-				panic(fmt.Sprintf("tuple existence assign: mit[%d]\n", i))
+				fmt.Printf("tuple existence assign: mit[%d]\n", i)
 			}
 		}
 		//		{
 		//			_, b := mti[t]
 		//			if !b {
-		//				panic(fmt.Sprintf("tuple existence decl: mti[%d]\n", i))
+		//				fmt.Printf("tuple existence decl: mti[%d]\n", i)
 		//			}
 		//			_, b = mti[t]
 		//			if !b {
-		//				panic(fmt.Sprintf("tuple existence assign: mti[%d]\n", i))
+		//				fmt.Printf("tuple existence assign: mti[%d]\n", i)
 		//			}
 		//		}
 	}
@@ -341,131 +341,131 @@ func testbasic() {
 		{
 			_, b := mib[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mib[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mib[%d]", i)
 			}
 			_, b = mib[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mib[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mib[%d]", i)
 			}
 		}
 		{
 			_, b := mii[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mii[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mii[%d]", i)
 			}
 			_, b = mii[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mii[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mii[%d]", i)
 			}
 		}
 		{
 			_, b := mfi[f]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mfi[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mfi[%d]", i)
 			}
 			_, b = mfi[f]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mfi[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mfi[%d]", i)
 			}
 		}
 		{
 			_, b := mif[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mif[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mif[%d]", i)
 			}
 			_, b = mif[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mif[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mif[%d]", i)
 			}
 		}
 		{
 			_, b := mis[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mis[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mis[%d]", i)
 			}
 			_, b = mis[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mis[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mis[%d]", i)
 			}
 		}
 		{
 			_, b := msi[s]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: msi[%d]", i))
+				fmt.Printf("tuple nonexistence decl: msi[%d]", i)
 			}
 			_, b = msi[s]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: msi[%d]", i))
+				fmt.Printf("tuple nonexistence assign: msi[%d]", i)
 			}
 		}
 		{
 			_, b := mss[s]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mss[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mss[%d]", i)
 			}
 			_, b = mss[s]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mss[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mss[%d]", i)
 			}
 		}
 		{
 			_, b := mspa[s]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mspa[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mspa[%d]", i)
 			}
 			_, b = mspa[s]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mspa[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mspa[%d]", i)
 			}
 		}
 		{
 			_, b := mipT[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mipT[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mipT[%d]", i)
 			}
 			_, b = mipT[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mipT[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mipT[%d]", i)
 			}
 		}
 		{
 			_, b := mpTi[apT[i]]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mpTi[apt[%d]]", i))
+				fmt.Printf("tuple nonexistence decl: mpTi[apt[%d]]", i)
 			}
 			_, b = mpTi[apT[i]]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mpTi[apT[%d]]", i))
+				fmt.Printf("tuple nonexistence assign: mpTi[apT[%d]]", i)
 			}
 		}
 		{
 			_, b := mipM[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mipM[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mipM[%d]", i)
 			}
 			_, b = mipM[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mipM[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mipM[%d]", i)
 			}
 		}
 		//		{
 		//			_, b := mti[t]
 		//			if b {
-		//				panic(fmt.Sprintf("tuple nonexistence decl: mti[%d]", i))
+		//				fmt.Printf("tuple nonexistence decl: mti[%d]", i)
 		//			}
 		//			_, b = mti[t]
 		//			if b {
-		//				panic(fmt.Sprintf("tuple nonexistence assign: mti[%d]", i))
+		//				fmt.Printf("tuple nonexistence assign: mti[%d]", i)
 		//			}
 		//		}
 		{
 			_, b := mit[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence decl: mit[%d]", i))
+				fmt.Printf("tuple nonexistence decl: mit[%d]", i)
 			}
 			_, b = mit[i]
 			if b {
-				panic(fmt.Sprintf("tuple nonexistence assign: mit[%d]", i))
+				fmt.Printf("tuple nonexistence assign: mit[%d]", i)
 			}
 		}
 	}
@@ -475,25 +475,21 @@ func testbasic() {
 		s := strconv.Itoa(i)
 		mspa[s][i%2] = "deleted"
 		if mspa[s][i%2] != "deleted" {
-			panic(fmt.Sprintf("update mspa[%s][%d] = %s\n", s, i%2, mspa[s][i%2]))
-
+			fmt.Printf("update mspa[%s][%d] = %s\n", s, i%2, mspa[s][i%2])
 		}
 
 		mipT[i].i += 1
 		if mipT[i].i != int64(i)+1 {
-			panic(fmt.Sprintf("update mipT[%d].i = %d\n", i, mipT[i].i))
-
+			fmt.Printf("update mipT[%d].i = %d\n", i, mipT[i].i)
 		}
 		mipT[i].f = float32(i + 1)
 		if mipT[i].f != float32(i+1) {
-			panic(fmt.Sprintf("update mipT[%d].f = %g\n", i, mipT[i].f))
-
+			fmt.Printf("update mipT[%d].f = %g\n", i, mipT[i].f)
 		}
 
 		mipM[i][i]++
 		if mipM[i][i] != (i+1)+1 {
-			panic(fmt.Sprintf("update mipM[%d][%d] = %d\n", i, i, mipM[i][i]))
-
+			fmt.Printf("update mipM[%d][%d] = %d\n", i, i, mipM[i][i])
 		}
 	}
 
@@ -523,29 +519,29 @@ func testfloat() {
 			nanb: "NaN",
 		}
 		if m[pz] != "+0" {
-			panic(fmt.Sprintln("float32 map cannot read back m[+0]:", m[pz]))
+			fmt.Println("float32 map cannot read back m[+0]:", m[pz])
 		}
 		if m[nz] != "+0" {
-			fmt.Sprintln("float32 map does not treat", pz, "and", nz, "as equal for read")
-			panic(fmt.Sprintln("float32 map does not treat -0 and +0 as equal for read"))
+			fmt.Println("float32 map does not treat", pz, "and", nz, "as equal for read")
+			fmt.Println("float32 map does not treat -0 and +0 as equal for read")
 		}
 		m[nz] = "-0"
 		if m[pz] != "-0" {
-			panic(fmt.Sprintln("float32 map does not treat -0 and +0 as equal for write"))
+			fmt.Println("float32 map does not treat -0 and +0 as equal for write")
 		}
 		if _, ok := m[nana]; ok {
-			panic(fmt.Sprintln("float32 map allows NaN lookup (a)"))
+			fmt.Println("float32 map allows NaN lookup (a)")
 		}
 		if _, ok := m[nanb]; ok {
-			panic(fmt.Sprintln("float32 map allows NaN lookup (b)"))
+			fmt.Println("float32 map allows NaN lookup (b)")
 		}
 		if len(m) != 3 {
-			panic(fmt.Sprintln("float32 map should have 3 entries:", m))
+			fmt.Println("float32 map should have 3 entries:", m)
 		}
 		m[nana] = "NaN"
 		m[nanb] = "NaN"
 		if len(m) != 5 {
-			panic(fmt.Sprintln("float32 map should have 5 entries:", m))
+			fmt.Println("float32 map should have 5 entries:", m)
 		}
 	}
 
@@ -563,25 +559,25 @@ func testfloat() {
 			nanb: "NaN",
 		}
 		if m[nz] != "+0" {
-			panic(fmt.Sprintln("float64 map does not treat -0 and +0 as equal for read"))
+			fmt.Println("float64 map does not treat -0 and +0 as equal for read")
 		}
 		m[nz] = "-0"
 		if m[pz] != "-0" {
-			panic(fmt.Sprintln("float64 map does not treat -0 and +0 as equal for write"))
+			fmt.Println("float64 map does not treat -0 and +0 as equal for write")
 		}
 		if _, ok := m[nana]; ok {
-			panic(fmt.Sprintln("float64 map allows NaN lookup (a)"))
+			fmt.Println("float64 map allows NaN lookup (a)")
 		}
 		if _, ok := m[nanb]; ok {
-			panic(fmt.Sprintln("float64 map allows NaN lookup (b)"))
+			fmt.Println("float64 map allows NaN lookup (b)")
 		}
 		if len(m) != 3 {
-			panic(fmt.Sprintln("float64 map should have 3 entries:", m))
+			fmt.Println("float64 map should have 3 entries:", m)
 		}
 		m[nana] = "NaN"
 		m[nanb] = "NaN"
 		if len(m) != 5 {
-			panic(fmt.Sprintln("float64 map should have 5 entries:", m))
+			fmt.Println("float64 map should have 5 entries:", m)
 		}
 	}
 
@@ -599,25 +595,25 @@ func testfloat() {
 			nanb: "NaN",
 		}
 		if m[nz] != "+0" {
-			panic(fmt.Sprintln("complex64 map does not treat -0 and +0 as equal for read"))
+			fmt.Println("complex64 map does not treat -0 and +0 as equal for read")
 		}
 		m[nz] = "-0"
 		if m[pz] != "-0" {
-			panic(fmt.Sprintln("complex64 map does not treat -0 and +0 as equal for write"))
+			fmt.Println("complex64 map does not treat -0 and +0 as equal for write")
 		}
 		if _, ok := m[nana]; ok {
-			panic(fmt.Sprintln("complex64 map allows NaN lookup (a)"))
+			fmt.Println("complex64 map allows NaN lookup (a)")
 		}
 		if _, ok := m[nanb]; ok {
-			panic(fmt.Sprintln("complex64 map allows NaN lookup (b)"))
+			fmt.Println("complex64 map allows NaN lookup (b)")
 		}
 		if len(m) != 3 {
-			panic(fmt.Sprintln("complex64 map should have 3 entries:", m))
+			fmt.Println("complex64 map should have 3 entries:", m)
 		}
 		m[nana] = "NaN"
 		m[nanb] = "NaN"
 		if len(m) != 5 {
-			panic(fmt.Sprintln("complex64 map should have 5 entries:", m))
+			fmt.Println("complex64 map should have 5 entries:", m)
 		}
 	}
 
@@ -635,50 +631,63 @@ func testfloat() {
 			nanb: "NaN",
 		}
 		if m[nz] != "+0" {
-			panic(fmt.Sprintln("complex128 map does not treat -0 and +0 as equal for read"))
+			fmt.Println("complex128 map does not treat -0 and +0 as equal for read")
 		}
 		m[nz] = "-0"
 		if m[pz] != "-0" {
-			panic(fmt.Sprintln("complex128 map does not treat -0 and +0 as equal for write"))
+			fmt.Println("complex128 map does not treat -0 and +0 as equal for write")
 		}
 		if _, ok := m[nana]; ok {
-			panic(fmt.Sprintln("complex128 map allows NaN lookup (a)"))
+			fmt.Println("complex128 map allows NaN lookup (a)")
 		}
 		if _, ok := m[nanb]; ok {
-			panic(fmt.Sprintln("complex128 map allows NaN lookup (b)"))
+			fmt.Println("complex128 map allows NaN lookup (b)")
 		}
 		if len(m) != 3 {
-			panic(fmt.Sprintln("complex128 map should have 3 entries:", m))
+			fmt.Println("complex128 map should have 3 entries:", m)
 		}
 		m[nana] = "NaN"
 		m[nanb] = "NaN"
 		if len(m) != 5 {
-			panic(fmt.Sprintln("complex128 map should have 5 entries:", m))
+			fmt.Println("complex128 map should have 5 entries:", m)
 		}
 	}
 }
 
 func testnan() {
-	n := 500
-	m := map[float64]int{}
-	nan := math.NaN()
-	for i := 0; i < n; i++ {
-		m[nan] = 1
-	}
-	if len(m) != n {
-		panic("wrong size map after nan insertion")
-	}
-	iters := 0
-	for k, v := range m {
-		iters++
-		if !math.IsNaN(k) {
-			panic("not NaN")
+	// Test that NaNs in maps don't go quadratic.
+	t := func(n int) time.Duration {
+		t0 := time.Now()
+		m := map[float64]int{}
+		nan := math.NaN()
+		for i := 0; i < n; i++ {
+			m[nan] = 1
 		}
-		if v != 1 {
-			panic("wrong value")
+		if len(m) != n {
+			panic("wrong size map after nan insertion")
 		}
+		return time.Since(t0)
 	}
-	if iters != n {
-		panic("wrong number of nan range iters")
+
+	// Depending on the machine and OS, this test might be too fast
+	// to measure with accurate enough granularity. On failure,
+	// make it run longer, hoping that the timing granularity
+	// is eventually sufficient.
+
+	n := 30000 // 0.02 seconds on a MacBook Air
+	fails := 0
+	for {
+		t1 := t(n)
+		t2 := t(2 * n)
+		// should be 2x (linear); allow up to 3x
+		if t2 < 3*t1 {
+			return
+		}
+		fails++
+		if fails == 4 {
+			fmt.Printf("too slow: %d inserts: %v; %d inserts: %v\n", n, t1, 2*n, t2)
+			return
+		}
+		n *= 2
 	}
 }

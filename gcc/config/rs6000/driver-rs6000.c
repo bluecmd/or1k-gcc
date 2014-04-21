@@ -1,5 +1,5 @@
 /* Subroutines for the gcc driver.
-   Copyright (C) 2007-2014 Free Software Foundation, Inc.
+   Copyright (C) 2007-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -29,6 +29,10 @@ along with GCC; see the file COPYING3.  If not see
 
 #ifdef __linux__
 # include <link.h>
+#endif
+
+#ifdef HAVE_SYS_AUXV_H
+# include <sys/auxv.h>
 #endif
 
 #if defined (__APPLE__) || (__FreeBSD__)
@@ -190,7 +194,7 @@ elf_platform (void)
   return NULL;
 }
 
-/* Returns AT_DCACHEBSIZE if present, otherwise generic 32.  */
+/* Returns AT_PLATFORM if present, otherwise generic 32.  */
 
 static int
 elf_dcachebsize (void)

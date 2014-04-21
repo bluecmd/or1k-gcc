@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-gdwarf -O0 -dA -fno-merge-debug-strings" } */
+/* { dg-options "-g -O0 -dA -fno-merge-debug-strings" } */
 
 struct foo;
 struct foo *obj;

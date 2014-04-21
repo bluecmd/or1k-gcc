@@ -1,6 +1,7 @@
 /* Contributed by Kris Van Hees <kris.van.hees@oracle.com> */
 /* Expected errors for char32_t character constants. */
-/* { dg-do compile { target c++11 } } */
+/* { dg-do compile } */
+/* { dg-options "-std=c++0x" } */
 
 const static char32_t	c0 = U'';		/* { dg-error "empty character" } */
 const static char32_t	c1 = U'ab';		/* { dg-warning "constant too long" } */

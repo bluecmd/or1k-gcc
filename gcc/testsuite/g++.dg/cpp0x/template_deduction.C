@@ -2,7 +2,8 @@
 
 // Test the "Augmented" template argument deduction when binding an lvalue to an rvalue reference.
 
-// { dg-do compile { target c++11 } }
+// { dg-do compile }
+// { dg-options "-std=c++0x" }
 
 template <bool> struct sa;
 template <> struct sa<true> {};
@@ -34,7 +35,7 @@ test1(T&&)
 
 template <bool is_lvalue_ref, bool is_rvalue_ref, class T>
 void
-test2(const T&&)		// { dg-message "argument" }
+test2(const T&&)		// { dg-error "argument" }
 {
     sa<is_lvalue_reference<const T&&>::value == is_lvalue_ref> t1;
     sa<is_rvalue_reference<const T&&>::value == is_rvalue_ref> t2;

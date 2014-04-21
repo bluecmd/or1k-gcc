@@ -85,8 +85,6 @@ main (void)
   l = ! omp_in_parallel ();
 #pragma omp parallel reduction (|:l) if (1)
   l = ! omp_in_parallel ();
-  if (l)
-    abort ();
 
   e = omp_get_wtime ();
   if (d > e)

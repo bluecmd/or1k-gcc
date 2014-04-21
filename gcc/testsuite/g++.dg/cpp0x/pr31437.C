@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=gnu++0x" }
 template <typename... T> struct A // { dg-message "candidates|A" }
 {
   A(T* p) {  // { dg-error "parameter packs|T" }

@@ -130,7 +130,14 @@ func Index(s, sep string) int {
 	case n == 0:
 		return 0
 	case n == 1:
-		return IndexByte(s, sep[0])
+		c := sep[0]
+		// special case worth making fast
+		for i := 0; i < len(s); i++ {
+			if s[i] == c {
+				return i
+			}
+		}
+		return -1
 	case n == len(s):
 		if sep == s {
 			return 0
@@ -425,7 +432,10 @@ func Repeat(s string, count int) string {
 	b := make([]byte, len(s)*count)
 	bp := 0
 	for i := 0; i < count; i++ {
-		bp += copy(b[bp:], s)
+		for j := 0; j < len(s); j++ {
+			b[bp] = s[j]
+			bp++
+		}
 	}
 	return string(b)
 }

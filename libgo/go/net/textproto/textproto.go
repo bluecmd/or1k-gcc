@@ -105,7 +105,7 @@ func Dial(network, addr string) (*Conn, error) {
 //	if _, _, err = c.ReadCodeLine(110); err != nil {
 //		return nil, err
 //	}
-//	text, err := c.ReadDotBytes()
+//	text, err := c.ReadDotAll()
 //	if err != nil {
 //		return nil, err
 //	}

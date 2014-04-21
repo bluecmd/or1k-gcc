@@ -8,21 +8,10 @@
 // This file is shared between AddressSanitizer and ThreadSanitizer
 // run-time libraries. See sanitizer_libc.h for details.
 //===----------------------------------------------------------------------===//
-#include "sanitizer_allocator_internal.h"
 #include "sanitizer_common.h"
 #include "sanitizer_libc.h"
 
 namespace __sanitizer {
-
-// Make the compiler think that something is going on there.
-static inline void break_optimization(void *arg) {
-#if SANITIZER_WINDOWS
-  // FIXME: make sure this is actually enough.
-  __asm;
-#else
-  __asm__ __volatile__("" : : "r" (arg) : "memory");
-#endif
-}
 
 s64 internal_atoll(const char *nptr) {
   return internal_simple_strtoll(nptr, (char**)0, 10);
@@ -68,16 +57,6 @@ void *internal_memmove(void *dest, const void *src, uptr n) {
       }
   }
   return dest;
-}
-
-// Semi-fast bzero for 16-aligned data. Still far from peak performance.
-void internal_bzero_aligned16(void *s, uptr n) {
-  struct S16 { u64 a, b; } ALIGNED(16);
-  CHECK_EQ((reinterpret_cast<uptr>(s) | n) & 15, 0);
-  for (S16 *p = reinterpret_cast<S16*>(s), *end = p + n / 16; p < end; p++) {
-    p->a = p->b = 0;
-    break_optimization(0);  // Make sure this does not become memset.
-  }
 }
 
 void *internal_memset(void* s, int c, uptr n) {
@@ -143,13 +122,6 @@ char* internal_strchr(const char *s, int c) {
   }
 }
 
-char *internal_strchrnul(const char *s, int c) {
-  char *res = internal_strchr(s, c);
-  if (!res)
-    res = (char*)s + internal_strlen(s);
-  return res;
-}
-
 char *internal_strrchr(const char *s, int c) {
   const char *res = 0;
   for (uptr i = 0; s[i]; i++) {
@@ -177,7 +149,8 @@ char *internal_strncpy(char *dst, const char *src, uptr n) {
   uptr i;
   for (i = 0; i < n && src[i]; i++)
     dst[i] = src[i];
-  internal_memset(dst + i, '\0', n - i);
+  for (; i < n; i++)
+    dst[i] = '\0';
   return dst;
 }
 

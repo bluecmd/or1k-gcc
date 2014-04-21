@@ -95,45 +95,45 @@ func (tr *Reader) Next() (*Header, error) {
 func mergePAX(hdr *Header, headers map[string]string) error {
 	for k, v := range headers {
 		switch k {
-		case paxPath:
+		case "path":
 			hdr.Name = v
-		case paxLinkpath:
+		case "linkpath":
 			hdr.Linkname = v
-		case paxGname:
+		case "gname":
 			hdr.Gname = v
-		case paxUname:
+		case "uname":
 			hdr.Uname = v
-		case paxUid:
+		case "uid":
 			uid, err := strconv.ParseInt(v, 10, 0)
 			if err != nil {
 				return err
 			}
 			hdr.Uid = int(uid)
-		case paxGid:
+		case "gid":
 			gid, err := strconv.ParseInt(v, 10, 0)
 			if err != nil {
 				return err
 			}
 			hdr.Gid = int(gid)
-		case paxAtime:
+		case "atime":
 			t, err := parsePAXTime(v)
 			if err != nil {
 				return err
 			}
 			hdr.AccessTime = t
-		case paxMtime:
+		case "mtime":
 			t, err := parsePAXTime(v)
 			if err != nil {
 				return err
 			}
 			hdr.ModTime = t
-		case paxCtime:
+		case "ctime":
 			t, err := parsePAXTime(v)
 			if err != nil {
 				return err
 			}
 			hdr.ChangeTime = t
-		case paxSize:
+		case "size":
 			size, err := strconv.ParseInt(v, 10, 0)
 			if err != nil {
 				return err
@@ -243,15 +243,13 @@ func (tr *Reader) octal(b []byte) int64 {
 		return x
 	}
 
-	// Because unused fields are filled with NULs, we need
-	// to skip leading NULs. Fields may also be padded with
-	// spaces or NULs.
-	// So we remove leading and trailing NULs and spaces to
-	// be sure.
-	b = bytes.Trim(b, " \x00")
-
-	if len(b) == 0 {
-		return 0
+	// Removing leading spaces.
+	for len(b) > 0 && b[0] == ' ' {
+		b = b[1:]
+	}
+	// Removing trailing NULs and spaces.
+	for len(b) > 0 && (b[len(b)-1] == ' ' || b[len(b)-1] == '\x00') {
+		b = b[0 : len(b)-1]
 	}
 	x, err := strconv.ParseUint(cString(b), 8, 64)
 	if err != nil {

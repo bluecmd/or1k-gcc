@@ -1,4 +1,4 @@
-/* { dg-do compile { target { ! c++1y } } } */
+/* { dg-do compile } */
 /* { dg-options "-pedantic-errors -Wvla" } */
 
 void func (int i)

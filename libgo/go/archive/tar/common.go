@@ -13,7 +13,6 @@
 package tar
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -83,9 +82,9 @@ func (fi headerFileInfo) Sys() interface{}   { return fi.h }
 // Name returns the base name of the file.
 func (fi headerFileInfo) Name() string {
 	if fi.IsDir() {
-		return path.Base(path.Clean(fi.h.Name))
+		return path.Clean(fi.h.Name)
 	}
-	return path.Base(fi.h.Name)
+	return fi.h.Name
 }
 
 // Mode returns the permission and mode bits for the headerFileInfo.
@@ -175,29 +174,9 @@ const (
 	c_ISSOCK = 0140000 // Socket
 )
 
-// Keywords for the PAX Extended Header
-const (
-	paxAtime    = "atime"
-	paxCharset  = "charset"
-	paxComment  = "comment"
-	paxCtime    = "ctime" // please note that ctime is not a valid pax header.
-	paxGid      = "gid"
-	paxGname    = "gname"
-	paxLinkpath = "linkpath"
-	paxMtime    = "mtime"
-	paxPath     = "path"
-	paxSize     = "size"
-	paxUid      = "uid"
-	paxUname    = "uname"
-	paxNone     = ""
-)
-
 // FileInfoHeader creates a partially-populated Header from fi.
 // If fi describes a symlink, FileInfoHeader records link as the link target.
 // If fi describes a directory, a slash is appended to the name.
-// Because os.FileInfo's Name method returns only the base name of
-// the file it describes, it may be necessary to modify the Name field
-// of the returned header to provide the full path name of the file.
 func FileInfoHeader(fi os.FileInfo, link string) (*Header, error) {
 	if fi == nil {
 		return nil, errors.New("tar: FileInfo is nil")
@@ -277,26 +256,4 @@ func (sp *slicer) next(n int) (b []byte) {
 	s := *sp
 	b, *sp = s[0:n], s[n:]
 	return
-}
-
-func isASCII(s string) bool {
-	for _, c := range s {
-		if c >= 0x80 {
-			return false
-		}
-	}
-	return true
-}
-
-func toASCII(s string) string {
-	if isASCII(s) {
-		return s
-	}
-	var buf bytes.Buffer
-	for _, c := range s {
-		if c < 0x80 {
-			buf.WriteByte(byte(c))
-		}
-	}
-	return buf.String()
 }

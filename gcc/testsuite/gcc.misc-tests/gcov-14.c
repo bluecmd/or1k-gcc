@@ -6,7 +6,6 @@
 /* { dg-require-weak "" } */
 /* { dg-do run { target native } } */
 /* { dg-skip-if "undefined weak not supported" { { hppa*-*-hpux* } && { ! lp64 } } } */
-/* { dg-skip-if "undefined weak not supported" { powerpc-ibm-aix* } } */
 
 extern int __attribute__ ((weak)) Foo ();
 

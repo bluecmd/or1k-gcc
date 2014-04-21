@@ -1,4 +1,4 @@
-/* ifcvt accidentally deletes a referenced label while generating
+/* ifcvt accidently deletes a referenced label while generating
    conditional traps on machines having such patterns */
 
 struct foo { int a; };

@@ -1,5 +1,5 @@
 /* Preprocess only, using cpplib.
-   Copyright (C) 1995-2014 Free Software Foundation, Inc.
+   Copyright (C) 1995-2013 Free Software Foundation, Inc.
    Written by Per Bothner, 1994-95.
 
    This program is free software; you can redistribute it and/or modify it
@@ -251,11 +251,7 @@ scan_translation_unit (cpp_reader *pfile)
 	  cpp_output_token (token, print.outf);
 	}
 
-      /* CPP_COMMENT tokens and raw-string literal tokens can
-	 have embedded new-line characters.  Rather than enumerating
-	 all the possible token types just check if token uses
-	 val.str union member.  */
-      if (cpp_token_val_index (token) == CPP_TOKEN_FLD_STR)
+      if (token->type == CPP_COMMENT)
 	account_for_newlines (token->val.str.text, token->val.str.len);
     }
 }

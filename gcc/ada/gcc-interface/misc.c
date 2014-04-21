@@ -6,7 +6,7 @@
  *                                                                          *
  *                           C Implementation File                          *
  *                                                                          *
- *          Copyright (C) 1992-2013, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2012, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -30,8 +30,6 @@
 #include "options.h"
 #include "tm.h"
 #include "tree.h"
-#include "stor-layout.h"
-#include "print-tree.h"
 #include "diagnostic.h"
 #include "target.h"
 #include "ggc.h"
@@ -151,10 +149,6 @@ gnat_handle_option (size_t scode, const char *arg ATTRIBUTE_UNUSED, int value,
       /* These are handled by the front-end.  */
       break;
 
-    case OPT_fshort_enums:
-      /* This is handled by the middle-end.  */
-      break;
-
     default:
       gcc_unreachable ();
     }
@@ -228,12 +222,10 @@ gnat_init_options (unsigned int decoded_options_count,
 #undef optimize
 #undef optimize_size
 #undef flag_compare_debug
-#undef flag_short_enums
 #undef flag_stack_check
 int optimize;
 int optimize_size;
 int flag_compare_debug;
-int flag_short_enums;
 enum stack_check_type flag_stack_check = NO_STACK_CHECK;
 
 /* Settings adjustments after switches processing by the back-end.
@@ -263,13 +255,6 @@ gnat_post_options (const char **pfilename ATTRIBUTE_UNUSED)
   optimize_size = global_options.x_optimize_size;
   flag_compare_debug = global_options.x_flag_compare_debug;
   flag_stack_check = global_options.x_flag_stack_check;
-  flag_short_enums = global_options.x_flag_short_enums;
-
-  /* Unfortunately the post_options hook is called before the value of
-     flag_short_enums is autodetected, if need be.  Mimic the process
-     for our private flag_short_enums.  */
-  if (flag_short_enums == 2)
-    flag_short_enums = targetm.default_short_enums ();
 
   return false;
 }
@@ -361,7 +346,9 @@ gnat_init (void)
   return true;
 }
 
-/* Initialize the GCC support for exception handling.  */
+/* If we are using the GCC mechanism to process exception handling, we
+   have to register the personality routine for Ada and to initialize
+   various language dependent hooks.  */
 
 void
 gnat_init_gcc_eh (void)
@@ -392,28 +379,6 @@ gnat_init_gcc_eh (void)
   flag_non_call_exceptions = 1;
 
   init_eh ();
-}
-
-/* Initialize the GCC support for floating-point operations.  */
-
-void
-gnat_init_gcc_fp (void)
-{
-  /* Disable FP optimizations that ignore the signedness of zero if
-     S'Signed_Zeros is true, but don't override the user if not.  */
-  if (Signed_Zeros_On_Target)
-    flag_signed_zeros = 1;
-  else if (!global_options_set.x_flag_signed_zeros)
-    flag_signed_zeros = 0;
-
-  /* Assume that FP operations can trap if S'Machine_Overflow is true,
-     but don't override the user if not.
-
-     ??? Alpha/VMS enables FP traps without declaring it.  */
-  if (Machine_Overflows_On_Target || TARGET_ABI_OPEN_VMS)
-    flag_trapping_math = 1;
-  else if (!global_options_set.x_flag_trapping_math)
-    flag_trapping_math = 0;
 }
 
 /* Print language-specific items in declaration NODE.  */
@@ -606,7 +571,7 @@ gnat_type_max_size (const_tree gnu_type)
 
   /* If we don't have a constant, see what we can get from TYPE_ADA_SIZE,
      which should stay untouched.  */
-  if (!tree_fits_uhwi_p (max_unitsize)
+  if (!host_integerp (max_unitsize, 1)
       && RECORD_OR_UNION_TYPE_P (gnu_type)
       && !TYPE_FAT_POINTER_P (gnu_type)
       && TYPE_ADA_SIZE (gnu_type))
@@ -615,7 +580,7 @@ gnat_type_max_size (const_tree gnu_type)
 
       /* If we have succeeded in finding a constant, round it up to the
 	 type's alignment and return the result in units.  */
-      if (tree_fits_uhwi_p (max_adasize))
+      if (host_integerp (max_adasize, 1))
 	max_unitsize
 	  = size_binop (CEIL_DIV_EXPR,
 			round_up (max_adasize, TYPE_ALIGN (gnu_type)),
@@ -683,7 +648,7 @@ must_pass_by_ref (tree gnu_type)
 /* This function is called by the front-end to enumerate all the supported
    modes for the machine, as well as some predefined C types.  F is a function
    which is called back with the parameters as listed below, first a string,
-   then six ints.  The name is any arbitrary null-terminated string and has
+   then seven ints.  The name is any arbitrary null-terminated string and has
    no particular significance, except for the case of predefined C types, where
    it should be the name of the C type.  For integer types, only signed types
    should be listed, unsigned versions are assumed.  The order of types should
@@ -699,11 +664,12 @@ must_pass_by_ref (tree gnu_type)
    COMPLEX_P	nonzero is this represents a complex mode
    COUNT	count of number of items, nonzero for vector mode
    FLOAT_REP	Float_Rep_Kind for FP, otherwise undefined
-   SIZE		number of bits used to store data
+   PRECISION	number of bits used to store data
+   SIZE		number of bits occupied by the mode
    ALIGN	number of bits to which mode is aligned.  */
 
 void
-enumerate_modes (void (*f) (const char *, int, int, int, int, int, int))
+enumerate_modes (void (*f) (const char *, int, int, int, int, int, int, int))
 {
   const tree c_types[]
     = { float_type_node, double_type_node, long_double_type_node };
@@ -777,28 +743,26 @@ enumerate_modes (void (*f) (const char *, int, int, int, int, int, int))
 
       /* First register any C types for this mode that the front end
 	 may need to know about, unless the mode should be skipped.  */
-
-      if (!skip_p)
+      if (!skip_p && !vector_p)
 	for (nameloop = 0; nameloop < ARRAY_SIZE (c_types); nameloop++)
 	  {
-	    tree typ = c_types[nameloop];
-	    const char *nam = c_names[nameloop];
+	    tree type = c_types[nameloop];
+	    const char *name = c_names[nameloop];
 
-	    if (TYPE_MODE (typ) == i)
+	    if (TYPE_MODE (type) == i)
 	      {
-		f (nam, digs, complex_p,
-		   vector_p ? GET_MODE_NUNITS (i) : 0, float_rep,
-		   TYPE_PRECISION (typ), TYPE_ALIGN (typ));
+		f (name, digs, complex_p, 0, float_rep, TYPE_PRECISION (type),
+		   TREE_INT_CST_LOW (TYPE_SIZE (type)), TYPE_ALIGN (type));
 		skip_p = true;
 	      }
 	  }
 
       /* If no predefined C types were found, register the mode itself.  */
-
       if (!skip_p)
 	f (GET_MODE_NAME (i), digs, complex_p,
 	   vector_p ? GET_MODE_NUNITS (i) : 0, float_rep,
-	   GET_MODE_PRECISION (i), GET_MODE_ALIGNMENT (i));
+	   GET_MODE_PRECISION (i), GET_MODE_BITSIZE (i),
+	   GET_MODE_ALIGNMENT (i));
     }
 }
 

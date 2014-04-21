@@ -132,7 +132,6 @@ func verify8(length, in, out, m int) {
 	n := ncopied(length, in, out)
 	if m != n {
 		fmt.Printf("count bad(%d %d %d): %d not %d\n", length, in, out, m, n)
-		os.Exit(1)
 		return
 	}
 	// before
@@ -173,7 +172,6 @@ func verifyS(length, in, out, m int) {
 	n := ncopied(length, in, out)
 	if m != n {
 		fmt.Printf("count bad(%d %d %d): %d not %d\n", length, in, out, m, n)
-		os.Exit(1)
 		return
 	}
 	// before
@@ -214,7 +212,6 @@ func verify16(length, in, out, m int) {
 	n := ncopied(length, in, out)
 	if m != n {
 		fmt.Printf("count bad(%d %d %d): %d not %d\n", length, in, out, m, n)
-		os.Exit(1)
 		return
 	}
 	// before
@@ -255,7 +252,6 @@ func verify32(length, in, out, m int) {
 	n := ncopied(length, in, out)
 	if m != n {
 		fmt.Printf("count bad(%d %d %d): %d not %d\n", length, in, out, m, n)
-		os.Exit(1)
 		return
 	}
 	// before
@@ -296,7 +292,6 @@ func verify64(length, in, out, m int) {
 	n := ncopied(length, in, out)
 	if m != n {
 		fmt.Printf("count bad(%d %d %d): %d not %d\n", length, in, out, m, n)
-		os.Exit(1)
 		return
 	}
 	// before

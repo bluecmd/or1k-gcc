@@ -7,8 +7,7 @@
 
 extern char a[];
 
-/* Can not infer loop iteration from array -- exit test can not be
-   replaced by the array address.  */
+/* Can not infer loop iteration from array -- exit test can not be replaced.  */
 void foo (unsigned int i_width, TYPE dst)
 {
   unsigned long long i = 0;
@@ -22,5 +21,5 @@ void foo (unsigned int i_width, TYPE dst)
     }
 }
 
-/* { dg-final { scan-tree-dump-times "\[^:\]*if \\(.*j_\[0-9\]+.*\\)" 1 "ivopts"} } */
+/* { dg-final { scan-tree-dump-times "Replacing" 0 "ivopts"} } */
 /* { dg-final { cleanup-tree-dump "ivopts" } } */

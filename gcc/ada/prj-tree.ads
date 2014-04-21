@@ -2,11 +2,11 @@
 --                                                                          --
 --                         GNAT COMPILER COMPONENTS                         --
 --                                                                          --
---                             P R J . T R E E                              --
+--                              P R J . T R E E                             --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2001-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2011, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -61,8 +61,8 @@ package Prj.Tree is
    end record;
 
    procedure Initialize
-     (Self  : out Environment;
-      Flags : Processing_Flags);
+     (Self      : out Environment;
+      Flags     : Processing_Flags);
    --  Initialize a new environment
 
    procedure Initialize_And_Copy
@@ -1469,16 +1469,12 @@ package Prj.Tree is
          Node : Project_Node_Id;
          --  Node of the project in table Project_Nodes
 
-         Resolved_Path : Path_Name_Type;
+         Canonical_Path : Path_Name_Type;
          --  Resolved and canonical path of a real project file.
          --  No_Name in case of virtual projects.
 
          Extended : Boolean;
          --  True when the project is being extended by another project
-
-         From_Extended : Boolean;
-         --  True when the project is only imported by projects that are
-         --  extended.
 
          Proj_Qualifier : Project_Qualifier;
          --  The project qualifier of the project, if any
@@ -1488,9 +1484,8 @@ package Prj.Tree is
         (Name           => No_Name,
          Display_Name   => No_Name,
          Node           => Empty_Node,
-         Resolved_Path  => No_Path,
+         Canonical_Path => No_Path,
          Extended       => True,
-         From_Extended  => False,
          Proj_Qualifier => Unspecified);
 
       package Projects_Htable is new GNAT.Dynamic_HTables.Simple_HTable

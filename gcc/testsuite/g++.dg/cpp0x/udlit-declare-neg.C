@@ -1,4 +1,4 @@
-// { dg-do compile { target c++11 } }
+// { dg-options "-std=c++0x" }
 
 //  Check that undeclared literal operator calls and literals give appropriate errors.
 

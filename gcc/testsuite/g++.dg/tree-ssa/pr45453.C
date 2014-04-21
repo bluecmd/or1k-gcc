@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-optimized -fno-devirtualize-speculatively" } */
+/* { dg-options "-O2 -fdump-tree-optimized" } */
 struct S
 {
   S();

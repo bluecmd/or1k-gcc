@@ -22,7 +22,6 @@
 #define _FP_NANSIGN_Q		0
 
 #define _FP_KEEPNANFRACP 1
-#define _FP_QNANNEGATEDP 0
 
 /* Someone please check this.  */
 #define _FP_CHOOSENAN(fs, wc, R, X, Y, OP)			\
@@ -45,8 +44,6 @@
 #define	__BIG_ENDIAN	4321
 
 #define __BYTE_ORDER __BIG_ENDIAN
-
-#define _FP_TININESS_AFTER_ROUNDING 0
 
 /* Define ALIASNAME as a strong alias for NAME.  */
 # define strong_alias(name, aliasname) _strong_alias(name, aliasname)

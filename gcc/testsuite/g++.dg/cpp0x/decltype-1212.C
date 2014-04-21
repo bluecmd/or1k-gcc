@@ -1,5 +1,5 @@
 // Core 1212
-// { dg-do compile { target c++11 } }
+// { dg-options -std=c++0x }
 
 template <class T, class U> struct assert_same_type;
 template <class T> struct assert_same_type<T,T> {};
