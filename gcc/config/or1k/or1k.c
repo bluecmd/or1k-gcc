@@ -684,6 +684,7 @@ or1k_legitimize_tls_address (rtx x)
 {
   rtx dest;
   rtx tp = gen_rtx_REG(Pmode, THREAD_PTR_REGNUM);
+  rtx sym;
   enum tls_model tls_kind = or1k_tls_symbolic_operand (x);
 
   fprintf(stderr, "Legitimizing code: %d ", GET_CODE(x));
@@ -695,8 +696,11 @@ or1k_legitimize_tls_address (rtx x)
     case TLS_MODEL_LOCAL_DYNAMIC:
       /* TODO: For now, treat LD as GD */
       crtl->uses_pic_offset_table = 1;
-      emit_insn (gen_movsi_tlsgdhi (dest, x));
-      emit_insn (gen_movsi_tlsgdlo (dest, dest, x));
+      /* Generate a new symbol ref that is not marked as TLS or we will recurse
+       * in or1k_legitimate_constant_p. */
+      sym = gen_rtx_SYMBOL_REF(Pmode, XSTR(x, 0));
+      emit_insn (gen_movsi_tlsgdhi (dest, sym));
+      emit_insn (gen_movsi_tlsgdlo (dest, dest, sym));
       emit_insn (gen_add3_insn (dest, dest, pic_offset_table_rtx));
       or1k_tls_call (dest);
       break;
