@@ -679,18 +679,40 @@ or1k_tls_call (rtx arg)
       LCT_CONST, Pmode, 1, arg, Pmode);
 }
 
+#define DEBUG_OR1K
 static rtx
-or1k_legitimize_tls_address (rtx x)
+or1k_legitimize_tls_address (rtx dest, rtx x)
 {
-  rtx dest;
   rtx tp = gen_rtx_REG(Pmode, THREAD_PTR_REGNUM);
   rtx sym;
   enum tls_model tls_kind = or1k_tls_symbolic_operand (x);
 
-  fprintf(stderr, "Legitimizing code: %d ", GET_CODE(x));
-  debug_rtx(x);
+#ifdef DEBUG_OR1K
+  fprintf (stderr, "or1k_legitimize_tls_address:\n");
+  fprintf (stderr, "dest: ");
+  debug_rtx (dest);
+  fprintf (stderr, "src:  ");
+  debug_rtx (x);
+  fprintf (stderr, "type: ");
+  switch (tls_kind) {
+    case TLS_MODEL_GLOBAL_DYNAMIC:
+      fprintf (stderr, "GD\n");
+      break;
+    case TLS_MODEL_LOCAL_DYNAMIC:
+      fprintf (stderr, "LD\n");
+      break;
+    case TLS_MODEL_INITIAL_EXEC:
+      fprintf (stderr, "IE\n");
+      break;
+    case TLS_MODEL_LOCAL_EXEC:
+      fprintf (stderr, "LE\n");
+      break;
+    default:
+      fprintf (stderr, "Error\n");
+      gcc_unreachable ();
+  }
 
-  dest = gen_reg_rtx (Pmode);
+#endif
   switch (tls_kind) {
     case TLS_MODEL_GLOBAL_DYNAMIC:
     case TLS_MODEL_LOCAL_DYNAMIC:
@@ -731,10 +753,8 @@ static rtx
 or1k_legitimize_address (rtx x, rtx oldx ATTRIBUTE_UNUSED,
                          enum machine_mode mode ATTRIBUTE_UNUSED)
 {
-  fprintf(stderr, "or1k_legitimize_address: ");
-  debug_rtx (x);
   if (or1k_tls_symbolic_operand (x) != TLS_MODEL_NONE)
-    return or1k_legitimize_tls_address (x);
+    return or1k_legitimize_tls_address (gen_reg_rtx (Pmode), x);
 
   return x;
 }
@@ -757,15 +777,6 @@ or1k_expand_symbol_ref(enum machine_mode mode, rtx operands[])
 bool
 or1k_expand_move (enum machine_mode mode, rtx operands[])
 {
-  if (or1k_tls_symbolic_operand (operands[1]) != TLS_MODEL_NONE)
-  {
-    fprintf(stderr, "or1k_expand_symbol_ref: ");
-    debug_rtx (operands[1]);
-    emit_move_insn (operands[0], or1k_legitimize_tls_address (operands[1]));
-    return true;
-  }
-
-
   if (can_create_pseudo_p ())
     {
       if (GET_CODE (operands[0]) == MEM
@@ -776,6 +787,13 @@ or1k_expand_move (enum machine_mode mode, rtx operands[])
           operands[1] = force_reg (SImode, operands[1]);
         }
     }
+
+  if (or1k_tls_symbolic_operand (operands[1]) != TLS_MODEL_NONE)
+  {
+    or1k_legitimize_tls_address (force_reg (Pmode, operands[0]),
+        operands[1]);
+    return true;
+  }
 
   if (or1k_expand_symbol_ref (mode, operands))
     return true;
@@ -2063,9 +2081,6 @@ or1k_legitimate_constant_p (enum machine_mode mode ATTRIBUTE_UNUSED, rtx x)
   if (or1k_tls_symbolic_operand (x) == TLS_MODEL_GLOBAL_DYNAMIC ||
       or1k_tls_symbolic_operand (x) == TLS_MODEL_LOCAL_DYNAMIC)
   {
-    fprintf(stderr, "or1k_legitimate_constant is TLS (type %d, mode %d, code %d): ",
-        or1k_tls_symbolic_operand (x), mode, GET_CODE(x));
-    debug_rtx (x);
     return 0;
   }
 
