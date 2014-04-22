@@ -599,6 +599,13 @@ or1k_expand_pic_symbol_ref (enum machine_mode mode ATTRIBUTE_UNUSED,
   else if (GET_CODE (operands[1]) == SYMBOL_REF)
     {
       crtl->uses_pic_offset_table = 1;
+#ifdef DEBUG_OR1K
+      fprintf (stderr, "emitting got for SYM:\n");
+      fprintf (stderr, "dest: ");
+      debug_rtx (operands[0]);
+      fprintf (stderr, "src:  ");
+      debug_rtx (operands[1]);
+#endif
       emit_insn (gen_movsi_got (operands[0], operands[1]));
       return true;
     }
@@ -634,6 +641,14 @@ or1k_expand_pic_symbol_ref (enum machine_mode mode ATTRIBUTE_UNUSED,
 	      or1k_emit_set_const32 (scratch, const_int);
 	      const_int = scratch;
 	    }
+
+#ifdef DEBUG_OR1K
+    fprintf (stderr, "emitting got for OTHER:\n");
+    fprintf (stderr, "dest: ");
+    debug_rtx (operands[0]);
+    fprintf (stderr, "src:  ");
+    debug_rtx (symbolref);
+#endif
 
 	  emit_insn (gen_movsi_got (operands[0], symbolref));
 	  emit_insn (gen_add3_insn(operands[0], operands[0], const_int));
@@ -777,6 +792,14 @@ or1k_expand_symbol_ref(enum machine_mode mode, rtx operands[])
 bool
 or1k_expand_move (enum machine_mode mode, rtx operands[])
 {
+#ifdef DEBUG_OR1K
+  fprintf (stderr, "or1k_expand_move:\n");
+  fprintf (stderr, "dest: ");
+  debug_rtx (operands[0]);
+  fprintf (stderr, "src:  ");
+  debug_rtx (operands[1]);
+#endif
+
   if (can_create_pseudo_p ())
     {
       if (GET_CODE (operands[0]) == MEM
