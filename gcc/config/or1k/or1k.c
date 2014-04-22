@@ -703,14 +703,21 @@ or1k_legitimize_tls_address (rtx dest, rtx x)
   rtx tmp2;
   rtx tmp3;
   rtx tmp4;
+  rtx addend = NULL_RTX;
+  rtx result = dest;
+
   enum tls_model tls_kind = or1k_tls_symbolic_operand (x);
 
-  if (GET_CODE (x) != SYMBOL_REF)
+  if (GET_CODE (x) == SYMBOL_REF)
+    sym = gen_rtx_SYMBOL_REF(Pmode, XSTR(x, 0));
+  else if (GET_CODE (x) == CONST)
   {
-    fprintf (stderr, "only symbolref supported, got %d, :", GET_CODE(x));
-    debug_rtx (x);
-    gcc_unreachable ();
+    result = gen_reg_rtx (Pmode);
+    split_const (x, &sym, &addend);
+    sym = gen_rtx_SYMBOL_REF(Pmode, XSTR(sym, 0));
   }
+  else
+    gcc_unreachable ();
 
 #ifdef DEBUG_OR1K
   fprintf (stderr, "or1k_legitimize_tls_address:\n");
@@ -738,7 +745,6 @@ or1k_legitimize_tls_address (rtx dest, rtx x)
   }
 
 #endif
-  sym = gen_rtx_SYMBOL_REF(Pmode, XSTR(x, 0));
   switch (tls_kind) {
     case TLS_MODEL_GLOBAL_DYNAMIC:
     case TLS_MODEL_LOCAL_DYNAMIC:
@@ -752,7 +758,7 @@ or1k_legitimize_tls_address (rtx dest, rtx x)
       emit_insn (gen_movsi_tlsgdhi (tmp1, sym));
       emit_insn (gen_movsi_tlsgdlo (tmp2, tmp1, sym));
       emit_insn (gen_add3_insn (tmp3, tmp2, pic_offset_table_rtx));
-      or1k_tls_call (dest, tmp3);
+      or1k_tls_call (result, tmp3);
       break;
 
     case TLS_MODEL_INITIAL_EXEC:
@@ -765,7 +771,7 @@ or1k_legitimize_tls_address (rtx dest, rtx x)
       emit_insn (gen_movsi_gottpofflo (tmp2, tmp1, sym));
       emit_insn (gen_add3_insn (tmp3, tmp2, pic_offset_table_rtx));
       emit_insn (gen_load_gottpoff (tmp4, tmp3));
-      emit_insn (gen_add3_insn (dest, tmp4, tp));
+      emit_insn (gen_add3_insn (result, tmp4, tp));
       break;
 
     case TLS_MODEL_LOCAL_EXEC:
@@ -773,12 +779,15 @@ or1k_legitimize_tls_address (rtx dest, rtx x)
       tmp2 = gen_reg_rtx (Pmode);
       emit_insn (gen_movsi_tpoffhi (tmp1, sym));
       emit_insn (gen_movsi_tpofflo (tmp2, tmp1, sym));
-      emit_insn (gen_add3_insn (dest, tmp2, tp));
+      emit_insn (gen_add3_insn (result, tmp2, tp));
       break;
 
     default:
       gcc_unreachable ();
   }
+
+  if (addend != NULL_RTX)
+    emit_insn (gen_add3_insn (dest, result, addend));
 
   return dest;
 }
