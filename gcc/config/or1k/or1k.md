@@ -25,6 +25,10 @@
 ;; You should have received a copy of the GNU General Public License along
 ;; with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
+;; AI = Atomic Integers
+;; We do not support DI in our atomic operations.
+(define_mode_iterator AI [QI HI SI])
+
 (define_constants [
   (SP_REG 1)
   (FP_REG 2) ; hard frame pointer
@@ -43,6 +47,7 @@
   (UNSPEC_TLSGDLO       9)
   (UNSPEC_TLSGDHI       10)
   (UNSPEC_SET_GOT       101)
+  (UNSPEC_CMPXCHG       201)
 ])
 
 (include "predicates.md")
@@ -1412,6 +1417,84 @@
  \tl.ori    \tr16,r16,gotpclo(_GLOBAL_OFFSET_TABLE_+0)
  \tl.add    \tr16,r16,r9"
   [(set_attr "length" "16")])
+
+(define_expand "atomic_compare_and_swap<mode>"
+  [(match_operand:SI 0 "register_operand" "")   ;; bool output
+   (match_operand:AI 1 "register_operand" "")   ;; val output
+   (match_operand:AI 2 "memory_operand" "")     ;; memory
+   (match_operand:AI 3 "register_operand" "")   ;; expected
+   (match_operand:AI 4 "register_operand" "")   ;; desired
+   (match_operand:SI 5 "const_int_operand" "")  ;; is_weak
+   (match_operand:SI 6 "const_int_operand" "")  ;; mod_s
+   (match_operand:SI 7 "const_int_operand" "")] ;; mod_f
+  ""
+{
+  or1k_expand_compare_and_swap (operands);
+  DONE;
+})
+
+(define_insn "atomic_cmpxchg_qi"
+  [(set (match_operand:QI 0 "register_operand" "=r")
+        (match_operand:QI 1 "memory_operand" "=m"))
+   (set (match_dup 1)
+        (unspec_volatile:QI [(match_operand:QI 2 "register_operand" "r")
+                             (match_operand:QI 3 "register_operand" "r")]
+         UNSPEC_CMPXCHG))
+   (unspec:SI [(match_operand:SI 4 "register_operand" "=r")] UNSPEC_CMPXCHG)]
+  ""
+  "
+  \tl.lwa   \t%0,%1\t # cmpxchg: load
+  \tl.andi  \t%0,%0,255
+  \tl.sfeq  \t%0,%2\t # cmpxchg: cmp
+  \tl.bnf   \t1f      # cmpxchg: no change
+  \t l.nop
+  \tl.swa   \t%1,%3\t # cmpxchg: store new
+  \tl.bf    \t1f\t    # cmpxchg: done
+   \tl.ori   \t%4,r0,1# cmpxchg: result = 1
+  \tl.ori   \t%4,r0,0 # cmpxchg: result = 0
+1:")
+
+(define_insn "atomic_cmpxchg_hi"
+  [(set (match_operand:HI 0 "register_operand" "=r")
+        (match_operand:HI 1 "memory_operand" "=m"))
+   (set (match_dup 1)
+        (unspec_volatile:HI [(match_operand:HI 2 "register_operand" "r")
+                             (match_operand:HI 3 "register_operand" "r")]
+         UNSPEC_CMPXCHG))
+   (unspec:SI [(match_operand:SI 4 "register_operand" "=r")] UNSPEC_CMPXCHG)]
+  ""
+  "
+  \tl.lwa   \t%0,%1\t # cmpxchg: load
+  \tl.andi  \t%0,%0,255
+  \tl.sfeq  \t%0,%2\t # cmpxchg: cmp
+  \tl.bnf   \t1f      # cmpxchg: no change
+  \t l.nop
+  \tl.swa   \t%1,%3\t # cmpxchg: store new
+  \tl.bf    \t1f\t    # cmpxchg: done
+   \tl.ori   \t%4,r0,1# cmpxchg: result = 1
+  \tl.ori   \t%4,r0,0 # cmpxchg: result = 0
+1:")
+
+(define_insn "atomic_cmpxchg_si"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (match_operand:SI 1 "memory_operand" "=m"))
+   (set (match_dup 1)
+        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")
+                             (match_operand:SI 3 "register_operand" "r")]
+         UNSPEC_CMPXCHG))
+   (unspec:SI [(match_operand:SI 4 "register_operand" "=r")] UNSPEC_CMPXCHG)]
+  ""
+  "
+  \tl.lwa   \t%0,%1\t # cmpxchg: load
+  \tl.sfeq  \t%0,%2\t # cmpxchg: cmp
+  \tl.bnf   \t1f      # cmpxchg: no change
+  \t l.nop
+  \tl.swa   \t%1,%3\t # cmpxchg: store new
+  \tl.bf    \t1f\t    # cmpxchg: done
+   \tl.ori   \t%4,r0,1# cmpxchg: result = 1
+  \tl.ori   \t%4,r0,0 # cmpxchg: result = 0
+1:")
+
 
 
 ;; Local variables:

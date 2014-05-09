@@ -400,6 +400,32 @@ or1k_expand_compare (enum rtx_code code, rtx op0, rtx op1)
 }	/* or1k_expand_compare () */
 
 
+/* TODO(bluecmd): Write documentation for this function */
+void
+or1k_expand_compare_and_swap (rtx operands[])
+{
+  rtx bval, retval, mem, oldval, newval;
+  enum machine_mode mode;
+  enum memmodel model;
+
+  bval = operands[0];
+  retval = operands[1];
+  mem = operands[2];
+  oldval = operands[3];
+  newval = operands[4];
+  model = (enum memmodel) INTVAL (operands[6]);
+  mode = GET_MODE (mem);
+
+  if (mode == QImode) {
+    emit_insn (gen_atomic_cmpxchg_qi (retval, mem, oldval, newval, bval));
+  } else if (mode == HImode) {
+    emit_insn (gen_atomic_cmpxchg_hi (retval, mem, oldval, newval, bval));
+  } else if (mode == SImode) {
+    emit_insn (gen_atomic_cmpxchg_si (retval, mem, oldval, newval, bval));
+  }
+}
+
+
 /* -------------------------------------------------------------------------- */
 /*!Emit insns to use the l.cmov instruction
 

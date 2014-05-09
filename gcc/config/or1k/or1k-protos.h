@@ -44,6 +44,7 @@ extern void        or1k_emit_set_const32 (rtx  op0,
                                           rtx  op1);
 extern bool        or1k_expand_symbol_ref (enum machine_mode mode,
                                            rtx operands[]);
+extern void        or1k_expand_compare_and_swap (rtx operands[]);
 #endif
 
 #endif

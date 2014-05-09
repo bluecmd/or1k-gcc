@@ -7928,6 +7928,9 @@ expand_atomic_fetch_op_no_fallback (rtx target, rtx mem, rtx val,
 	}
     }
 
+  fprintf(stderr, "Not using the awesome __atomic version\n");
+  debug_rtx(target);
+
   /* No direct opcode can be generated.  */
   return NULL_RTX;
 }
