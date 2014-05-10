@@ -44,6 +44,8 @@
   (UNSPEC_TLSGDHI       10)
   (UNSPEC_SET_GOT       101)
   (UNSPEC_CMPXCHG       201)
+  (UNSPEC_FETCH_AND_OP  202)
+  (UNSPEC_OP_AND_FETCH  203)
 ])
 
 (include "predicates.md")
@@ -1433,7 +1435,6 @@
    (match_operand:SI 7 "const_int_operand")] ;; mod_f
   ""
 {
-  fprintf(stderr, "atomic_cas %s\n", "<mode>");
   or1k_expand_compare_and_swap (operands);
   DONE;
 })
@@ -1446,8 +1447,14 @@
    (atomic_op:AI (match_dup 0) (match_dup 1))]
   ""
 {
-  fprintf(stderr, "atomic_fetch %s\n", "<atomic_op_name> <mode>");
-  emit_insn (gen_nop());
+  if (<MODE>mode != SImode)
+    {
+      fprintf(stderr, "atomic fetch %s\n", "<atomic_op_name> <mode>");
+      emit_insn (gen_nop());
+    }
+  else
+    emit_insn (gen_fetch_<atomic_op_name> (operands[0], operands[1],
+                                           operands[2]));
   DONE;
 })
 
@@ -1459,10 +1466,50 @@
    (atomic_op:AI (match_dup 0) (match_dup 1))]
   ""
 {
-  fprintf(stderr, "atomic then fetch %s\n", "<atomic_op_name> <mode>");
-  emit_insn (gen_nop());
+  if (<MODE>mode != SImode)
+    {
+      fprintf(stderr, "atomic then fetch %s\n", "<atomic_op_name> <mode>");
+      emit_insn (gen_nop());
+    }
+  else
+    emit_insn (gen_<atomic_op_name>_fetch (operands[0], operands[1],
+                                           operands[2]));
   DONE;
 })
+
+(define_insn "<atomic_op_name>_fetch"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (match_operand:SI 1 "memory_operand" "=m"))
+   (set (match_dup 1)
+        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")]
+         UNSPEC_OP_AND_FETCH))
+   (atomic_op:SI (match_dup 0) (match_dup 1))]
+  ""
+  "
+1:
+  \tl.lwa   \t%0,%1\t# <atomic_op_name>_fetch: load
+  \tl.<atomic_op_name>\t\t%0,%0,%2\t# <atomic_op_name>_fetch: logic
+  \tl.swa   \t%1,%0\t# <atomic_op_name>_fetch: store new
+  \tl.bnf   \t1b\t\t# <atomic_op_name>_fetch: done
+  \t l.nop
+  ")
+
+(define_insn "fetch_<atomic_op_name>"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+        (match_operand:SI 1 "memory_operand" "=m"))
+   (set (match_dup 1)
+        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")]
+         UNSPEC_FETCH_AND_OP))
+   (atomic_op:SI (match_dup 0) (match_dup 1))]
+  ""
+  "
+1:
+  \tl.lwa   \t%0,%1\t# fetch_<atomic_op_name>: load
+  \tl.<atomic_op_name>\t\t%2,%0,%2\t# fetch_<atomic_op_name>: logic
+  \tl.swa   \t%1,%2\t# fetch_<atomic_op_name>: store new
+  \tl.bnf   \t1b\t\t# fetch_<atomic_op_name>: done
+  \t l.nop
+  ")
 
 (define_insn "cmpxchg"
   [(set (match_operand:SI 0 "register_operand" "=r")
@@ -1480,7 +1527,7 @@
   \t l.nop
   \tl.swa   \t%1,%3\t # cmpxchg: store new
   \tl.bf    \t1f\t    # cmpxchg: done
-   \tl.ori   \t%4,r0,1# cmpxchg: result = 1
+  \t l.ori  \t%4,r0,1 # cmpxchg: result = 1
   \tl.ori   \t%4,r0,0 # cmpxchg: result = 0
 1:")
 
