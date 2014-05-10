@@ -417,11 +417,11 @@ or1k_expand_compare_and_swap (rtx operands[])
   mode = GET_MODE (mem);
 
   if (mode == QImode) {
-    emit_insn (gen_atomic_cmpxchg_qi (retval, mem, oldval, newval, bval));
+    emit_insn (gen_nop());
   } else if (mode == HImode) {
-    emit_insn (gen_atomic_cmpxchg_hi (retval, mem, oldval, newval, bval));
+    emit_insn (gen_nop());
   } else if (mode == SImode) {
-    emit_insn (gen_atomic_cmpxchg_si (retval, mem, oldval, newval, bval));
+    emit_insn (gen_cmpxchg (retval, mem, oldval, newval, bval));
   }
 }
 

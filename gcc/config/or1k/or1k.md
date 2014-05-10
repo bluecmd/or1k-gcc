@@ -25,10 +25,6 @@
 ;; You should have received a copy of the GNU General Public License along
 ;; with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
-;; AI = Atomic Integers
-;; We do not support DI in our atomic operations.
-(define_mode_iterator AI [QI HI SI])
-
 (define_constants [
   (SP_REG 1)
   (FP_REG 2) ; hard frame pointer
@@ -85,7 +81,15 @@
 			 "or1k_alu")
 (define_insn_reservation "mul_unit" 16 (eq_attr "type" "mul") "or1k_alu*16")
 
-
+;; AI = Atomic Integers
+;; We do not support DI in our atomic operations.
+(define_mode_iterator AI [QI HI SI])
+
+;; Note: We use 'mult' for nand since nand does not have its own RTX.
+(define_code_iterator atomic_op [plus minus and ior xor mult])
+(define_code_attr atomic_op_name
+  [(plus "add") (minus "sub") (and "and") (ior "or") (xor "xor") (mult "nand")])
+
 ;; Called after register allocation to add any instructions needed for the
 ;; prologue.  Using a prologue insn is favored compared to putting all of the
 ;; instructions in output_function_prologue(), since it allows the scheduler
@@ -1419,63 +1423,48 @@
   [(set_attr "length" "16")])
 
 (define_expand "atomic_compare_and_swap<mode>"
-  [(match_operand:SI 0 "register_operand" "")   ;; bool output
-   (match_operand:AI 1 "register_operand" "")   ;; val output
-   (match_operand:AI 2 "memory_operand" "")     ;; memory
-   (match_operand:AI 3 "register_operand" "")   ;; expected
-   (match_operand:AI 4 "register_operand" "")   ;; desired
-   (match_operand:SI 5 "const_int_operand" "")  ;; is_weak
-   (match_operand:SI 6 "const_int_operand" "")  ;; mod_s
-   (match_operand:SI 7 "const_int_operand" "")] ;; mod_f
+  [(match_operand:SI 0 "register_operand")   ;; bool output
+   (match_operand:AI 1 "register_operand")   ;; val output
+   (match_operand:AI 2 "memory_operand")     ;; memory
+   (match_operand:AI 3 "register_operand")   ;; expected
+   (match_operand:AI 4 "register_operand")   ;; desired
+   (match_operand:SI 5 "const_int_operand")  ;; is_weak
+   (match_operand:SI 6 "const_int_operand")  ;; mod_s
+   (match_operand:SI 7 "const_int_operand")] ;; mod_f
   ""
 {
+  fprintf(stderr, "atomic_cas %s\n", "<mode>");
   or1k_expand_compare_and_swap (operands);
   DONE;
 })
 
-(define_insn "atomic_cmpxchg_qi"
-  [(set (match_operand:QI 0 "register_operand" "=r")
-        (match_operand:QI 1 "memory_operand" "=m"))
-   (set (match_dup 1)
-        (unspec_volatile:QI [(match_operand:QI 2 "register_operand" "r")
-                             (match_operand:QI 3 "register_operand" "r")]
-         UNSPEC_CMPXCHG))
-   (unspec:SI [(match_operand:SI 4 "register_operand" "=r")] UNSPEC_CMPXCHG)]
+(define_expand "atomic_fetch_<atomic_op_name><mode>"
+  [(match_operand:AI 0 "register_operand")
+   (match_operand:AI 1 "memory_operand")
+   (match_operand:AI 2 "register_operand")
+   (match_operand:SI 3 "const_int_operand")
+   (atomic_op:AI (match_dup 0) (match_dup 1))]
   ""
-  "
-  \tl.lwa   \t%0,%1\t # cmpxchg: load
-  \tl.andi  \t%0,%0,255
-  \tl.sfeq  \t%0,%2\t # cmpxchg: cmp
-  \tl.bnf   \t1f      # cmpxchg: no change
-  \t l.nop
-  \tl.swa   \t%1,%3\t # cmpxchg: store new
-  \tl.bf    \t1f\t    # cmpxchg: done
-   \tl.ori   \t%4,r0,1# cmpxchg: result = 1
-  \tl.ori   \t%4,r0,0 # cmpxchg: result = 0
-1:")
+{
+  fprintf(stderr, "atomic_fetch %s\n", "<atomic_op_name> <mode>");
+  emit_insn (gen_nop());
+  DONE;
+})
 
-(define_insn "atomic_cmpxchg_hi"
-  [(set (match_operand:HI 0 "register_operand" "=r")
-        (match_operand:HI 1 "memory_operand" "=m"))
-   (set (match_dup 1)
-        (unspec_volatile:HI [(match_operand:HI 2 "register_operand" "r")
-                             (match_operand:HI 3 "register_operand" "r")]
-         UNSPEC_CMPXCHG))
-   (unspec:SI [(match_operand:SI 4 "register_operand" "=r")] UNSPEC_CMPXCHG)]
+(define_expand "atomic_<atomic_op_name>_fetch<mode>"
+  [(match_operand:AI 0 "register_operand")
+   (match_operand:AI 1 "memory_operand")
+   (match_operand:AI 2 "register_operand")
+   (match_operand:SI 3 "const_int_operand")
+   (atomic_op:AI (match_dup 0) (match_dup 1))]
   ""
-  "
-  \tl.lwa   \t%0,%1\t # cmpxchg: load
-  \tl.andi  \t%0,%0,255
-  \tl.sfeq  \t%0,%2\t # cmpxchg: cmp
-  \tl.bnf   \t1f      # cmpxchg: no change
-  \t l.nop
-  \tl.swa   \t%1,%3\t # cmpxchg: store new
-  \tl.bf    \t1f\t    # cmpxchg: done
-   \tl.ori   \t%4,r0,1# cmpxchg: result = 1
-  \tl.ori   \t%4,r0,0 # cmpxchg: result = 0
-1:")
+{
+  fprintf(stderr, "atomic then fetch %s\n", "<atomic_op_name> <mode>");
+  emit_insn (gen_nop());
+  DONE;
+})
 
-(define_insn "atomic_cmpxchg_si"
+(define_insn "cmpxchg"
   [(set (match_operand:SI 0 "register_operand" "=r")
         (match_operand:SI 1 "memory_operand" "=m"))
    (set (match_dup 1)
@@ -1494,8 +1483,6 @@
    \tl.ori   \t%4,r0,1# cmpxchg: result = 1
   \tl.ori   \t%4,r0,0 # cmpxchg: result = 0
 1:")
-
-
 
 ;; Local variables:
 ;; mode:emacs-lisp
