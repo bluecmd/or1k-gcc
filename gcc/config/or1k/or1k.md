@@ -1494,11 +1494,11 @@
   ""
   "
 1:
-  \tl.lwa   \t%0,%1\t# <atomic_op_name>_fetch: load
-  \tl.<atomic_op_name>\t\t%0,%0,%2\t# <atomic_op_name>_fetch: logic
-  \tl.swa   \t%1,%0\t# <atomic_op_name>_fetch: store new
-  \tl.bnf   \t1b\t\t# <atomic_op_name>_fetch: done
-  \t l.nop
+   l.lwa   \t%0,%1\t# <atomic_op_name>_fetch: load
+   l.<atomic_op_name>\t\t%0,%0,%2\t# <atomic_op_name>_fetch: logic
+   l.swa   \t%1,%0\t# <atomic_op_name>_fetch: store new
+   l.bnf   \t1b\t\t# <atomic_op_name>_fetch: done
+    l.nop
   ")
 
 (define_insn "fetch_<atomic_op_name>"
@@ -1511,11 +1511,11 @@
   ""
   "
 1:
-  \tl.lwa   \t%0,%1\t# fetch_<atomic_op_name>: load
-  \tl.<atomic_op_name>\t\t%2,%0,%2\t# fetch_<atomic_op_name>: logic
-  \tl.swa   \t%1,%2\t# fetch_<atomic_op_name>: store new
-  \tl.bnf   \t1b\t\t# fetch_<atomic_op_name>: done
-  \t l.nop
+   l.lwa   \t%0,%1\t# fetch_<atomic_op_name>: load
+   l.<atomic_op_name>\t\t%2,%0,%2\t# fetch_<atomic_op_name>: logic
+   l.swa   \t%1,%2\t# fetch_<atomic_op_name>: store new
+   l.bnf   \t1b\t\t# fetch_<atomic_op_name>: done
+    l.nop
   ")
 
 (define_insn "cmpxchg"
@@ -1528,15 +1528,15 @@
    (unspec:SI [(match_operand:SI 4 "register_operand" "=r")] UNSPEC_CMPXCHG)]
   ""
   "
-  \tl.lwa   \t%0,%1\t # cmpxchg: load
-  \tl.sfeq  \t%0,%2\t # cmpxchg: cmp
-  \tl.bnf   \t1f      # cmpxchg: no change
-  \t l.ori  \t%4,r0,0 # cmpxchg: result = 0
-  \tl.swa   \t%1,%3\t # cmpxchg: store new
-  \tl.bnf   \t1f\t    # cmpxchg: done
-  \t l.nop
-  \tl.ori   \t%4,r0,1 # cmpxchg: result = 1
-  \tl.ori   \t%2,%0,0 # cmpxchg_mask: save old val
+   l.lwa   \t%0,%1\t # cmpxchg: load
+   l.sfeq  \t%0,%2\t # cmpxchg: cmp
+   l.bnf   \t1f      # cmpxchg: not expected
+    l.ori  \t%4,r0,0 # cmpxchg: result = 0
+   l.swa   \t%1,%3\t # cmpxchg: store new
+   l.bnf   \t1f\t    # cmpxchg: done
+    l.nop
+   l.ori   \t%4,r0,1 # cmpxchg: result = 1
+   l.ori   \t%2,%0,0 # cmpxchg_mask: save old val
 1:")
 
 (define_insn "cmpxchg_mask"
@@ -1552,18 +1552,18 @@
    (clobber (match_scratch:SI 7 "=&r"))]
   ""
   "
-  \tl.lwa   \t%0,%1\t # cmpxchg_mask: load
-  \tl.and   \t%6,%0,%5\t # cmpxchg_mask: mask
-  \tl.sfeq  \t%6,%2\t # cmpxchg_mask: cmp
-  \tl.bnf   \t1f      # cmpxchg_mask: no change
-  \t l.ori  \t%4,r0,0 # cmpxchg_mask: result = 0
-  \tl.xor   \t%7,%0,%6\t #cmpxchg_mask: clear
-  \tl.or    \t%7,%0,%3\t #cmpxchg_mask: set
-  \tl.swa   \t%1,%7\t # cmpxchg_mask: store new
-  \tl.bnf   \t1f\t    # cmpxchg_mask: done
-  \t l.nop
-  \tl.ori   \t%4,r0,1 # cmpxchg_mask: result = 1
-  \tl.ori   \t%2,%7,0 # cmpxchg_mask: save old val
+   l.lwa   \t%0,%1\t # cmpxchg_mask: load
+   l.and   \t%6,%0,%5\t # cmpxchg_mask: mask
+   l.sfeq  \t%6,%2\t # cmpxchg_mask: cmp
+   l.bnf   \t1f      # cmpxchg_mask: not expected
+    l.ori  \t%4,r0,0 # cmpxchg_mask: result = 0
+   l.xor   \t%7,%0,%6\t #cmpxchg_mask: clear
+   l.or    \t%7,%0,%3\t #cmpxchg_mask: set
+   l.swa   \t%1,%7\t # cmpxchg_mask: store new
+   l.bnf   \t1f\t    # cmpxchg_mask: done
+    l.nop
+   l.ori   \t%4,r0,1 # cmpxchg_mask: result = 1
+   l.ori   \t%2,%7,0 # cmpxchg_mask: save old val
 1:")
 
 ;; Local variables:
