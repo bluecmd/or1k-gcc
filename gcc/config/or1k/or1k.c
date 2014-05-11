@@ -443,15 +443,11 @@ or1k_expand_cmpxchg_qihi (rtx bval, rtx retval, rtx mem, rtx oldval, rtx newval,
   emit_insn (gen_ashlsi3 (shifted_newval, newval, shifter));
   emit_insn (gen_ashlsi3 (shifted_mask, mask, shifter));
 
-  emit_insn (gen_cmpxchg_mask (retword, memsi, shifted_oldval,
-                               shifted_newval, bval, shifted_mask));
+  emit_insn (gen_cmpxchg_mask (bval, retword, memsi, shifted_oldval,
+                               shifted_newval, shifted_mask));
 
-  /* mask the result and shift the data we care about to the lower end. */
-  emit_insn (gen_rtx_SET (VOIDmode, retword,
-             gen_rtx_AND (SImode, retword, shifted_mask)));
-
-  emit_insn (gen_rtx_SET (VOIDmode, retword,
-             gen_rtx_LSHIFTRT (SImode, retword, shifter)));
+  /* shift the data we care about to the lower end. */
+  emit_insn (gen_lshrsi3 (retword, retword, shifter));
 
   emit_move_insn (retval, gen_lowpart (GET_MODE (retval), retword));
 }
