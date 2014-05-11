@@ -402,27 +402,58 @@ or1k_expand_compare (enum rtx_code code, rtx op0, rtx op1)
 
 /* TODO(bluecmd): Write documentation for this function */
 void
-or1k_expand_compare_and_swap (rtx operands[])
+or1k_expand_cmpxchg_qihi (rtx bval, rtx retval, rtx mem, rtx oldval, rtx newval,
+                          int is_weak, enum memmodel success_mode,
+                          enum memmodel failure_mode)
 {
-  rtx bval, retval, mem, oldval, newval;
-  enum machine_mode mode;
-  enum memmodel model;
+  rtx addr1 = force_reg (Pmode, XEXP (mem, 0));
+  rtx addr = gen_reg_rtx (Pmode);
+  rtx off = gen_reg_rtx (SImode);
+  rtx shifter = gen_reg_rtx (SImode);
+  rtx retword = gen_reg_rtx (SImode);
+  rtx mask = gen_reg_rtx (SImode);
+  rtx shifted_oldval = gen_reg_rtx (SImode);
+  rtx shifted_newval = gen_reg_rtx (SImode);
+  rtx shifted_mask = gen_reg_rtx (SImode);
+  rtx mask_const;
+  rtx memsi;
+  enum machine_mode mode = GET_MODE (mem);
 
-  bval = operands[0];
-  retval = operands[1];
-  mem = operands[2];
-  oldval = operands[3];
-  newval = operands[4];
-  model = (enum memmodel) INTVAL (operands[6]);
-  mode = GET_MODE (mem);
+  oldval = gen_lowpart_common (SImode, oldval);
+  newval = gen_lowpart_common (SImode, newval);
 
-  if (mode == QImode) {
-    emit_insn (gen_nop());
-  } else if (mode == HImode) {
-    emit_insn (gen_nop());
-  } else if (mode == SImode) {
-    emit_insn (gen_cmpxchg (retval, mem, oldval, newval, bval));
-  }
+  mask_const = gen_rtx_CONST_INT (VOIDmode,
+                                  mode == QImode ? 0xff : 0xffff);
+  emit_insn (gen_rtx_SET (VOIDmode, mask, mask_const));
+
+  /* align address and retrieve the offset. */
+  emit_insn (gen_rtx_SET (VOIDmode, addr,
+             gen_rtx_AND (Pmode, addr1, GEN_INT (-4))));
+  emit_insn (gen_rtx_SET (VOIDmode, off,
+             gen_rtx_AND (SImode, addr1, GEN_INT (3))));
+
+  memsi = gen_rtx_MEM (SImode, addr);
+
+  /* shift all arguments to be aligned to where the data we want
+   * to operate on is located. */
+  emit_insn (gen_rtx_SET (VOIDmode, shifter,
+             gen_rtx_ASHIFT (SImode, off, GEN_INT (3))));
+
+  emit_insn (gen_ashlsi3 (shifted_oldval, oldval, shifter));
+  emit_insn (gen_ashlsi3 (shifted_newval, newval, shifter));
+  emit_insn (gen_ashlsi3 (shifted_mask, mask, shifter));
+
+  emit_insn (gen_cmpxchg_mask (retword, memsi, shifted_oldval,
+                               shifted_newval, bval, shifted_mask));
+
+  /* mask the result and shift the data we care about to the lower end. */
+  emit_insn (gen_rtx_SET (VOIDmode, retword,
+             gen_rtx_AND (SImode, retword, shifted_mask)));
+
+  emit_insn (gen_rtx_SET (VOIDmode, retword,
+             gen_rtx_LSHIFTRT (SImode, retword, shifter)));
+
+  emit_move_insn (retval, gen_lowpart (GET_MODE (retval), retword));
 }
 
 
