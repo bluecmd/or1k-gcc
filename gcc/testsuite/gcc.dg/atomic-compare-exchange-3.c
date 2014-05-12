@@ -19,44 +19,33 @@ int zero = 0;
 int
 main ()
 {
-  printf("%d\n", __LINE__);
+
   if (!__atomic_compare_exchange_n (&v, &expected, max, STRONG , __ATOMIC_RELAXED, __ATOMIC_RELAXED)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != 0)
     abort ();
 
-  printf("%d\n", __LINE__);
   if (__atomic_compare_exchange_n (&v, &expected, 0, STRONG , __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != max)
     abort ();
 
-  printf("%d\n", __LINE__);
   if (!__atomic_compare_exchange_n (&v, &expected, 0, STRONG , __ATOMIC_RELEASE, __ATOMIC_ACQUIRE)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != max)
     abort ();
-  printf("%d\n", __LINE__);
   if (v != 0)
     abort ();
 
-  printf("%d\n", __LINE__);
   if (__atomic_compare_exchange_n (&v, &expected, desired, WEAK, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != 0)
     abort ();
 
-  printf("%d\n", __LINE__);
   if (!__atomic_compare_exchange_n (&v, &expected, desired, STRONG , __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != 0)
     abort ();
-  printf("%d\n", __LINE__);
   if (v != max)
     abort ();
 
@@ -64,44 +53,32 @@ main ()
 
   v = 0;
 
-  printf("%d\n", __LINE__);
   if (!__atomic_compare_exchange (&v, &expected, &max, STRONG, __ATOMIC_RELAXED, __ATOMIC_RELAXED))
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != 0)
     abort ();
 
-  printf("%d\n", __LINE__);
   if (__atomic_compare_exchange (&v, &expected, &zero, STRONG , __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != max)
     abort ();
 
-  printf("%d\n", __LINE__);
   if (!__atomic_compare_exchange (&v, &expected, &zero, STRONG , __ATOMIC_RELEASE, __ATOMIC_ACQUIRE)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != max)
     abort ();
-  printf("%d\n", __LINE__);
   if (v != 0)
     abort ();
 
-  printf("%d\n", __LINE__);
   if (__atomic_compare_exchange (&v, &expected, &desired, WEAK, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != 0)
     abort ();
 
-  printf("%d\n", __LINE__);
   if (!__atomic_compare_exchange (&v, &expected, &desired, STRONG , __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) 
     abort ();
-  printf("%d\n", __LINE__);
   if (expected != 0)
     abort ();
-  printf("%d\n", __LINE__);
   if (v != max)
     abort ();
 

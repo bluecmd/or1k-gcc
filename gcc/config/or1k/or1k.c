@@ -431,6 +431,10 @@ or1k_expand_cmpxchg_qihi (rtx bval, rtx retval, rtx mem, rtx oldval, rtx newval,
              gen_rtx_AND (Pmode, addr1, GEN_INT (-4))));
   emit_insn (gen_rtx_SET (VOIDmode, off,
              gen_rtx_AND (SImode, addr1, GEN_INT (3))));
+  emit_insn (gen_rtx_SET (VOIDmode, off,
+                          gen_rtx_XOR (SImode, off,
+                                       GEN_INT (GET_MODE (mem) == QImode
+                                                ? 3 : 2))));
 
   memsi = gen_rtx_MEM (SImode, addr);
 

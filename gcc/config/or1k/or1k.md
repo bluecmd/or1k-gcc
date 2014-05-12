@@ -1552,7 +1552,6 @@
    (clobber (match_scratch:SI 6 "=&r"))]
   ""
   "
-   l.nop 8
    l.lwa   \t%6,%2\t # cmpxchg_mask: load
    l.and   \t%1,%6,%5\t # cmpxchg_mask: mask
    l.sfeq  \t%1,%3\t # cmpxchg_mask: cmp
@@ -1565,7 +1564,6 @@
     l.nop
    l.ori   \t%0,r0,1 # cmpxchg_mask: result = 1
 1:
-   l.nop 9
   ")
 
 ;; Local variables:
