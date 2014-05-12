@@ -37,7 +37,7 @@ main ()
   printf("%d\n", __LINE__);
   if (!__atomic_compare_exchange_n (&v, &expected, 0, STRONG , __ATOMIC_RELEASE, __ATOMIC_ACQUIRE)) 
     abort ();
-  printf("%d\n", __LINE__);
+  printf("%d: %d %d\n", __LINE__, expected, max);
   if (expected != max)
     abort ();
   printf("%d\n", __LINE__);

@@ -1521,7 +1521,7 @@
 (define_insn "cmpxchg"
    [(unspec:SI [(match_operand:SI 0 "register_operand" "=&r")] UNSPEC_CMPXCHG)
     (set (match_operand:SI 2 "memory_operand" "+m")
-         (unspec_volatile:SI [(match_operand:SI 3 "register_operand" "+&r")]
+         (unspec_volatile:SI [(match_operand:SI 3 "register_operand" "r")]
           UNSPEC_CMPXCHG))
     (set (match_operand:SI 1 "register_operand" "=&r")
          (unspec_volatile:SI [(match_dup 2) (match_dup 3)
@@ -1537,13 +1537,12 @@
    l.bnf   \t1f\t    # cmpxchg: done
     l.nop
    l.ori   \t%0,r0,1 # cmpxchg: result = 1
-   l.ori   \t%3,%1,0 # cmpxchg_mask: save old val
 1:")
 
 (define_insn "cmpxchg_mask"
    [(unspec:SI [(match_operand:SI 0 "register_operand" "=&r")] UNSPEC_CMPXCHG)
     (set (match_operand:SI 2 "memory_operand" "+m")
-         (unspec_volatile:SI [(match_operand:SI 3 "register_operand" "+&r")]
+         (unspec_volatile:SI [(match_operand:SI 3 "register_operand" "r")]
           UNSPEC_CMPXCHG))
     (set (match_operand:SI 1 "register_operand" "=&r")
          (unspec_volatile:SI [(match_dup 2) (match_dup 3)
@@ -1553,19 +1552,21 @@
    (clobber (match_scratch:SI 6 "=&r"))]
   ""
   "
-   l.lwa   \t%1,%2\t # cmpxchg_mask: load
-   l.and   \t%1,%1,%5\t # cmpxchg_mask: mask
+   l.nop 8
+   l.lwa   \t%6,%2\t # cmpxchg_mask: load
+   l.and   \t%1,%6,%5\t # cmpxchg_mask: mask
    l.sfeq  \t%1,%3\t # cmpxchg_mask: cmp
    l.bnf   \t1f      # cmpxchg_mask: not expected
     l.ori  \t%0,r0,0 # cmpxchg_mask: result = 0
-   l.xor   \t%6,%0,%1\t #cmpxchg_mask: clear
-   l.or    \t%6,%0,%4\t #cmpxchg_mask: set
+   l.xor   \t%6,%6,%1\t #cmpxchg_mask: clear
+   l.or    \t%6,%6,%4\t #cmpxchg_mask: set
    l.swa   \t%2,%6\t # cmpxchg_mask: store new
    l.bnf   \t1f\t    # cmpxchg_mask: done
     l.nop
    l.ori   \t%0,r0,1 # cmpxchg_mask: result = 1
-   l.ori   \t%3,%1,0 # cmpxchg_mask: save old val
-1:")
+1:
+   l.nop 9
+  ")
 
 ;; Local variables:
 ;; mode:emacs-lisp
