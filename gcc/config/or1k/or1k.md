@@ -45,7 +45,9 @@
   (UNSPEC_SET_GOT       101)
   (UNSPEC_CMPXCHG       201)
   (UNSPEC_FETCH_AND_OP  202)
-  (UNSPEC_OP_AND_FETCH  203)
+  (UNSPEC_FETCH_AND_NAND 203)
+  (UNSPEC_OP_AND_FETCH  204)
+  (UNSPEC_NAND_AND_FETCH 205)
 ])
 
 (include "predicates.md")
@@ -87,10 +89,11 @@
 ;; We do not support DI in our atomic operations.
 (define_mode_iterator AI [QI HI SI])
 
-;; Note: We use 'mult' for nand since nand does not have its own RTX.
-(define_code_iterator atomic_op [plus minus and ior xor mult])
+;; Note: We skip 'nand' here since it requires and+xor, it is easier to not
+;; use this iterator and just have to copies of the code instead.
+(define_code_iterator atomic_op [plus minus and ior xor])
 (define_code_attr atomic_op_name
-  [(plus "add") (minus "sub") (and "and") (ior "or") (xor "xor") (mult "nand")])
+  [(plus "add") (minus "sub") (and "and") (ior "or") (xor "xor")])
 
 ;; Called after register allocation to add any instructions needed for the
 ;; prologue.  Using a prologue insn is favored compared to putting all of the
@@ -1446,78 +1449,6 @@
   DONE;
 })
 
-;;;(define_expand "atomic_fetch_<atomic_op_name><mode>"
-;;;  [(match_operand:AI 0 "register_operand")
-;;;   (match_operand:AI 1 "memory_operand")
-;;;   (match_operand:AI 2 "register_operand")
-;;;   (match_operand:SI 3 "const_int_operand")
-;;;   (atomic_op:AI (match_dup 0) (match_dup 1))]
-;;;  ""
-;;;{
-;;;  if (<MODE>mode != SImode)
-;;;    {
-;;;      fprintf(stderr, "atomic fetch %s\n", "<atomic_op_name> <mode>");
-;;;      emit_insn (gen_nop());
-;;;    }
-;;;  else
-;;;    emit_insn (gen_fetch_<atomic_op_name> (operands[0], operands[1],
-;;;                                           operands[2]));
-;;;  DONE;
-;;;})
-;;;
-;;;(define_expand "atomic_<atomic_op_name>_fetch<mode>"
-;;;  [(match_operand:AI 0 "register_operand")
-;;;   (match_operand:AI 1 "memory_operand")
-;;;   (match_operand:AI 2 "register_operand")
-;;;   (match_operand:SI 3 "const_int_operand")
-;;;   (atomic_op:AI (match_dup 0) (match_dup 1))]
-;;;  ""
-;;;{
-;;;  if (<MODE>mode != SImode)
-;;;    {
-;;;      fprintf(stderr, "atomic then fetch %s\n", "<atomic_op_name> <mode>");
-;;;      emit_insn (gen_nop());
-;;;    }
-;;;  else
-;;;    emit_insn (gen_<atomic_op_name>_fetch (operands[0], operands[1],
-;;;                                           operands[2]));
-;;;  DONE;
-;;;})
-
-(define_insn "<atomic_op_name>_fetch"
-  [(set (match_operand:SI 0 "register_operand" "=r")
-        (match_operand:SI 1 "memory_operand" "=m"))
-   (set (match_dup 1)
-        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")]
-         UNSPEC_OP_AND_FETCH))
-   (atomic_op:SI (match_dup 0) (match_dup 1))]
-  ""
-  "
-1:
-   l.lwa   \t%0,%1\t# <atomic_op_name>_fetch: load
-   l.<atomic_op_name>\t\t%0,%0,%2\t# <atomic_op_name>_fetch: logic
-   l.swa   \t%1,%0\t# <atomic_op_name>_fetch: store new
-   l.bnf   \t1b\t\t# <atomic_op_name>_fetch: done
-    l.nop
-  ")
-
-(define_insn "fetch_<atomic_op_name>"
-  [(set (match_operand:SI 0 "register_operand" "=r")
-        (match_operand:SI 1 "memory_operand" "=m"))
-   (set (match_dup 1)
-        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")]
-         UNSPEC_FETCH_AND_OP))
-   (atomic_op:SI (match_dup 0) (match_dup 1))]
-  ""
-  "
-1:
-   l.lwa   \t%0,%1\t# fetch_<atomic_op_name>: load
-   l.<atomic_op_name>\t\t%2,%0,%2\t# fetch_<atomic_op_name>: logic
-   l.swa   \t%1,%2\t# fetch_<atomic_op_name>: store new
-   l.bnf   \t1b\t\t# fetch_<atomic_op_name>: done
-    l.nop
-  ")
-
 (define_insn "cmpxchg"
    [(unspec:SI [(match_operand:SI 0 "register_operand" "=&r")] UNSPEC_CMPXCHG)
     (set (match_operand:SI 2 "memory_operand" "+m")
@@ -1564,6 +1495,146 @@
     l.nop
    l.ori   \t%0,r0,1 # cmpxchg_mask: result = 1
 1:
+  ")
+
+(define_expand "atomic_fetch_<atomic_op_name><mode>"
+  [(match_operand:AI 0 "register_operand")
+   (match_operand:AI 1 "memory_operand")
+   (match_operand:AI 2 "register_operand")
+   (match_operand:SI 3 "const_int_operand")
+   (atomic_op:AI (match_dup 0) (match_dup 1))]
+  ""
+{
+  if (<MODE>mode != SImode)
+    {
+      fprintf(stderr, "atomic fetch %s\n", "<atomic_op_name> <mode>");
+      emit_insn (gen_nop());
+    }
+  else
+    emit_insn (gen_fetch_and_<atomic_op_name> (operands[0], operands[1],
+                                                operands[2]));
+  DONE;
+})
+
+(define_expand "atomic_fetch_nand<mode>"
+  [(match_operand:AI 0 "register_operand")
+   (match_operand:AI 1 "memory_operand")
+   (match_operand:AI 2 "register_operand")
+   (match_operand:SI 3 "const_int_operand")]
+  ""
+{
+  if (<MODE>mode != SImode)
+    {
+      fprintf(stderr, "atomic fetch %s\n", "nand <mode>");
+      emit_insn (gen_nop());
+    }
+  else
+    emit_insn (gen_fetch_and_nand (operands[0], operands[1], operands[2]));
+  DONE;
+})
+
+(define_insn "fetch_and_<atomic_op_name>"
+  [(set (match_operand:SI 0 "register_operand" "=&r")
+        (match_operand:SI 1 "memory_operand" "+m"))
+   (set (match_dup 1)
+        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")]
+         UNSPEC_FETCH_AND_OP))
+   (atomic_op:SI (match_dup 0) (match_dup 1))]
+  ""
+  "
+1:
+   l.lwa   \t%0,%1\t# fetch_<atomic_op_name>: load
+   l.<atomic_op_name>\t\t%2,%0,%2\t# fetch_<atomic_op_name>: logic
+   l.swa   \t%1,%2\t# fetch_<atomic_op_name>: store new
+   l.bnf   \t1b\t\t# fetch_<atomic_op_name>: done
+    l.nop
+  ")
+
+(define_insn "fetch_and_nand"
+  [(set (match_operand:SI 0 "register_operand" "=&r")
+        (match_operand:SI 1 "memory_operand" "+m"))
+   (set (match_dup 1)
+        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")]
+         UNSPEC_FETCH_AND_NAND))]
+  ""
+  "
+1:
+   l.lwa   \t%0,%1\t# fetch_nand: load
+   l.and   \t%2,%0,%2\t# fetch_nand: logic
+   l.xori  \t%2,%2,0xffff\t# fetch_nand: logic
+   l.swa   \t%1,%2\t# fetch_nand: store new
+   l.bnf   \t1b\t\t# fetch_nand: done
+    l.nop
+  ")
+
+(define_expand "atomic_<atomic_op_name>_fetch<mode>"
+  [(match_operand:AI 0 "register_operand")
+   (match_operand:AI 1 "memory_operand")
+   (match_operand:AI 2 "register_operand")
+   (match_operand:SI 3 "const_int_operand")
+   (atomic_op:AI (match_dup 0) (match_dup 1))]
+  ""
+{
+  if (<MODE>mode != SImode)
+    {
+      fprintf(stderr, "atomic then fetch %s\n", "<atomic_op_name> <mode>");
+      emit_insn (gen_nop());
+    }
+  else
+    emit_insn (gen_<atomic_op_name>_and_fetch (operands[0], operands[1],
+                                               operands[2]));
+  DONE;
+})
+
+(define_expand "atomic_nand_fetch<mode>"
+  [(match_operand:AI 0 "register_operand")
+   (match_operand:AI 1 "memory_operand")
+   (match_operand:AI 2 "register_operand")
+   (match_operand:SI 3 "const_int_operand")]
+  ""
+{
+  if (<MODE>mode != SImode)
+    {
+      fprintf(stderr, "atomic then fetch %s\n", "<atomic_op_name> <mode>");
+      emit_insn (gen_nop());
+    }
+  else
+    emit_insn (gen_nand_and_fetch (operands[0], operands[1], operands[2]));
+  DONE;
+})
+
+(define_insn "<atomic_op_name>_and_fetch"
+  [(set (match_operand:SI 0 "register_operand" "=&r")
+        (match_operand:SI 1 "memory_operand" "+m"))
+   (set (match_dup 1)
+        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")]
+         UNSPEC_OP_AND_FETCH))
+   (atomic_op:SI (match_dup 0) (match_dup 1))]
+  ""
+  "
+1:
+   l.lwa   \t%0,%1\t# <atomic_op_name>_fetch: load
+   l.<atomic_op_name>\t\t%0,%0,%2\t# <atomic_op_name>_fetch: logic
+   l.swa   \t%1,%0\t# <atomic_op_name>_fetch: store new
+   l.bnf   \t1b\t\t# <atomic_op_name>_fetch: done
+    l.nop
+  ")
+
+(define_insn "nand_and_fetch"
+  [(set (match_operand:SI 0 "register_operand" "=&r")
+        (match_operand:SI 1 "memory_operand" "+m"))
+   (set (match_dup 1)
+        (unspec_volatile:SI [(match_operand:SI 2 "register_operand" "r")]
+         UNSPEC_NAND_AND_FETCH))]
+  ""
+  "
+1:
+   l.lwa   \t%0,%1\t# nand_fetch: load
+   l.and   \t%0,%0,%2\t# nand_fetch: logic
+   l.xori  \t%0,%0,0xffff\t# nand_fetch: logic
+   l.swa   \t%1,%0\t# nand_fetch: store new
+   l.bnf   \t1b\t\t# nand_fetch: done
+    l.nop
   ")
 
 ;; Local variables:
