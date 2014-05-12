@@ -1460,12 +1460,12 @@
           UNSPEC_CMPXCHG))]
   ""
   "
-   l.lwa   \t%1,%2\t # cmpxchg: load
-   l.sfeq  \t%1,%3\t # cmpxchg: cmp
+   l.lwa   \t%1,%2   # cmpxchg: load
+   l.sfeq  \t%1,%3   # cmpxchg: cmp
    l.bnf   \t1f      # cmpxchg: not expected
     l.ori  \t%0,r0,0 # cmpxchg: result = 0
-   l.swa   \t%2,%4\t # cmpxchg: store new
-   l.bnf   \t1f\t    # cmpxchg: done
+   l.swa   \t%2,%4   # cmpxchg: store new
+   l.bnf   \t1f      # cmpxchg: done
     l.nop
    l.ori   \t%0,r0,1 # cmpxchg: result = 1
 1:")
@@ -1483,17 +1483,17 @@
    (clobber (match_scratch:SI 6 "=&r"))]
   ""
   "
-   l.lwa   \t%6,%2\t # cmpxchg_mask: load
-   l.and   \t%1,%6,%5\t # cmpxchg_mask: mask
-   l.sfeq  \t%1,%3\t # cmpxchg_mask: cmp
-   l.bnf   \t1f      # cmpxchg_mask: not expected
-    l.ori  \t%0,r0,0 # cmpxchg_mask: result = 0
-   l.xor   \t%6,%6,%1\t #cmpxchg_mask: clear
-   l.or    \t%6,%6,%4\t #cmpxchg_mask: set
-   l.swa   \t%2,%6\t # cmpxchg_mask: store new
-   l.bnf   \t1f\t    # cmpxchg_mask: done
+   l.lwa   \t%6,%2    # cmpxchg_mask: load
+   l.and   \t%1,%6,%5 # cmpxchg_mask: mask
+   l.sfeq  \t%1,%3    # cmpxchg_mask: cmp
+   l.bnf   \t1f       # cmpxchg_mask: not expected
+    l.ori  \t%0,r0,0  # cmpxchg_mask: result = 0
+   l.xor   \t%6,%6,%1 # cmpxchg_mask: clear
+   l.or    \t%6,%6,%4 # cmpxchg_mask: set
+   l.swa   \t%2,%6    # cmpxchg_mask: store new
+   l.bnf   \t1f       # cmpxchg_mask: done
     l.nop
-   l.ori   \t%0,r0,1 # cmpxchg_mask: result = 1
+   l.ori   \t%0,r0,1  # cmpxchg_mask: result = 1
 1:
   ")
 
@@ -1543,10 +1543,10 @@
   ""
   "
 1:
-   l.lwa   \t%0,%1\t# fetch_<atomic_op_name>: load
-   l.<atomic_op_name>\t\t%2,%0,%2\t# fetch_<atomic_op_name>: logic
-   l.swa   \t%1,%2\t# fetch_<atomic_op_name>: store new
-   l.bnf   \t1b\t\t# fetch_<atomic_op_name>: done
+   l.lwa   \t%0,%1  # fetch_<atomic_op_name>: load
+   l.<atomic_op_name>\t\t%2,%0,%2 # fetch_<atomic_op_name>: logic
+   l.swa   \t%1,%2  # fetch_<atomic_op_name>: store new
+   l.bnf   \t1b     # fetch_<atomic_op_name>: done
     l.nop
   ")
 
@@ -1559,11 +1559,11 @@
   ""
   "
 1:
-   l.lwa   \t%0,%1\t# fetch_nand: load
-   l.and   \t%2,%0,%2\t# fetch_nand: logic
-   l.xori  \t%2,%2,0xffff\t# fetch_nand: logic
-   l.swa   \t%1,%2\t# fetch_nand: store new
-   l.bnf   \t1b\t\t# fetch_nand: done
+   l.lwa   \t%0,%1    # fetch_nand: load
+   l.and   \t%2,%0,%2 # fetch_nand: logic
+   l.xori  \t%2,%2,0xffff # fetch_nand: logic
+   l.swa   \t%1,%2    # fetch_nand: store new
+   l.bnf   \t1b       # fetch_nand: done
     l.nop
   ")
 
@@ -1613,10 +1613,10 @@
   ""
   "
 1:
-   l.lwa   \t%0,%1\t# <atomic_op_name>_fetch: load
-   l.<atomic_op_name>\t\t%0,%0,%2\t# <atomic_op_name>_fetch: logic
-   l.swa   \t%1,%0\t# <atomic_op_name>_fetch: store new
-   l.bnf   \t1b\t\t# <atomic_op_name>_fetch: done
+   l.lwa   \t%0,%1 # <atomic_op_name>_fetch: load
+   l.<atomic_op_name>\t\t%0,%0,%2 # <atomic_op_name>_fetch: logic
+   l.swa   \t%1,%0 # <atomic_op_name>_fetch: store new
+   l.bnf   \t1b    # <atomic_op_name>_fetch: done
     l.nop
   ")
 
@@ -1629,11 +1629,11 @@
   ""
   "
 1:
-   l.lwa   \t%0,%1\t# nand_fetch: load
-   l.and   \t%0,%0,%2\t# nand_fetch: logic
-   l.xori  \t%0,%0,0xffff\t# nand_fetch: logic
-   l.swa   \t%1,%0\t# nand_fetch: store new
-   l.bnf   \t1b\t\t# nand_fetch: done
+   l.lwa   \t%0,%1    # nand_fetch: load
+   l.and   \t%0,%0,%2 # nand_fetch: logic
+   l.xori  \t%0,%0,0xffff # nand_fetch: logic
+   l.swa   \t%1,%0    # nand_fetch: store new
+   l.bnf   \t1b       # nand_fetch: done
     l.nop
   ")
 
