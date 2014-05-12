@@ -1482,17 +1482,17 @@
    (clobber (match_scratch:SI 6 "=&r"))]
   ""
   "
-   l.lwa   \t%6,%2    # cmpxchg_mask: load
-   l.and   \t%1,%6,%5 # cmpxchg_mask: mask
-   l.sfeq  \t%1,%3    # cmpxchg_mask: cmp
-   l.bnf   \t1f       # cmpxchg_mask: not expected
-    l.ori  \t%0,r0,0  # cmpxchg_mask: result = 0
-   l.xor   \t%6,%6,%1 # cmpxchg_mask: clear
-   l.or    \t%6,%6,%4 # cmpxchg_mask: set
-   l.swa   \t%2,%6    # cmpxchg_mask: store new
-   l.bnf   \t1f       # cmpxchg_mask: done
+   l.lwa   \t%6,%2    # cmpxchg: load
+   l.and   \t%1,%6,%5 # cmpxchg: mask
+   l.sfeq  \t%1,%3    # cmpxchg: cmp
+   l.bnf   \t1f       # cmpxchg: not expected
+    l.ori  \t%0,r0,0  # cmpxchg: result = 0
+   l.xor   \t%6,%6,%1 # cmpxchg: clear
+   l.or    \t%6,%6,%4 # cmpxchg: set
+   l.swa   \t%2,%6    # cmpxchg: store new
+   l.bnf   \t1f       # cmpxchg: done
     l.nop
-   l.ori   \t%0,r0,1  # cmpxchg_mask: result = 1
+   l.ori   \t%0,r0,1  # cmpxchg: result = 1
 1:
   ")
 
@@ -1504,14 +1504,12 @@
    (atomic_op:AI (match_dup 0) (match_dup 1))]
   ""
 {
+  rtx ret = gen_reg_rtx (<MODE>mode);
   if (<MODE>mode != SImode)
-    {
-      fprintf(stderr, "atomic fetch %s\n", "<op_name> <mode>");
-      emit_insn (gen_nop());
-    }
+    or1k_expand_fetch_op_qihi (operands[0], operands[1], operands[2], ret);
   else
-    emit_insn (gen_fetch_and_<op_name> (operands[0], operands[1],
-                                        operands[2], gen_reg_rtx (SImode)));
+    emit_insn (gen_fetch_and_<op_name> (operands[0], operands[1], operands[2],
+                                        ret));
   DONE;
 })
 
@@ -1523,14 +1521,12 @@
    (atomic_op:AI (match_dup 0) (match_dup 1))]
   ""
 {
+  rtx ret = gen_reg_rtx (<MODE>mode);
   if (<MODE>mode != SImode)
-    {
-      fprintf(stderr, "atomic then fetch %s\n", "<op_name> <mode>");
-      emit_insn (gen_nop());
-    }
+    or1k_expand_fetch_op_qihi (ret, operands[1], operands[2], operands[0]);
   else
-    emit_insn (gen_fetch_and_<op_name> (gen_reg_rtx (SImode), operands[1],
-                                        operands[2], operands[0]));
+    emit_insn (gen_fetch_and_<op_name> (ret, operands[1], operands[2],
+                                        operands[0]));
   DONE;
 })
 
@@ -1554,6 +1550,33 @@
     l.nop
   ")
 
+(define_insn "fetch_and_<op_name>_mask"
+  [(set (match_operand:SI 0 "register_operand" "=&r")
+        (match_operand:SI 1 "memory_operand" "+m"))
+   (set (match_operand:SI 3 "register_operand" "=&r")
+        (unspec_volatile:SI [(match_dup 1)
+                             (match_operand:SI 2 "register_operand" "r")
+                             (match_operand:SI 4 "register_operand" "r")]
+         UNSPEC_FETCH_AND_OP))
+   (set (match_dup 1)
+        (unspec_volatile:SI [(match_dup 3) (match_dup 4)] UNSPEC_FETCH_AND_OP))
+   (clobber (match_scratch:SI 5 "=&r"))
+   (single_insn_atomic_op:SI (match_dup 0) (match_dup 1))]
+  ""
+  "
+1:
+   l.lwa   \t%0,%1    # fetch_<op_name>: load
+   l.and   \t%5,%0,%4 # fetch_<op_name>: mask
+   l.xor   \t%5,%0,%5 # fetch_<op_name>: clear
+   l.<op_name>\t\t%3,%0,%2 # fetch_<op_name>: logic
+   l.and   \t%3,%3,%4 # fetch_<op_name>: mask result
+   l.or    \t%3,%5,%3 # fetch_<op_name>: set
+   l.swa   \t%1,%3    # fetch_<op_name>: store new
+   l.bnf   \t1b       # fetch_<op_name>: done
+    l.nop
+  ")
+
+;; TODO(bluecmd): replace this with a post_op3 thing tha CRIS uses.
 (define_insn "fetch_and_nand"
   [(set (match_operand:SI 0 "register_operand" "=&r")
         (match_operand:SI 1 "memory_operand" "+m"))

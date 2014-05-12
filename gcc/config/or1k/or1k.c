@@ -456,6 +456,13 @@ or1k_expand_cmpxchg_qihi (rtx bval, rtx retval, rtx mem, rtx oldval, rtx newval,
   emit_move_insn (retval, gen_lowpart (GET_MODE (retval), retword));
 }
 
+/* TODO(bluecmd): Write documentation for this function */
+void
+or1k_expand_fetch_op_qihi (rtx oldval, rtx mem, rtx operand, rtx newval)
+{
+
+  emit_insn (gen_nop ());
+}
 
 /* -------------------------------------------------------------------------- */
 /*!Emit insns to use the l.cmov instruction
