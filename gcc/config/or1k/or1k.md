@@ -1506,7 +1506,8 @@
 {
   rtx ret = gen_reg_rtx (<MODE>mode);
   if (<MODE>mode != SImode)
-    or1k_expand_fetch_op_qihi (operands[0], operands[1], operands[2], ret);
+    or1k_expand_fetch_op_qihi (operands[0], operands[1], operands[2], ret,
+                               gen_fetch_and_<op_name>_mask);
   else
     emit_insn (gen_fetch_and_<op_name> (operands[0], operands[1], operands[2],
                                         ret));
@@ -1523,7 +1524,8 @@
 {
   rtx ret = gen_reg_rtx (<MODE>mode);
   if (<MODE>mode != SImode)
-    or1k_expand_fetch_op_qihi (ret, operands[1], operands[2], operands[0]);
+    or1k_expand_fetch_op_qihi (ret, operands[1], operands[2], operands[0],
+                               gen_fetch_and_<op_name>_mask);
   else
     emit_insn (gen_fetch_and_<op_name> (ret, operands[1], operands[2],
                                         operands[0]));

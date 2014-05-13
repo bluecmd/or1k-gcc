@@ -458,7 +458,8 @@ or1k_expand_cmpxchg_qihi (rtx bval, rtx retval, rtx mem, rtx oldval, rtx newval,
 
 /* TODO(bluecmd): Write documentation for this function */
 void
-or1k_expand_fetch_op_qihi (rtx oldval, rtx mem, rtx operand, rtx newval)
+or1k_expand_fetch_op_qihi (rtx oldval, rtx mem, rtx operand, rtx newval,
+                           rtx (*generator)(rtx, rtx, rtx, rtx, rtx));
 {
 
   emit_insn (gen_nop ());

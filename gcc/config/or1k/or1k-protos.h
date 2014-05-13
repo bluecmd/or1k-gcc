@@ -47,8 +47,8 @@ extern bool        or1k_expand_symbol_ref (enum machine_mode mode,
 extern void        or1k_expand_cmpxchg_qihi (rtx bval, rtx retval,
                         rtx mem, rtx oldval, rtx newval, int is_weak,
                         enum memmodel success_mode, enum memmodel failure_mode);
-extern void        or1k_expand_fetch_op_qihi (rtx oldval, rtx mem, rtx operand,
-                                              rtx newval);
+extern void  or1k_expand_fetch_op_qihi (rtx oldval, rtx mem, rtx operand,
+                                        rtx newval, rtx (*generator)(rtx, rtx, rtx, rtx, rtx));
 #endif
 
 #endif
