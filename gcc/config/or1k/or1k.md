@@ -45,7 +45,6 @@
   (UNSPEC_SET_GOT       101)
   (UNSPEC_CMPXCHG       201)
   (UNSPEC_FETCH_AND_OP  202)
-  (UNSPEC_FETCH_AND_NAND 203)
 ])
 
 (include "predicates.md")
@@ -90,9 +89,13 @@
 ;; Note: We skip 'nand' here since it requires and+xor, it is easier to not
 ;; use this iterator and just have to copies of the code instead.
 (define_code_iterator atomic_op [plus minus and ior xor mult])
-(define_code_iterator single_insn_atomic_op [plus minus and ior xor])
 (define_code_attr op_name
   [(plus "add") (minus "sub") (and "and") (ior "or") (xor "xor") (mult "nand")])
+(define_code_attr op_insn
+  [(plus "add") (minus "sub") (and "and") (ior "or") (xor "xor") (mult "and")])
+(define_code_attr post_op_insn
+  [(plus "") (minus "") (and "") (ior "") (xor "")
+   (mult "l.xori  \t%3,%3,0xffff # fetch_nand: invert")])
 
 ;; Called after register allocation to add any instructions needed for the
 ;; prologue.  Using a prologue insn is favored compared to putting all of the
@@ -1541,12 +1544,13 @@
          UNSPEC_FETCH_AND_OP))
    (set (match_dup 1)
         (match_dup 3))
-   (single_insn_atomic_op:SI (match_dup 0) (match_dup 1))]
+   (atomic_op:SI (match_dup 0) (match_dup 1))]
   ""
   "
 1:
    l.lwa   \t%0,%1  # fetch_<op_name>: load
-   l.<op_name>\t\t%3,%0,%2 # fetch_<op_name>: logic
+   l.<op_insn>\t\t%3,%0,%2 # fetch_<op_name>: logic
+   <post_op_insn>
    l.swa   \t%1,%3  # fetch_<op_name>: store new
    l.bnf   \t1b     # fetch_<op_name>: done
     l.nop
@@ -1563,39 +1567,19 @@
    (set (match_dup 1)
         (unspec_volatile:SI [(match_dup 3) (match_dup 4)] UNSPEC_FETCH_AND_OP))
    (clobber (match_scratch:SI 5 "=&r"))
-   (single_insn_atomic_op:SI (match_dup 0) (match_dup 1))]
+   (atomic_op:SI (match_dup 0) (match_dup 1))]
   ""
   "
 1:
    l.lwa   \t%0,%1    # fetch_<op_name>: load
    l.and   \t%5,%0,%4 # fetch_<op_name>: mask
    l.xor   \t%5,%0,%5 # fetch_<op_name>: clear
-   l.<op_name>\t\t%3,%0,%2 # fetch_<op_name>: logic
+   l.<op_insn>\t\t%3,%0,%2 # fetch_<op_name>: logic
+   <post_op_insn>
    l.and   \t%3,%3,%4 # fetch_<op_name>: mask result
    l.or    \t%3,%5,%3 # fetch_<op_name>: set
    l.swa   \t%1,%3    # fetch_<op_name>: store new
    l.bnf   \t1b       # fetch_<op_name>: done
-    l.nop
-  ")
-
-;; TODO(bluecmd): replace this with a post_op3 thing tha CRIS uses.
-(define_insn "fetch_and_nand"
-  [(set (match_operand:SI 0 "register_operand" "=&r")
-        (match_operand:SI 1 "memory_operand" "+m"))
-   (set (match_operand:SI 3 "register_operand" "=&r")
-        (unspec_volatile:SI [(match_dup 1)
-                             (match_operand:SI 2 "register_operand" "r")]
-         UNSPEC_FETCH_AND_NAND))
-   (set (match_dup 1)
-        (match_dup 3))]
-  ""
-  "
-1:
-   l.lwa   \t%0,%1    # fetch_nand: load
-   l.and   \t%3,%0,%2 # fetch_nand: logic
-   l.xori  \t%3,%3,0xffff # fetch_nand: logic
-   l.swa   \t%1,%3    # fetch_nand: store new
-   l.bnf   \t1b       # fetch_nand: done
     l.nop
   ")
 
