@@ -86,8 +86,7 @@
 ;; We do not support DI in our atomic operations.
 (define_mode_iterator AI [QI HI SI])
 
-;; Note: We skip 'nand' here since it requires and+xor, it is easier to not
-;; use this iterator and just have to copies of the code instead.
+;; Note: We use 'mult' here for nand since it does not have its own RTX class.
 (define_code_iterator atomic_op [plus minus and ior xor mult])
 (define_code_attr op_name
   [(plus "add") (minus "sub") (and "and") (ior "or") (xor "xor") (mult "nand")])
