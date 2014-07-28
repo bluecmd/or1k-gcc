@@ -3,9 +3,10 @@
  * Assembly functions for software multiplication and devision.
  */
 
-#define ENTRY(symbol)	\
-	.align 4	;\
-	.global symbol	;\
+#define ENTRY(symbol)			\
+	.align	4;			\
+	.global	symbol;			\
+	.type	symbol, @function;	\
 symbol:
 
 #ifdef L__mulsi3
@@ -220,6 +221,6 @@ OR1K_DELAYED(
 	l.lwz	r14,4(r1)
 OR1K_DELAYED(
 	OR1K_INST(l.addi r1,r1,8),
-	OR1K_INST(l.jrr9)
+	OR1K_INST(l.jr	r9)
 )
 #endif
