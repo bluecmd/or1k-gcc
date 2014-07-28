@@ -2157,7 +2157,11 @@ or1k*-*-*)
 	tm_file="${tm_file} dbxelf.h elfos.h"
         case ${target} in
 	or1k*-*-elf*)
-		tm_file="${tm_file} newlib-stdint.h ${cpu_type}/elf.h"
+		tm_file="${tm_file} newlib-stdint.h or1k/elf.h"
+		extra_parts="crti.o crtbegin.o crtend.o crtn.o"
+		;;
+	or1k*-*-rtems*)
+		tm_file="${tm_file} newlib-stdint.h or1k/rtems.h rtems.h"
 		extra_parts="crti.o crtbegin.o crtend.o crtn.o"
 		;;
 	or1k*-*-linux-*)
