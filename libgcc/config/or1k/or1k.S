@@ -9,6 +9,9 @@
 	.type	symbol, @function;	\
 symbol:
 
+#define END(symbol)			\
+	.size	symbol, .-symbol;
+
 #ifdef L__mulsi3
 ENTRY(__mulsi3)
 	l.addi	r11,r0,0x0
@@ -36,6 +39,7 @@ OR1K_DELAYED(
 OR1K_DELAYED_NOP(
 	OR1K_INST(l.jr	r9)
 )
+END(__mulsi3)
 #endif
 
 #ifdef L__udivsi3
@@ -131,6 +135,7 @@ OR1K_DELAYED(
 	OR1K_INST(l.addi r1,r1,4),
 	OR1K_INST(l.jr	  r9)
 )
+END(__udivsi3)
 #endif
 
 #ifdef L__divsi3
@@ -171,6 +176,7 @@ OR1K_DELAYED(
 	OR1K_INST(l.addi r1,r1,8),
 	OR1K_INST(l.jr	r9)
 )
+END(__divsi3)
 #endif
 
 #ifdef L__umodsi3
@@ -186,6 +192,7 @@ OR1K_DELAYED(
 	OR1K_INST(l.addi r1,r1,4),
 	OR1K_INST(l.jr	r9)
 )
+END(__umodsi3)
 #endif
 
 #ifdef L__modsi3
@@ -223,4 +230,5 @@ OR1K_DELAYED(
 	OR1K_INST(l.addi r1,r1,8),
 	OR1K_INST(l.jr	r9)
 )
+END(__modsi3)
 #endif
