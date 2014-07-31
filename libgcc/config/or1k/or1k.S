@@ -12,7 +12,7 @@ symbol:
 #define END(symbol)			\
 	.size	symbol, .-symbol;
 
-#ifdef L__mulsi3
+#if defined(L__mulsi3)
 ENTRY(__mulsi3)
 	l.addi	r11,r0,0x0
 	l.sfne	r3,r11
@@ -42,8 +42,16 @@ OR1K_DELAYED_NOP(
 END(__mulsi3)
 #endif
 
-#ifdef L__udivsi3
+#if defined(L__udivsi3)
+# define INCLUDE_UDIVSI3
 ENTRY(__udivsi3)
+#endif
+#if defined(L__divsi3) || defined(L__umodsi3) || defined(L__modsi3)
+# define INCLUDE_UDIVSI3
+	.hidden .L__udivsi3
+.L__udivsi3:
+#endif
+#if defined(INCLUDE_UDIVSI3)
 	l.addi	r1,r1,-4
 	l.sw	0(r1),r9
 	l.addi	r11,r0,0
@@ -135,10 +143,12 @@ OR1K_DELAYED(
 	OR1K_INST(l.addi r1,r1,4),
 	OR1K_INST(l.jr	  r9)
 )
+#endif
+#if defined(L__udivsi3)
 END(__udivsi3)
 #endif
 
-#ifdef L__divsi3
+#if defined(L__divsi3)
 ENTRY(__divsi3)
 	l.addi	r1,r1,-8
 	l.sw	0(r1),r9
@@ -162,7 +172,7 @@ OR1K_DELAYED_NOP(
 1:
 OR1K_DELAYED(
 	OR1K_INST(l.addi r3,r5,0),
-	OR1K_INST(l.jal	__udivsi3)
+	OR1K_INST(l.jal	.L__udivsi3)
 )
 	l.sfeqi	 r14,1
 OR1K_DELAYED_NOP(
@@ -179,12 +189,12 @@ OR1K_DELAYED(
 END(__divsi3)
 #endif
 
-#ifdef L__umodsi3
+#if defined(L__umodsi3)
 ENTRY(__umodsi3)
 	l.addi	r1,r1,-4
 	l.sw	0(r1),r9
 OR1K_DELAYED_NOP(
-	OR1K_INST(l.jal	__udivsi3)
+	OR1K_INST(l.jal	.L__udivsi3)
 )
 	l.addi	r11,r7,0
 	l.lwz	r9,0(r1)
@@ -195,7 +205,7 @@ OR1K_DELAYED(
 END(__umodsi3)
 #endif
 
-#ifdef L__modsi3
+#if defined(L__modsi3)
 ENTRY(__modsi3)
 	l.addi	r1,r1,-8
 	l.sw	0(r1),r9
@@ -215,7 +225,7 @@ OR1K_DELAYED_NOP(
 	l.sub	r4,r0,r4
 1:
 OR1K_DELAYED_NOP(
-	OR1K_INST(l.jal	__udivsi3)
+	OR1K_INST(l.jal	.L__udivsi3)
 )
 	l.sfeqi	r14,1
 OR1K_DELAYED(
